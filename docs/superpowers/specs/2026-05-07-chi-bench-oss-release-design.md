@@ -10,7 +10,7 @@
 ### Goals
 
 1. A reader of the paper can `git clone` the public repo, install via `uv sync`, run `chi-bench data download`, and execute a Docker smoke trial in under five minutes on a laptop.
-2. A researcher with Anthropic API credentials and a Modal account can reproduce paper Tables 1, the E2E PA table, the Marathon table, the skill-ablation table, and the CLI-tools-ablation table from configs shipped in the repo.
+2. A researcher with Anthropic API credentials can reproduce paper Tables 1, the E2E PA table, the Marathon table, the skill-ablation table, and the CLI-tools-ablation table from configs shipped in the repo, **using local Docker only — no Modal account required**. Modal is supported as an optional accelerator (`-e modal`) for users who want horizontal scaling, but every paper config runs end-to-end on a single Docker host. README and `docs/reproducing-paper-tables.md` document realistic wall-time and cost expectations for both modes (Docker is meaningfully slower for the full 30×3×75 matrix; smaller paper tables like E2E and Marathon are tractable on a workstation).
 3. A researcher with their own agent harness can plug it in by following `docs/adding-an-agent-harness.md` and adding a `<harness>_harness.py` file alongside the seven harnesses we ship.
 4. The release exposes zero internal-only context: no `actAVA` branding outside the affiliations block, no internal incident notes, no internal env-var names, no internal Slack/JIRA/email references, no internal commit history.
 
@@ -304,14 +304,19 @@ Condensed from the internal `CLAUDE.md` architecture section. Covers what runs i
 
 ### `docs/reproducing-paper-tables.md`
 
-Exact commands per paper claim:
+Exact commands per paper claim. Each table has a Docker command (primary) and a Modal command (optional accelerator), with wall-time and cost columns for both:
 
-- Table 1 (main matrix): `chi-bench experiment run -f configs/experiments/main_matrix.yaml`, expected wall time, expected cost, output paths.
-- E2E table: one command.
-- Marathon table: three commands.
-- Skill ablation: one command.
-- CLI-tools ablation: one command.
-- Aggregation: `python scripts/aggregate_results.py --trials-dir logs/experiments/main_matrix --out results/table1.csv`.
+| Paper claim | Docker command | Modal command | Docker wall-time / cost | Modal wall-time / cost |
+|---|---|---|---|---|
+| Table 1 (main matrix) | `chi-bench experiment run -f configs/experiments/main_matrix.yaml -e docker` | `... -e modal` | (long, document realistic estimate) | (much shorter) |
+| E2E PA | `... -f configs/experiments/e2e_pa.yaml -e docker` | `... -e modal` | (workstation-tractable) | (faster) |
+| Marathon ×3 | three commands | three commands | (workstation-tractable) | (faster) |
+| Skill ablation | one command | one command | — | — |
+| CLI-tools ablation | one command | one command | — | — |
+
+Aggregation step (mode-agnostic): `python scripts/aggregate_results.py --trials-dir logs/experiments/main_matrix --out results/table1.csv`.
+
+Doc explicitly states that Docker requires no Modal account, no extra setup beyond a working Docker daemon and the four provider API keys, and that Modal is opt-in for users who want horizontal scaling. Wall-time and cost cells are filled in during Phase 8 from a real measurement on the maintainer's hardware (not estimated in the spec).
 
 ### `docs/adding-an-agent-harness.md`
 
