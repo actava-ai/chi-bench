@@ -196,7 +196,7 @@ Everything else under `configs/experiments/` (~33 files), plus `configs/archive/
 
 1. Replace dataset paths from `datasets/...` to `${CHI_BENCH_DATA_DIR}/...`.
 2. Replace `env_file: .env.experiment` with `.env`.
-3. Drop the per-row `optional_keys` blocks. The four `required_keys` (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`) are the entire credential surface external users need.
+3. Drop the per-row `optional_keys` blocks. The four `required_keys` — `ANTHROPIC_API_KEY` (Claude Code rows + the WorkspaceJudge), `OPENAI_API_KEY` (Codex rows), `GEMINI_API_KEY` (Gemini CLI rows), `OPENROUTER_API_KEY` (OpenClaw, Hermes, OAI Agents, DeepAgents rows over the five OpenRouter-served open-weight models) — are the entire credential surface external users need to reproduce every paper table.
 4. Set `environment: docker` as default. The `-e modal` override is documented in `docs/reproducing-paper-tables.md`.
 5. Drop `actava` Modal profile references; users supply their own profile.
 6. Keep API model ids (e.g. `anthropic/claude-opus-4-7`) — that's what the runner consumes; pretty names live in the paper's tables only.
