@@ -1,0 +1,33 @@
+name: table4_skill_ablation
+description: |
+  Skill-ablation results (paper Fig. 4 source) — 4 conditions × 75 tasks.
+  Drives CHI_BENCH_SKILLS_ABLATE (comma-separated list of references/<subdir>).
+
+defaults:
+  environment: docker
+  env_file: .env
+  concurrency: 5
+  n_attempts: 3
+  max_retries: 2
+  trials_root: logs/experiments/table4_skill_ablation
+  agent_timeout_multiplier: 2
+
+domains:
+  pa_provider:
+    dataset: data/prior_auth_provider/tasks
+    registry_path: data/prior_auth_provider/registry.json
+  pa_um:
+    dataset: data/prior_auth_um/tasks
+    registry_path: data/prior_auth_um/registry.json
+  cm:
+    dataset: data/care_management/tasks
+    registry_path: data/care_management/registry.json
+
+conditions:
+  - { name: full,       skills_ablate: [] }
+  - { name: no_domain,  skills_ablate: [provider-pa, payer-um, care-manager] }
+  - { name: no_medical, skills_ablate: [medical-library] }
+  - { name: none,       skills_ablate: [provider-pa, payer-um, care-manager, medical-library] }
+
+rows:
+  - { agent: codex, model: openai/gpt-5.5 }
