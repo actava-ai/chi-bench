@@ -1,0 +1,31 @@
+name: table5_mcp_vs_cli
+description: |
+  MCP vs CLI tool-surface ablation (paper Table 5) — 2 conditions × 75 tasks.
+  Drives CHI_BENCH_TOOL_MODE (mcp | cli).
+
+defaults:
+  environment: docker
+  env_file: .env
+  concurrency: 5
+  n_attempts: 3
+  max_retries: 2
+  trials_root: logs/experiments/table5_mcp_vs_cli
+  agent_timeout_multiplier: 2
+
+domains:
+  pa_provider:
+    dataset: data/prior_auth_provider/tasks
+    registry_path: data/prior_auth_provider/registry.json
+  pa_um:
+    dataset: data/prior_auth_um/tasks
+    registry_path: data/prior_auth_um/registry.json
+  cm:
+    dataset: data/care_management/tasks
+    registry_path: data/care_management/registry.json
+
+conditions:
+  - { name: mcp, tool_mode: mcp }
+  - { name: cli, tool_mode: cli }
+
+rows:
+  - { agent: codex, model: openai/gpt-5.5 }
