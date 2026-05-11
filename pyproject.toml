@@ -72,8 +72,9 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 markers = [
     "requires_anthropic_key: smoke tests that hit the live judge",
+    "slow: tests that take more than 30s (e.g. docker builds)",
 ]
-addopts = "-m 'not requires_anthropic_key'"
+addopts = "-m 'not requires_anthropic_key and not slow'"
 
 [tool.ruff]
 line-length = 100
