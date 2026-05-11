@@ -62,7 +62,7 @@ done
 # trial slice on stdout; we exec each in turn.
 PY_DRIVER="$(dirname "${BASH_SOURCE[0]}")/_emit_run_table_commands.py"
 
-python "$PY_DRIVER" \
+uv run python "$PY_DRIVER" \
   --config "$CONFIG_PATH" \
   ${AGENT_FILTER:+--agent "$AGENT_FILTER"} \
   ${ROW_FILTER:+--row "$ROW_FILTER"} \
