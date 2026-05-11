@@ -85,6 +85,22 @@ def data_verify(
     typer.echo("OK — data layout matches expectations.")
 
 
+docker_app = typer.Typer(help="Docker image commands.", no_args_is_help=True)
+app.add_typer(docker_app, name="docker")
+
+
+@docker_app.command("build")
+def docker_build(
+    tag: str = typer.Option("chi-bench:latest", "--tag", "-t", help="Image tag."),
+    target: str = typer.Option("runtime", "--target", help="Build stage: runtime | ci-skeleton."),
+) -> None:
+    """Build the chi-bench single-image container."""
+    import subprocess
+    cmd = ["docker", "build", "-f", "docker/Dockerfile", "--target", target, "-t", tag, "."]
+    typer.echo(f"$ {' '.join(cmd)}")
+    raise typer.Exit(subprocess.call(cmd))
+
+
 def _configure_logging(level: str) -> None:
     """Shared logging setup for all CLI commands."""
     import logging
