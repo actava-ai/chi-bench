@@ -20,6 +20,7 @@ from chi_bench.experiment.config import Environment, ExperimentConfig, ModalConf
 logger = logging.getLogger(__name__)
 
 MODAL_ENVIRONMENT_IMPORT_PATH = "chi_bench.experiment.modal_env:ChiBenchModalEnvironment"
+DOCKER_ENVIRONMENT_IMPORT_PATH = "chi_bench.experiment.docker_env:ChiBenchDockerEnvironment"
 
 # Agent name → import path mapping for custom harnesses
 _AGENT_IMPORT_PATHS: dict[str, str] = {
@@ -503,7 +504,11 @@ def _build_harbor_command(
             if value:
                 cmd += ["--agent-kwarg", f"{key}={value}"]
 
-    if cfg.environment == "modal":
+    if cfg.environment == "docker":
+        # Local single-image backend: pin the harbor environment to the
+        # docker shim so Harbor knows which class to instantiate per trial.
+        cmd += ["--environment-import-path", DOCKER_ENVIRONMENT_IMPORT_PATH]
+    elif cfg.environment == "modal":
         # Use ChiBenchModalEnvironment so Modal builds our sandbox image
         # from docker/Dockerfile.modal with repo-root context (no registry
         # push needed). Harbor clears environment.type when import_path is
