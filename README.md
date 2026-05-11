@@ -25,12 +25,12 @@ Headline numbers from the paper:
 git clone https://github.com/actava-ai/chi-bench && cd chi-bench
 uv sync --extra dev
 # 1. Download data (see "Download data" below)
-chi-bench data verify
+uv run chi-bench data verify
 # 2. Build the docker image (~5 min, one-time)
-chi-bench docker build
+uv run chi-bench docker build
 # 3. Run one task as a smoke check
 cp .env.example .env  # then fill in ANTHROPIC_API_KEY + OPENAI_API_KEY
-chi-bench experiment run \
+uv run chi-bench experiment run \
   --dataset data/prior_auth_um/tasks/pa_t008_t008_o002_p01_mdreview_payer \
   --agent codex --model openai/gpt-5.5
 ```
@@ -48,7 +48,7 @@ chi-bench experiment run \
 After all slices finish:
 
 ```bash
-python scripts/aggregate.py \
+uv run python scripts/aggregate.py \
   --trials-dir logs/experiments/table1_main_matrix \
   --prices configs/prices.yaml \
   --out-csv logs/table1.csv
@@ -75,8 +75,8 @@ CSV columns: `agent, model, n_trials, n_tasks, pass_at_1, pass_at_1_lo, pass_at_
 ### 1. Task fixtures (Hugging Face)
 
 ```bash
-pip install -U "huggingface_hub[cli]"
-huggingface-cli download actava/chi-bench --repo-type dataset --local-dir data/
+uv pip install -U "huggingface_hub[cli]"
+uv run huggingface-cli download actava/chi-bench --repo-type dataset --local-dir data/
 ```
 
 ### 2. Managed-Care Operations Handbook (Google Drive)
@@ -91,7 +91,7 @@ tar -xzf managed-care-operations-handbook.tar.gz -C data/skills/
 ### 3. Verify
 
 ```bash
-chi-bench data verify
+uv run chi-bench data verify
 ```
 
 ## Architecture
@@ -101,8 +101,8 @@ A single Python package (`chi_bench`) wraps a FastAPI server + 3 MCP servers (pr
 ## Modal (optional)
 
 ```bash
-modal token set --profile chi-bench
-chi-bench experiment run -f configs/experiments/table1_main_matrix.yaml --environment modal
+uv run modal token set --profile chi-bench
+uv run chi-bench experiment run -f configs/experiments/table1_main_matrix.yaml --environment modal
 ```
 
 ## Citation
