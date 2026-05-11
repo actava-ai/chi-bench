@@ -48,7 +48,22 @@ def data_verify(
         Path("data"), "--data-dir", help="Root of the downloaded dataset tree."
     ),
 ) -> None:
-    """Check that the downloaded data tree matches what the runner expects."""
+    """Check that the downloaded data tree matches what the runner expects.
+
+    Supports two layouts:
+
+    * **Source layout** (the host's ``data/`` tree, as downloaded from the
+      release artifacts): one ``<domain>/tasks/`` directory per task family.
+    * **Baked image layout** (``/opt/chi-bench`` inside the runtime image,
+      produced by ``docker/Dockerfile``): all task families flattened under
+      a single ``tasks/`` directory, with ``marathon/`` and ``worlds/`` as
+      siblings. The handbook lives at ``/workspace/skills/...`` in this
+      layout, not under ``data_dir``.
+
+    The layout is auto-detected: if ``data_dir/tasks`` exists at the root
+    but ``data_dir/prior_auth_provider/tasks`` does not, the baked layout
+    is assumed.
+    """
     EXPECTED_TASKS = {
         "prior_auth_provider": 25,
         "prior_auth_um": 25,
@@ -58,23 +73,52 @@ def data_verify(
     missing: list[str] = []
     bad_counts: list[str] = []
 
-    for dom, n_expected in EXPECTED_TASKS.items():
-        tasks_dir = data_dir / dom / "tasks"
-        if not tasks_dir.exists():
-            missing.append(str(tasks_dir))
-            continue
-        n_actual = sum(1 for p in tasks_dir.iterdir() if p.is_dir())
-        if n_actual != n_expected:
-            bad_counts.append(f"{tasks_dir}: expected {n_expected}, got {n_actual}")
+    flat_tasks = data_dir / "tasks"
+    source_tasks = data_dir / "prior_auth_provider" / "tasks"
+    is_baked_layout = flat_tasks.is_dir() and not source_tasks.is_dir()
 
-    for dom in ("prior_auth_provider", "prior_auth_um", "care_management"):
-        m = data_dir / "marathon" / dom
-        if not m.exists():
-            missing.append(str(m))
+    if is_baked_layout:
+        # In the baked image layout, every task family is COPYed into the
+        # same /opt/chi-bench/tasks/ directory plus a sibling marathon/
+        # subdir. Verify the merged count and the marathon subdirs.
+        n_expected_total = sum(EXPECTED_TASKS.values())
+        n_actual = sum(1 for p in flat_tasks.iterdir() if p.is_dir() and p.name != "marathon")
+        if n_actual != n_expected_total:
+            bad_counts.append(
+                f"{flat_tasks}: expected {n_expected_total} task dirs, got {n_actual}"
+            )
 
-    handbook = data_dir / "skills" / "managed-care-operations-handbook"
-    if not (handbook / "SKILL.md").exists():
-        missing.append(str(handbook))
+        for dom in ("prior_auth_provider", "prior_auth_um", "care_management"):
+            m = flat_tasks / "marathon" / dom
+            if not m.exists():
+                missing.append(str(m))
+
+        if not (data_dir / "worlds").is_dir():
+            missing.append(str(data_dir / "worlds"))
+
+        # Handbook is baked at /workspace/skills/..., not under data_dir.
+        handbook = Path("/workspace/skills/managed-care-operations-handbook")
+        if not (handbook / "SKILL.md").exists():
+            missing.append(str(handbook))
+    else:
+        # Source ("downloaded data") layout: data/<domain>/tasks/...
+        for dom, n_expected in EXPECTED_TASKS.items():
+            tasks_dir = data_dir / dom / "tasks"
+            if not tasks_dir.exists():
+                missing.append(str(tasks_dir))
+                continue
+            n_actual = sum(1 for p in tasks_dir.iterdir() if p.is_dir())
+            if n_actual != n_expected:
+                bad_counts.append(f"{tasks_dir}: expected {n_expected}, got {n_actual}")
+
+        for dom in ("prior_auth_provider", "prior_auth_um", "care_management"):
+            m = data_dir / "marathon" / dom
+            if not m.exists():
+                missing.append(str(m))
+
+        handbook = data_dir / "skills" / "managed-care-operations-handbook"
+        if not (handbook / "SKILL.md").exists():
+            missing.append(str(handbook))
 
     if missing or bad_counts:
         typer.echo(
