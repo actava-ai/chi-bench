@@ -1,0 +1,28 @@
+name: table2_e2e_arena
+description: chi-Bench Table 2 — Dual-agent end-to-end PA, Codex + GPT-5.5 on both sides.
+
+defaults:
+  environment: docker
+  env_file: .env
+  concurrency: 5
+  n_attempts: 3
+  max_retries: 2
+  trials_root: logs/experiments/table2_e2e_arena
+  agent_timeout_multiplier: 2
+
+dataset: data/prior_auth_e2e/tasks
+registry_path: data/prior_auth_e2e/registry.json
+
+agent: dual-pa-e2e
+model: openai/gpt-5.5
+provider_agent: codex
+provider_model: openai/gpt-5.5
+payer_agent: codex
+payer_model: openai/gpt-5.5
+
+agent_kwargs:
+  phase_max_turns: "50"
+  max_cycles: "6"
+  p2p_coordination_cycles: "4"
+  p2p_max_turn_pairs: "4"
+  p2p_repair_attempts: "1"
