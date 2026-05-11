@@ -15,7 +15,7 @@ def _seed_cm_fixtures(store: WorldStore) -> None:
     from chi_bench.bootstrap_cm import CM_PROVIDER_RESOURCE_TYPES, CM_HIDDEN_RESOURCE_TYPES
 
     cm_worlds_dir = (
-        Path(__file__).resolve().parents[2] / "datasets" / "care_management" / "shared" / "worlds"
+        Path(__file__).resolve().parents[2] / "data" / "care_management" / "shared" / "worlds"
     )
     cm_world_path = cm_worlds_dir / "chi_bench-care-mgmt-canonical-v1.json"
     if not cm_world_path.exists():

@@ -16,7 +16,12 @@ from pathlib import Path
 
 import yaml
 
-from scripts._wilson import wilson_score_interval
+# Allow `python scripts/aggregate.py ...` (sys.path[0] = scripts/) AND test imports
+# via `from scripts.aggregate import aggregate` (pytest puts repo root on sys.path).
+try:
+    from scripts._wilson import wilson_score_interval
+except ImportError:
+    from _wilson import wilson_score_interval
 
 
 @dataclass

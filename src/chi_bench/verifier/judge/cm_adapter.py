@@ -291,7 +291,7 @@ def _cm_v4_rubrics(expectations: dict) -> tuple[dict, ...]:
 
 
 _RUNTIME_HANDBOOK_ROOT = Path("/workspace/skills/managed-care-operations-handbook/references")
-_REPO_HANDBOOK_ROOT = Path("datasets/skills/managed-care-operations-handbook/references")
+_REPO_HANDBOOK_ROOT = Path("data/skills/managed-care-operations-handbook/references")
 
 
 def _handbook_roots() -> tuple[Path, ...]:

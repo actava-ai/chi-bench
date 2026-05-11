@@ -253,7 +253,7 @@ def serve(
     port: int = typer.Option(8023, help="Port to listen on."),
     host: str = typer.Option("0.0.0.0", help="Host to bind to."),
     no_frontend: bool = typer.Option(
-        False, "--no-frontend", help="Skip starting the frontend dev server."
+        True, "--no-frontend/--frontend", help="Skip starting the frontend dev server."
     ),
     frontend_port: int = typer.Option(5180, "--frontend-port", help="Frontend dev server port."),
     frontend_wait_timeout: float = typer.Option(
@@ -328,12 +328,16 @@ def serve(
     frontend_waiter: threading.Thread | None = None
     frontend_stop = threading.Event()
     if not no_frontend:
-        _kill_port(frontend_port)
-
         frontend_dir = Path(__file__).resolve().parents[2] / "frontend" / "chi_bench"
         if not (frontend_dir / "package.json").exists():
-            typer.echo(f"Frontend not found at {frontend_dir}", err=True)
-            raise typer.Exit(1)
+            typer.echo(
+                f"Frontend not found at {frontend_dir}; running backend only.",
+                err=True,
+            )
+            no_frontend = True
+
+    if not no_frontend:
+        _kill_port(frontend_port)
         typer.echo(
             "Waiting for backend health before starting frontend dev server "
             f"(timeout {frontend_wait_timeout:.1f}s)."
@@ -554,7 +558,7 @@ def experiment_rejudge(
         ),
     ),
     task_dataset_root: Path = typer.Option(
-        Path("datasets/care_management/tasks"),
+        Path("data/care_management/tasks"),
         "--task-dataset-root",
         help=(
             "Root of task dataset; each trial's expectations.json is resolved "

@@ -77,4 +77,4 @@ python "$PY_DRIVER" \
     done
 
 echo "All slices for $TABLE completed."
-echo "Run: python scripts/aggregate.py --table $TABLE  to produce CSV."
+echo "Run: python scripts/aggregate.py --trials-dir logs/experiments/${TABLE}_* --out-csv logs/${TABLE}.csv  to produce CSV."

@@ -13,7 +13,7 @@ but each PA task's ``environment/Dockerfile`` references repo-root files
 ``context: ${REPO_ROOT}``. Modal ignores the compose file, so the stock
 path fails with a missing-file error on the first ``COPY`` step.
 
-This subclass swaps in ``docker/Dockerfile.modal`` + ``context_dir=<repo>``
+This subclass swaps in ``docker/Dockerfile`` + ``context_dir=<repo>``
 so Modal builds our single-image sandbox from the correct context. No
 registry push is required — Modal tars the context, ships it to its
 builders, caches the resulting image, and re-uses it across trials.
@@ -166,15 +166,15 @@ def _build_agent_log_prune_command(source_dir: str) -> str:
 
 
 def _resolve_repo_root() -> Path:
-    """Walk up from this file to the repo root containing ``docker/Dockerfile.modal``."""
+    """Walk up from this file to the repo root containing ``docker/Dockerfile``."""
     here = Path(__file__).resolve()
     for candidate in (here, *here.parents):
-        if (candidate / "docker" / "Dockerfile.modal").is_file() and (
+        if (candidate / "docker" / "Dockerfile").is_file() and (
             candidate / "pyproject.toml"
         ).is_file():
             return candidate
     raise RuntimeError(
-        "cannot locate repo root with docker/Dockerfile.modal above "
+        "cannot locate repo root with docker/Dockerfile above "
         f"{here} — chi_bench must be installed from a source checkout to use "
         "the Modal backend"
     )
@@ -195,7 +195,7 @@ def _resolve_task_dir(environment_dir: Path) -> Path:
 def _add_task_dir_override(image: Any, environment_dir: Path) -> Any:
     """Overlay the current Harbor task directory onto the baked tasks root.
 
-    ``Dockerfile.modal`` bakes the default datasets for normal runs, but custom
+    ``Dockerfile`` bakes the default datasets for normal runs, but custom
     smoke datasets use the same task ids with different fixtures/personas. The
     entrypoint reads ``/opt/chi_bench/tasks/<CHI_BENCH_TASK_ID>/fixtures`` at
     container startup, so the current task dir must be present there before the
@@ -208,7 +208,7 @@ def _add_task_dir_override(image: Any, environment_dir: Path) -> Any:
 
 
 class ChiBenchModalEnvironment(ModalEnvironment):
-    """ModalEnvironment subclass that builds from ``docker/Dockerfile.modal``.
+    """ModalEnvironment subclass that builds from ``docker/Dockerfile``.
 
     Also overrides ``_create_sandbox`` to forward ``task_env_config.env``
     (resolved into ``self._persistent_env`` by the base class) to Modal via
@@ -224,7 +224,7 @@ class ChiBenchModalEnvironment(ModalEnvironment):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         # Harbor 0.4.0 auto-selects `_ModalDinD` when `environment/docker-compose.yaml`
         # exists. Our tasks ship one for local-Docker runs, so harbor defaults to
-        # DinD — but our `start()` builds `Dockerfile.modal` as a self-contained
+        # DinD — but our `start()` builds `Dockerfile` as a self-contained
         # direct-mode image, which the DinD strategy (expecting a `main` compose
         # service) cannot drive. Also, when harbor sees compose mode it skips
         # merging `task_env_config.env` into `_persistent_env` — dropping the
@@ -276,7 +276,7 @@ class ChiBenchModalEnvironment(ModalEnvironment):
 
     async def start(self, force_build: bool) -> None:
         repo_root = _resolve_repo_root()
-        dockerfile = repo_root / "docker" / "Dockerfile.modal"
+        dockerfile = repo_root / "docker" / "Dockerfile"
         logger.info(
             "building Modal image from %s (context=%s, force_build=%s)",
             dockerfile,

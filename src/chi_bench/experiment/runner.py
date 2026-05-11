@@ -549,7 +549,7 @@ def _build_harbor_command(
 # ─── rejudge ─────────────────────────────────────────────────────────────────
 
 
-DEFAULT_CM_TASK_DATASET_ROOT = Path("datasets/care_management/tasks")
+DEFAULT_CM_TASK_DATASET_ROOT = Path("data/care_management/tasks")
 
 
 def _resolve_expectations_for_trial(
