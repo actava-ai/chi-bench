@@ -1,0 +1,95 @@
+# USD per 1M tokens. Used by scripts/aggregate.py to compute paper Table 1's Cost column.
+# `cache` is the cache-READ rate (matches `result.json.agent_result.n_cache_tokens`
+# which Harbor reports for re-used prompt context). Cache-WRITE rates are not
+# modeled — benchmark runs typically don't distinguish first-time vs repeat
+# prompts for ROI purposes.
+#
+# Price sources (verified April 2026):
+#   OpenAI:    https://openai.com/api/pricing/
+#   Anthropic: https://platform.claude.com/docs/en/about-claude/pricing
+#   Google:    https://ai.google.dev/gemini-api/docs/pricing
+#   xAI:       https://docs.x.ai/developers/models
+#   Others:    https://openrouter.ai/<slug>
+#
+# Model key convention: "<provider>/<name>" matches how the aggregator reads
+# `result.json.agent_info.model_info.{provider,name}`. Harbor adapters should
+# set these fields so the lookup hits. Unknown keys fall back to cost=0 (an
+# aggregator warning fires); patch this file and re-run — no re-execution
+# needed.
+
+prices:
+  # ── OpenAI ─────────────────────────────────────────────────────
+  openai/gpt-5.4:
+    input: 2.50
+    output: 15.00
+    cache: 0.25          # 10% of input (OpenAI cached-input standard)
+  openai/gpt-5.4-mini:
+    input: 0.75
+    output: 4.50
+    cache: 0.075
+
+  # ── Anthropic ──────────────────────────────────────────────────
+  # Cache-read = 0.1x base input (Anthropic standard: "Cache read (hit) =
+  # 0.1x base input price"). Opus 4.7 uses a new tokenizer that may consume
+  # ~35% more tokens for the same fixed text vs earlier Opus versions; the
+  # per-token rate is identical to Opus 4.6, but ROI denominator on 4.7 runs
+  # skews higher accordingly.
+  anthropic/claude-opus-4-7:
+    input: 5.00
+    output: 25.00
+    cache: 0.50
+  anthropic/claude-opus-4-6:
+    input: 5.00
+    output: 25.00
+    cache: 0.50
+  anthropic/claude-sonnet-4-6:
+    input: 3.00
+    output: 15.00
+    cache: 0.30
+  anthropic/claude-haiku-4-5:
+    input: 1.00
+    output: 5.00
+    cache: 0.10
+
+  # ── Google Gemini ──────────────────────────────────────────────
+  # Pricing below is the ≤200K-context tier. Above 200K, Pro input doubles
+  # to $4/M and output to $18/M. Aggregator doesn't currently model tiering;
+  # treat this as an under-estimate for long-context runs.
+  google/gemini-3-pro:
+    input: 2.00
+    output: 12.00
+    cache: 0.20          # 10% of input
+  google/gemini-3-flash:
+    input: 0.50
+    output: 3.00
+    cache: 0.05
+
+  # ── xAI Grok ───────────────────────────────────────────────────
+  # Grok prompt caching applies automatically; cached usage surfaces in the
+  # API `usage` object (no config flag). Official docs: docs.x.ai.
+  xai/grok-4:
+    input: 3.00
+    output: 15.00
+    cache: 0.75
+  xai/grok-4.3:
+    input: 1.25
+    output: 2.50
+    cache: 0.31
+  xai/grok-4-fast:
+    input: 0.20
+    output: 0.50
+    cache: 0.05
+
+  # ── OpenRouter (no first-party API, or cheaper via OR) ────────
+  # OpenRouter does not publish an explicit cache-read rate for most
+  # third-party slugs; we assume 10% of input as an industry-typical
+  # cached-discount heuristic. Revisit once a real provider number shows up
+  # in `result.json.agent_result` for these runs.
+  qwen/qwen3-max:
+    input: 0.78
+    output: 3.90
+    cache: 0.08          # assumed 10% of input (OpenRouter cache rate TBD)
+  moonshotai/kimi-k2:
+    input: 0.57
+    output: 2.30
+    cache: 0.057         # assumed 10% of input (OpenRouter cache rate TBD)
