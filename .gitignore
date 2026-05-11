@@ -216,3 +216,33 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# === chi-Bench OSS release ===
+
+# Source repos (gitignored siblings — not part of release)
+actava-bench/
+chi-bench-arxiv-submission/
+
+# Downloaded data (users populate via HF + Google Drive)
+data/
+
+# Runtime
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+
+# Experiment outputs
+logs/
+trials/
+
+# Editor
+.idea/
+.vscode/
+.DS_Store
+
+# Secrets
+.env
+.env.local
