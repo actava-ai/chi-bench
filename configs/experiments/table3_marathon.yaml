@@ -1,0 +1,26 @@
+name: table3_marathon
+description: chi-Bench Table 3 — Marathon (all 25 tasks per domain in one session).
+
+defaults:
+  environment: docker
+  env_file: .env
+  concurrency: 1            # marathon tasks are long-horizon; one at a time
+  n_attempts: 3
+  max_retries: 1
+  trials_root: logs/experiments/table3_marathon
+  agent_timeout_multiplier: 2
+
+domains:
+  pa_provider:
+    dataset: data/marathon/prior_auth_provider
+    registry_path: data/marathon/prior_auth_provider/registry.json
+  pa_um:
+    dataset: data/marathon/prior_auth_um
+    registry_path: data/marathon/prior_auth_um/registry.json
+  cm:
+    dataset: data/marathon/care_management
+    registry_path: data/marathon/care_management/registry.json
+
+rows:
+  - { agent: claude-code, model: anthropic/claude-opus-4-7 }
+  - { agent: codex,       model: openai/gpt-5.5 }
