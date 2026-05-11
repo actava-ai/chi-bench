@@ -206,9 +206,7 @@ class P2PService:
             expected_file=f"event/{session.agent_turns_used + 1:02d}_agent.md",
         )
 
-    def _render_reveal_channel_lines(
-        self, request: PayerPeerToPeerRequest
-    ) -> list[str]:
+    def _render_reveal_channel_lines(self, request: PayerPeerToPeerRequest) -> list[str]:
         """Extract reveal-channel facts as baseline-knowledge bullets.
 
         Each fact lands as one bullet of the simulator's complete
@@ -245,15 +243,11 @@ class P2PService:
             ]
             lines.append(f"- {text}")
             if triggers:
-                lines.append(
-                    f"  Cite this when the discussion touches: {', '.join(triggers)}."
-                )
+                lines.append(f"  Cite this when the discussion touches: {', '.join(triggers)}.")
             lines.append("")
         return lines
 
-    def _extract_forbidden_arguments(
-        self, request: PayerPeerToPeerRequest, role: str
-    ) -> list[str]:
+    def _extract_forbidden_arguments(self, request: PayerPeerToPeerRequest, role: str) -> list[str]:
         """Read forbidden_arguments from fixture <role>_policy.
 
         role: "provider" or "payer". The caller renders these as
@@ -336,7 +330,7 @@ class P2PService:
             "",
             "## Your Goal",
             "Address the reviewer's concerns using everything in \"What You",
-            "Know\" below. If your knowledge supports the medical necessity",
+            'Know" below. If your knowledge supports the medical necessity',
             "of the requested service, present that evidence directly and in",
             "full. If it does not, acknowledge it honestly. Do not fabricate",
             "information you don't have.",
@@ -349,12 +343,8 @@ class P2PService:
             lines.append("")
 
         lines.append("## What You Know")
-        lines.append(
-            "This is your complete clinical knowledge for this call. You may"
-        )
-        lines.append(
-            "cite anything here by name and date when responding to the"
-        )
+        lines.append("This is your complete clinical knowledge for this call. You may")
+        lines.append("cite anything here by name and date when responding to the")
         lines.append("reviewer.")
         lines.append("")
 
@@ -366,9 +356,7 @@ class P2PService:
 
         reveal_lines = self._render_reveal_channel_lines(request)
         if reveal_lines:
-            lines.append(
-                "### Additional Knowledge (not packaged into the submission)"
-            )
+            lines.append("### Additional Knowledge (not packaged into the submission)")
             lines.append("")
             lines.extend(reveal_lines)
 
@@ -381,7 +369,7 @@ class P2PService:
                 "- Do not introduce clinical specifics — anatomical findings,",
                 "  lab values, dates, test results, or study citations — that",
                 '  are not in "What You Know" above. If asked about something',
-                '  outside your knowledge, say "I\'d need to look that up and',
+                "  outside your knowledge, say \"I'd need to look that up and",
                 '  send it later" and do not fill the gap.',
                 "",
             ]
@@ -478,9 +466,7 @@ class P2PService:
             lines.append("")
 
         lines.append("## What You Know")
-        lines.append(
-            "This is your complete reviewer-side knowledge for this call."
-        )
+        lines.append("This is your complete reviewer-side knowledge for this call.")
         lines.append("")
 
         if policy_summary:
@@ -509,7 +495,7 @@ class P2PService:
                 "- Do not introduce clinical specifics — anatomical findings,",
                 "  lab values, dates, test results, or study citations — that",
                 '  are not in "What You Know" above. If the provider asks about',
-                '  something outside your knowledge, say "I\'d need to look that',
+                "  something outside your knowledge, say \"I'd need to look that",
                 '  up and follow up later" and do not fill the gap.',
                 "",
             ]

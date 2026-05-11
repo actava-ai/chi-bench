@@ -860,11 +860,11 @@ class DeepAgentsHarness(BaseInstalledAgent):
                 "( "
                 "  while [ ! -f /tmp/deepagents_server_log_*.txt ] 2>/dev/null; do "
                 "    LOGFILE=$(ls /tmp/deepagents_server_log_*.txt 2>/dev/null | head -1); "
-                "    [ -n \"$LOGFILE\" ] && break; "
+                '    [ -n "$LOGFILE" ] && break; '
                 "    sleep 0.2; "
                 "  done; "
                 "  LOGFILE=$(ls /tmp/deepagents_server_log_*.txt 2>/dev/null | head -1); "
-                "  [ -n \"$LOGFILE\" ] && tail -F -n +1 \"$LOGFILE\" > /logs/agent/dev_server.log 2>&1; "
+                '  [ -n "$LOGFILE" ] && tail -F -n +1 "$LOGFILE" > /logs/agent/dev_server.log 2>&1; '
                 ") & TAIL_PID=$!; "
                 "deepagents --stdin -n '' "
                 f"{model_flag}"

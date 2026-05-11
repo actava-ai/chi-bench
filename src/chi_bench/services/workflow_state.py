@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from chi_bench.core.enums import IntakeStatus, PayerReviewStatus
 from chi_bench.core.models import (
@@ -21,9 +21,15 @@ if TYPE_CHECKING:
     from chi_bench.core.context import ServiceContext
 
 
-_P2P_ACTIVE_STATUSES = frozenset({
-    "requested", "slots_offered", "slot_selected", "scheduled", "event_open",
-})
+_P2P_ACTIVE_STATUSES = frozenset(
+    {
+        "requested",
+        "slots_offered",
+        "slot_selected",
+        "scheduled",
+        "event_open",
+    }
+)
 
 
 class WorkflowStateService:
@@ -146,12 +152,8 @@ class WorkflowStateService:
     ) -> UnifiedWorkflowState:
         case_id = case.id
 
-        active_internal_appeal = self._latest_open_appeal(
-            all_appeals, case_id, level="internal"
-        )
-        active_external_appeal = self._latest_open_appeal(
-            all_appeals, case_id, level="external"
-        )
+        active_internal_appeal = self._latest_open_appeal(all_appeals, case_id, level="internal")
+        active_external_appeal = self._latest_open_appeal(all_appeals, case_id, level="external")
         active_p2p = self._find_active_p2p(p2p_requests)
 
         if case.status.value == "closed":
@@ -287,9 +289,7 @@ class WorkflowStateService:
         return "none"
 
     @staticmethod
-    def _latest_open_appeal(
-        appeals: list[Appeal], case_id: str, *, level: str
-    ) -> Appeal | None:
+    def _latest_open_appeal(appeals: list[Appeal], case_id: str, *, level: str) -> Appeal | None:
         best: Appeal | None = None
         for appeal in appeals:
             if (

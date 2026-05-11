@@ -1,5 +1,3 @@
-import pytest
-
 from chi_bench.experiment.config import ExperimentConfig
 from chi_bench.experiment.runner import _build_harbor_command, _forward_agent_keys
 
@@ -25,6 +23,7 @@ def test_forward_agent_keys_emits_present_only():
 def test_forward_agent_keys_no_overrides_signature():
     """_forward_agent_keys MUST be a single-argument function — per-row override path removed."""
     import inspect
+
     sig = inspect.signature(_forward_agent_keys)
     assert list(sig.parameters.keys()) == ["env"], (
         f"per-row override 'overrides' param must be gone; got {list(sig.parameters)}"
@@ -47,7 +46,9 @@ def test_build_harbor_command_docker_default(tmp_path):
     assert "trials start" in s
     assert "-a codex" in s
     assert "-m openai/gpt-5.5" in s
-    assert "--environment-import-path chi_bench.experiment.docker_env:ChiBenchDockerEnvironment" in s
+    assert (
+        "--environment-import-path chi_bench.experiment.docker_env:ChiBenchDockerEnvironment" in s
+    )
     assert "--ae OPENAI_API_KEY=ak-test" in s
 
 

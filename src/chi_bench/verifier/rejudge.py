@@ -199,9 +199,7 @@ def _rejudge_pa_um_trial(
     # Carry over deterministic checks (everything not in the judge.* namespace).
     original_checks = old_scorecard.get("checks") or {}
     merged_checks: dict[str, Any] = {
-        cid: status
-        for cid, status in original_checks.items()
-        if not cid.startswith("judge.")
+        cid: status for cid, status in original_checks.items() if not cid.startswith("judge.")
     }
 
     judge_input = PaUmJudgeAdapter(expectations, exported).build()

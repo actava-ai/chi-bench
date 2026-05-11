@@ -38,7 +38,5 @@ class InboxService:
             raise KeyError(f"No message found with id '{message_id}'.")
         message.read_at = self.ctx.now
         self.ctx.save_message(message)
-        self.ctx.audit(
-            "comms", "read_message", case_id=message.case_id, message_id=message_id
-        )
+        self.ctx.audit("comms", "read_message", case_id=message.case_id, message_id=message_id)
         return {"message": self.ctx.decorate_message_payload(message)}

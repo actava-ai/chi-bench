@@ -93,9 +93,7 @@ class RelayTranscript:
     @property
     def payer_ready_to_finalize(self) -> bool:
         return any(
-            turn.actor == "payer"
-            and turn.ready_to_finalize
-            and turn.final_position is not None
+            turn.actor == "payer" and turn.ready_to_finalize and turn.final_position is not None
             for turn in self.turns
         )
 

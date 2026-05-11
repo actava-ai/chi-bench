@@ -145,7 +145,5 @@ def html_to_pdf_sync(
 ) -> None:
     """Synchronous wrapper — submits work to the persistent background loop."""
     loop = _ensure_loop()
-    future = asyncio.run_coroutine_threadsafe(
-        html_to_pdf(html, output_path, **kwargs), loop
-    )
+    future = asyncio.run_coroutine_threadsafe(html_to_pdf(html, output_path, **kwargs), loop)
     future.result()  # blocks until done

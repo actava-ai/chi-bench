@@ -50,9 +50,7 @@ _QUESTION_KEY_URL = "https://chi_bench.dev/fhir/StructureDefinition/question-key
 _RACE_URL = "https://chi_bench.dev/fhir/StructureDefinition/race"
 _ETHNICITY_URL = "https://chi_bench.dev/fhir/StructureDefinition/ethnicity"
 _ENCOUNTER_CPT_CODE_URL = "https://chi_bench.dev/fhir/StructureDefinition/encounter-cpt-code"
-_ENCOUNTER_CPT_DESC_URL = (
-    "https://chi_bench.dev/fhir/StructureDefinition/encounter-cpt-description"
-)
+_ENCOUNTER_CPT_DESC_URL = "https://chi_bench.dev/fhir/StructureDefinition/encounter-cpt-description"
 _FACILITY_NAME_URL = "https://chi_bench.dev/fhir/StructureDefinition/encounter-facility-name"
 _FACILITY_NPI_URL = "https://chi_bench.dev/fhir/StructureDefinition/encounter-facility-npi"
 _NOTE_TYPE_URL = "https://chi_bench.dev/fhir/StructureDefinition/note-type"

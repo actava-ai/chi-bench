@@ -218,14 +218,10 @@ def build_provider_determination_preview(
     else:
         if dedup_docs:
             finding_codes.append(ProviderFindingCode.MISSING_REQUIRED_DOCUMENTS)
-            rationale_parts.append(
-                "Missing required documents: " + ", ".join(dedup_docs) + "."
-            )
+            rationale_parts.append("Missing required documents: " + ", ".join(dedup_docs) + ".")
         if dedup_fields:
             finding_codes.append(ProviderFindingCode.MISSING_REQUIRED_FORM_FIELDS)
-            rationale_parts.append(
-                "Missing required form fields: " + ", ".join(dedup_fields) + "."
-            )
+            rationale_parts.append("Missing required form fields: " + ", ".join(dedup_fields) + ".")
         if dedup_qa:
             finding_codes.append(ProviderFindingCode.MISSING_REQUIRED_QUESTIONNAIRE_ANSWERS)
             rationale_parts.append(

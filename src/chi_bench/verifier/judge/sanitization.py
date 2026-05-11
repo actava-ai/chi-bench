@@ -312,8 +312,7 @@ _GRADED_POSTURES = ("satisfied", "insufficient", "contradicts")
 
 _EVIDENCE_PROMPT_TEMPLATES = {
     "satisfied": (
-        "Did the agent's PA submission cite chart evidence supporting "
-        "'{criterion_short}'?"
+        "Did the agent's PA submission cite chart evidence supporting '{criterion_short}'?"
     ),
     "insufficient": (
         "Did the agent's PA submission acknowledge that chart evidence "
@@ -368,9 +367,7 @@ def _iter_evidence_rubric_items(bundle: dict) -> list[dict]:
     """
     draft = bundle.get("draft") or {}
     path_edges = draft.get("path_edges") or []
-    docs_by_kind = _documents_by_kind(
-        (bundle.get("document_plan") or {}).get("documents") or []
-    )
+    docs_by_kind = _documents_by_kind((bundle.get("document_plan") or {}).get("documents") or [])
 
     items: list[dict] = []
     seen_keys: dict[str, int] = {}
@@ -447,9 +444,7 @@ def _compose_evidence_rubric(item: dict) -> dict:
             "supported_facts": list(item.get("supported_facts") or []),
             "unsupported_claims": list(item.get("unsupported_claims") or []),
         },
-        "relevant_agent_output_file": (
-            "agent_outputs/stage_provider_pre_submission.json"
-        ),
+        "relevant_agent_output_file": ("agent_outputs/stage_provider_pre_submission.json"),
     }
     assert_no_synth_leaks(rubric)
     return rubric
@@ -576,9 +571,7 @@ def _service_request_coherence_rubric(expectations: dict) -> dict:
             "acceptable_service_types": list(esr.get("acceptable_service_types") or []),
             "acceptable_site_of_service": list(esr.get("acceptable_site_of_service") or []),
         },
-        "relevant_agent_output_file": (
-            "agent_outputs/stage_provider_pre_submission.json"
-        ),
+        "relevant_agent_output_file": ("agent_outputs/stage_provider_pre_submission.json"),
     }
     assert_no_synth_leaks(rubric)
     return rubric
@@ -610,9 +603,7 @@ def _rationale_scope_rubric(expectations: dict) -> dict:
             "documented_facts_union": documented,
             "facts_not_in_chart_union": not_in_chart,
         },
-        "relevant_agent_output_file": (
-            "agent_outputs/stage_provider_pre_submission.json"
-        ),
+        "relevant_agent_output_file": ("agent_outputs/stage_provider_pre_submission.json"),
     }
     assert_no_synth_leaks(rubric)
     return rubric
@@ -633,9 +624,7 @@ def _no_submission_required_rubric(expectations: dict) -> dict:
             "expected_terminal_status": "requirement_checked",
             "reason_category": expectations.get("requirement_outcome") or "",
         },
-        "relevant_agent_output_file": (
-            "agent_outputs/stage_provider_pre_submission.json"
-        ),
+        "relevant_agent_output_file": ("agent_outputs/stage_provider_pre_submission.json"),
     }
     assert_no_synth_leaks(rubric)
     return rubric

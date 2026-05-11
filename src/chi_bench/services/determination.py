@@ -377,9 +377,7 @@ class DeterminationService:
             if d.case_id == case_id and d.superseded_by is None
         ]
         if existing:
-            raise InvalidCaseActionError(
-                f"Case '{case_id}' already has a finalized determination."
-            )
+            raise InvalidCaseActionError(f"Case '{case_id}' already has a finalized determination.")
 
         if case.payer_intake_case_id:
             intake_case_id = case.payer_intake_case_id

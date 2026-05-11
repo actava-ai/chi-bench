@@ -616,6 +616,7 @@ class ServiceContext:
 
         # Session mode: no per-task manifest.json at the fixtures root.
         from chi_bench.core.loaders import SESSION_MANIFEST_FILENAME
+
         if (self.fixtures_dir / SESSION_MANIFEST_FILENAME).exists():
             self._load_session_definitions()
             return

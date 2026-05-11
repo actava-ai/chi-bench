@@ -2,21 +2,38 @@ import json
 import csv
 from pathlib import Path
 
-import pytest
 
-
-def _make_trial(tmp: Path, name: str, reward: float, n_in: int, n_out: int, cache: int, walltime: float, model: str = "openai/gpt-5.5", agent: str = "codex") -> None:
+def _make_trial(
+    tmp: Path,
+    name: str,
+    reward: float,
+    n_in: int,
+    n_out: int,
+    cache: int,
+    walltime: float,
+    model: str = "openai/gpt-5.5",
+    agent: str = "codex",
+) -> None:
     d = tmp / name
     d.mkdir(parents=True, exist_ok=True)
-    (d / "result.json").write_text(json.dumps({
-        "verifier_result": {"rewards": {"reward": reward}},
-        "agent_result": {
-            "input_tokens": n_in, "output_tokens": n_out,
-            "n_cache_tokens": cache, "wall_clock_seconds": walltime,
-        },
-        "agent_info": {"agent": agent, "model_info": {"provider": model.split("/")[0], "name": model.split("/", 1)[1]}},
-        "task": {"path": f"data/prior_auth_um/tasks/{name.split('__')[0]}"},
-    }))
+    (d / "result.json").write_text(
+        json.dumps(
+            {
+                "verifier_result": {"rewards": {"reward": reward}},
+                "agent_result": {
+                    "input_tokens": n_in,
+                    "output_tokens": n_out,
+                    "n_cache_tokens": cache,
+                    "wall_clock_seconds": walltime,
+                },
+                "agent_info": {
+                    "agent": agent,
+                    "model_info": {"provider": model.split("/")[0], "name": model.split("/", 1)[1]},
+                },
+                "task": {"path": f"data/prior_auth_um/tasks/{name.split('__')[0]}"},
+            }
+        )
+    )
     # reward.txt sentinel — aggregate.py checks for completion.
     (d / "reward.txt").write_text(str(reward))
 

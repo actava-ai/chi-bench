@@ -44,7 +44,9 @@ app.add_typer(data_app, name="data")
 
 @data_app.command("verify")
 def data_verify(
-    data_dir: Path = typer.Option(Path("data"), "--data-dir", help="Root of the downloaded dataset tree."),
+    data_dir: Path = typer.Option(
+        Path("data"), "--data-dir", help="Root of the downloaded dataset tree."
+    ),
 ) -> None:
     """Check that the downloaded data tree matches what the runner expects."""
     EXPECTED_TASKS = {
@@ -75,7 +77,9 @@ def data_verify(
         missing.append(str(handbook))
 
     if missing or bad_counts:
-        typer.echo("Data layout INCOMPLETE — see README §'Download data' for setup steps.", err=True)
+        typer.echo(
+            "Data layout INCOMPLETE — see README §'Download data' for setup steps.", err=True
+        )
         for path in missing:
             typer.echo(f"  missing: {path}", err=True)
         for line in bad_counts:
@@ -96,6 +100,7 @@ def docker_build(
 ) -> None:
     """Build the chi-bench single-image container."""
     import subprocess
+
     cmd = ["docker", "build", "-f", "docker/Dockerfile", "--target", target, "-t", tag, "."]
     typer.echo(f"$ {' '.join(cmd)}")
     raise typer.Exit(subprocess.call(cmd))
@@ -104,6 +109,7 @@ def docker_build(
 def _configure_logging(level: str) -> None:
     """Shared logging setup for all CLI commands."""
     import logging
+
     logging.basicConfig(
         level=getattr(logging, level.upper(), logging.INFO),
         format="%(asctime)s %(levelname)-7s %(name)s — %(message)s",
@@ -549,5 +555,3 @@ def experiment_status(
         status = "complete" if reward_file.exists() else "running"
         reward = reward_file.read_text().strip() if reward_file.exists() else "-"
         typer.echo(f"  {trial_dir.name}: {status} (reward={reward})")
-
-

@@ -86,7 +86,7 @@ def archive_phase_logs_command(phase_slug: str) -> str:
             "set -e",
             f"phase_dir={quoted_phase_path}",
             'mkdir -p "$phase_dir" /logs/agent/e2e_relay',
-            'for path in /logs/agent/*; do',
+            "for path in /logs/agent/*; do",
             '  [ -e "$path" ] || continue',
             '  case "$path" in',
             "    /logs/agent/phases|/logs/agent/e2e_relay|"
@@ -110,9 +110,7 @@ def _sum_int_field(results: list[PhaseResult], field_name: str) -> int | None:
 
 def aggregate_phase_contexts(results: list[PhaseResult]) -> AgentContext:
     costs = [
-        float(result.context.cost_usd)
-        for result in results
-        if result.context.cost_usd is not None
+        float(result.context.cost_usd) for result in results if result.context.cost_usd is not None
     ]
     phase_metadata = [result.to_metadata() for result in results]
     return AgentContext(

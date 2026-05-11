@@ -77,11 +77,11 @@ class ProviderPreSubmissionVerifier(StageVerifier):
                 if latest_audit_final_action is not None
                 else _normalized_str(latest_determination.get("final_action"))
             )
-            checks["provider_pre_submission.provider_determination_present"] = bool(latest_determination)
+            checks["provider_pre_submission.provider_determination_present"] = bool(
+                latest_determination
+            )
             checks["provider_pre_submission.final_action"] = (
-                actual_final_action == expected_final_action
-                if latest_determination
-                else False
+                actual_final_action == expected_final_action if latest_determination else False
             )
 
         if expected.get("packet_must_be_absent") or is_expected_non_submit:
@@ -108,9 +108,9 @@ class ProviderPreSubmissionVerifier(StageVerifier):
         if is_expected_non_submit:
             mark_not_applicable(checks, "provider_pre_submission.required_documents_present")
         elif required_document_kinds:
-            checks["provider_pre_submission.required_documents_present"] = set(required_document_kinds).issubset(
-                actual_document_kinds
-            )
+            checks["provider_pre_submission.required_documents_present"] = set(
+                required_document_kinds
+            ).issubset(actual_document_kinds)
         else:
             mark_not_applicable(checks, "provider_pre_submission.required_documents_present")
 
@@ -122,7 +122,9 @@ class ProviderPreSubmissionVerifier(StageVerifier):
         ]
         if absent_document_kinds:
             for kind in absent_document_kinds:
-                checks[f"provider_pre_submission.document_absent.{kind}"] = kind not in actual_document_kinds
+                checks[f"provider_pre_submission.document_absent.{kind}"] = (
+                    kind not in actual_document_kinds
+                )
 
         details = {"case_id": resolved_case_id or None}
         if target_resolution is not None:

@@ -706,7 +706,9 @@ class DualPaE2EHarness(BaseInstalledAgent):
                 before=previous_export,
                 after=current_export,
                 request_id=str(current_request.get("id") or "").strip() or None,
-                case_id=str(current_request.get("case_id") or target_case_id(current_export)).strip(),
+                case_id=str(
+                    current_request.get("case_id") or target_case_id(current_export)
+                ).strip(),
                 phase="P2P coordination",
             )
             request_id = str(current_request.get("id") or "").strip()
@@ -758,9 +760,7 @@ class DualPaE2EHarness(BaseInstalledAgent):
                 if advance_result.startswith("unexpected_status")
                 else "p2p_event_open_failed",
             )
-            stuck_case_id = str(
-                request.get("case_id") or target_case_id(exported) or ""
-            ).strip()
+            stuck_case_id = str(request.get("case_id") or target_case_id(exported) or "").strip()
             if stuck_case_id:
                 await self._write_early_exit_marker(
                     environment,
@@ -882,10 +882,7 @@ class DualPaE2EHarness(BaseInstalledAgent):
             f"/logs/agent/e2e_relay/{transcript.request_id}/{role}_{turn_index:02d}.json"
         )
         host_output_path: Path = (
-            self.logs_dir
-            / "e2e_relay"
-            / transcript.request_id
-            / f"{role}_{turn_index:02d}.json"
+            self.logs_dir / "e2e_relay" / transcript.request_id / f"{role}_{turn_index:02d}.json"
         )
         repair_error: str | None = None
         attempts = 1 + max(0, int(self._resolved_flags.get("p2p_repair_attempts", 1)))
@@ -952,8 +949,7 @@ class DualPaE2EHarness(BaseInstalledAgent):
             and str(request.get("status") or "").strip() == "completed"
         ):
             raise RuntimeError(
-                "P2P outcome was recorded outside the harness relay before the "
-                "payer relay turn"
+                "P2P outcome was recorded outside the harness relay before the payer relay turn"
             )
 
         direct_actions = [
@@ -995,15 +991,11 @@ class DualPaE2EHarness(BaseInstalledAgent):
         before_snapshot = _p2p_bypass_snapshot(before, case_id=case_id, request_id=request_id)
         after_snapshot = _p2p_bypass_snapshot(after, case_id=case_id, request_id=request_id)
 
-        new_completed = (
-            after_snapshot["completed_requests"] - before_snapshot["completed_requests"]
-        )
+        new_completed = after_snapshot["completed_requests"] - before_snapshot["completed_requests"]
         new_outcomes = after_snapshot["outcome_requests"] - before_snapshot["outcome_requests"]
         new_outcome_actions = after_snapshot["outcome_actions"] - before_snapshot["outcome_actions"]
         if new_completed or new_outcomes or new_outcome_actions:
-            raise RuntimeError(
-                f"P2P outcome was recorded outside the harness relay during {phase}"
-            )
+            raise RuntimeError(f"P2P outcome was recorded outside the harness relay during {phase}")
 
         new_direct_actions = (
             after_snapshot["direct_session_actions"] - before_snapshot["direct_session_actions"]
@@ -1059,7 +1051,9 @@ class DualPaE2EHarness(BaseInstalledAgent):
                 environment=environment,
                 role="provider",
                 role_phase="provider_submit",
-                instruction=_phase_instruction("provider", "provider_submit", instruction, exported),
+                instruction=_phase_instruction(
+                    "provider", "provider_submit", instruction, exported
+                ),
                 mcp_url=provider_mcp_url,
                 model_name=self.provider_model,
             )
@@ -1116,7 +1110,9 @@ class DualPaE2EHarness(BaseInstalledAgent):
                 environment=environment,
                 role="provider",
                 role_phase="provider_submit",
-                instruction=_phase_instruction("provider", "provider_submit", instruction, exported),
+                instruction=_phase_instruction(
+                    "provider", "provider_submit", instruction, exported
+                ),
                 mcp_url=provider_mcp_url,
                 model_name=self.provider_model,
             )

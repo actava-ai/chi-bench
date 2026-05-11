@@ -38,19 +38,13 @@ def test_draft_is_the_initial_status() -> None:
 
 def test_draft_to_requirement_checked_is_legal() -> None:
     """A representative legal transition should not raise."""
-    assert (
-        CaseStatus.REQUIREMENT_CHECKED
-        in ALLOWED_CASE_TRANSITIONS[CaseStatus.DRAFT]
-    )
+    assert CaseStatus.REQUIREMENT_CHECKED in ALLOWED_CASE_TRANSITIONS[CaseStatus.DRAFT]
     # Should not raise.
     assert_transition_allowed(CaseStatus.DRAFT, CaseStatus.REQUIREMENT_CHECKED)
 
 
 def test_draft_to_approved_is_illegal() -> None:
     """A skip-ahead transition should be rejected."""
-    assert (
-        CaseStatus.APPROVED
-        not in ALLOWED_CASE_TRANSITIONS[CaseStatus.DRAFT]
-    )
+    assert CaseStatus.APPROVED not in ALLOWED_CASE_TRANSITIONS[CaseStatus.DRAFT]
     with pytest.raises(InvalidCaseTransitionError):
         assert_transition_allowed(CaseStatus.DRAFT, CaseStatus.APPROVED)

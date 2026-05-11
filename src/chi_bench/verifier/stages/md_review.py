@@ -47,7 +47,9 @@ def _compare_expected_item(expected_item: dict, actual_item: dict | None) -> tup
     else:
         value_match = normalize_scalar(actual_value) == normalize_scalar(expected_value)
 
-    unit_match = True if expected_unit in (None, "") else str(actual_unit or "") == str(expected_unit)
+    unit_match = (
+        True if expected_unit in (None, "") else str(actual_unit or "") == str(expected_unit)
+    )
     if recomputed_result is not None:
         item_result_match = recomputed_result == str(expected_result or "")
     else:
@@ -75,7 +77,9 @@ class MdReviewVerifier(StageVerifier):
         gt_review = ground_truth_fields_for_model(self.ground_truth, "MdReviewRecord")
         gt_decision = ground_truth_fields_for_model(self.ground_truth, "MdCaseDecision")
         md_reviews = filter_by_case_id(self.exported.get("payer_md_reviews", []), self.case_id)
-        md_decisions = filter_by_case_id(self.exported.get("payer_md_case_decisions", []), self.case_id)
+        md_decisions = filter_by_case_id(
+            self.exported.get("payer_md_case_decisions", []), self.case_id
+        )
         latest_decision = md_decisions[-1] if md_decisions else {}
 
         checks: dict[str, CheckStatus] = {}
@@ -132,17 +136,25 @@ class MdReviewVerifier(StageVerifier):
                         if not isinstance(item, dict):
                             continue
                         item_id = str(item.get("item_id") or "")
-                        item_passed, comparison = _compare_expected_item(item, actual_items.get(item_id))
+                        item_passed, comparison = _compare_expected_item(
+                            item, actual_items.get(item_id)
+                        )
                         item_details[item_id] = comparison
                         criterion_items_match = criterion_items_match and item_passed
                         if actual_items.get(item_id):
-                            observed_item_results.append(str(actual_items[item_id].get("item_result") or "unclear"))
+                            observed_item_results.append(
+                                str(actual_items[item_id].get("item_result") or "unclear")
+                            )
                     expected_rollup = str(criterion.get("expected_criterion_result") or "")
                     actual_rollup = str(actual_evaluation.get("result") or "")
-                    recomputed_rollup = rollup_criterion_result(
-                        observed_item_results,
-                        str(criterion.get("rollup_rule") or "all_items"),
-                    ) if observed_item_results else None
+                    recomputed_rollup = (
+                        rollup_criterion_result(
+                            observed_item_results,
+                            str(criterion.get("rollup_rule") or "all_items"),
+                        )
+                        if observed_item_results
+                        else None
+                    )
                     rollup_match = actual_rollup == expected_rollup
                     if recomputed_rollup is not None:
                         rollup_match = rollup_match and recomputed_rollup == expected_rollup
@@ -205,7 +217,8 @@ class MdReviewVerifier(StageVerifier):
 
         if not contract_v3:
             review_decisions = filter_by_case_id(
-                self.exported.get("review_decisions", []), self.case_id,
+                self.exported.get("review_decisions", []),
+                self.case_id,
             )
             denied_by_non_physician = any(
                 rd.get("outcome") in ("deny", "denied")
@@ -214,7 +227,9 @@ class MdReviewVerifier(StageVerifier):
             )
             checks["md.role_compliance"] = not denied_by_non_physician
         checks["md.audit"] = has_audit_action(
-            self.exported, self.case_id, "submit_case_decision",
+            self.exported,
+            self.case_id,
+            "submit_case_decision",
         )
 
         return StageResult(stage="md_review", checks=checks, details=details)

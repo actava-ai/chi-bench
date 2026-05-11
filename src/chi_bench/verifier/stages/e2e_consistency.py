@@ -145,9 +145,7 @@ def _check_provider_action_match_exact(
         "match": match,
     }
     if match:
-        message = (
-            f"agent_final_action exactly matches expected_action ({expected_action})."
-        )
+        message = f"agent_final_action exactly matches expected_action ({expected_action})."
     else:
         message = (
             f"Expected {expected_action}, agent recorded "
@@ -430,25 +428,17 @@ class E2EConsistencyVerifier(StageVerifier):
                 self.expectations.get("expected_provider_action") or "submit"
             ).strip()
             judgment = _check_provider_judgment_path(expected_action, agent_path)
-            match_exact = _check_provider_action_match_exact(
-                expected_action, self.exported
-            )
+            match_exact = _check_provider_action_match_exact(expected_action, self.exported)
 
             if agent_path == "no_submit":
                 checks: dict[str, CheckStatus] = {}
                 details: dict[str, Any] = {"case_id": self.case_id}
-                _project_check_result(
-                    checks=checks, details=details, check=judgment
-                )
-                _project_check_result(
-                    checks=checks, details=details, check=match_exact
-                )
+                _project_check_result(checks=checks, details=details, check=judgment)
+                _project_check_result(checks=checks, details=details, check=match_exact)
                 for name in _PAYER_SIDE_E2E_CHECK_NAMES_FOR_NO_SUBMIT:
                     checks[name] = check_not_applicable()
                     details.setdefault(name, {})["agent_path"] = agent_path
-                return StageResult(
-                    stage=self.stage_name, checks=checks, details=details
-                )
+                return StageResult(stage=self.stage_name, checks=checks, details=details)
 
         case_id = self.case_id
         expected = self.expectations.get("expected_e2e") or {}
@@ -512,9 +502,7 @@ class E2EConsistencyVerifier(StageVerifier):
             else packet_submitted_at <= determination_created_at
         )
 
-        binding_trace = _latest_case_stage_trace(
-            self.exported, case_id, "e2e_payer_gt_binding"
-        )
+        binding_trace = _latest_case_stage_trace(self.exported, case_id, "e2e_payer_gt_binding")
         binding_trace_details = binding_trace.get("details") if binding_trace else {}
         if not isinstance(binding_trace_details, dict):
             binding_trace_details = {}
@@ -536,9 +524,10 @@ class E2EConsistencyVerifier(StageVerifier):
         }
         if is_provider_to_payer_e2e_task(self.expectations):
             checks["e2e.payer_gt_binding_audit"] = bool(binding_audits)
-            checks["e2e.payer_gt_bound_after_submission"] = bool(
-                binding_trace and binding_created_at and packet_submitted_at
-            ) and binding_created_at >= packet_submitted_at
+            checks["e2e.payer_gt_bound_after_submission"] = (
+                bool(binding_trace and binding_created_at and packet_submitted_at)
+                and binding_created_at >= packet_submitted_at
+            )
         else:
             checks["e2e.payer_gt_binding_audit"] = check_not_applicable()
             checks["e2e.payer_gt_bound_after_submission"] = check_not_applicable()
@@ -623,9 +612,9 @@ class E2EConsistencyVerifier(StageVerifier):
             checks["e2e.pend_requested"] = "request_missing_information" in audit_actions
             checks["e2e.pend_provider_responded"] = "respond_to_pend" in audit_actions
             checks["e2e.pend_requeued_for_review"] = (
-                ("pended_action_required", "resubmitted") in transition_pairs
-                and ("resubmitted", "under_review") in transition_pairs
-            )
+                "pended_action_required",
+                "resubmitted",
+            ) in transition_pairs and ("resubmitted", "under_review") in transition_pairs
             checks["e2e.pend_chronology_valid"] = (
                 check_not_applicable()
                 if not chronology_has_required_timestamps
@@ -712,13 +701,12 @@ class E2EConsistencyVerifier(StageVerifier):
                 role="payer",
             )
             illegal_outcome_times = [
-                ts for ts in outcome_times
+                ts
+                for ts in outcome_times
                 if not any(start <= ts <= end for start, end in relay_windows)
             ]
             details["p2p_record_outcome_legal"] = {
-                "relay_windows": [
-                    {"enter": s, "leave": e} for s, e in relay_windows
-                ],
+                "relay_windows": [{"enter": s, "leave": e} for s, e in relay_windows],
                 "outcome_times": list(outcome_times),
                 "illegal_outcome_times": illegal_outcome_times,
             }
@@ -754,9 +742,7 @@ class E2EConsistencyVerifier(StageVerifier):
                 normalized_str(item.get("outcome")) for item in completed_p2p_requests
             )
             checks["e2e.p2p_transcript_exists"] = transcript_payload is not None
-            checks["e2e.p2p_transcript_has_both_roles"] = {"provider", "payer"}.issubset(
-                p2p_actors
-            )
+            checks["e2e.p2p_transcript_has_both_roles"] = {"provider", "payer"}.issubset(p2p_actors)
             checks["e2e.p2p_no_simulator_turns"] = bool(transcript_payload) and not (
                 p2p_actors & {"counterpart", "simulator"}
             )
@@ -797,8 +783,7 @@ class E2EConsistencyVerifier(StageVerifier):
             checks["e2e.p2p_outcome_matches_transcript"] = bool(
                 payer_final_position
                 and transcript_linked_request
-                and normalized_str(transcript_linked_request.get("outcome"))
-                == payer_final_position
+                and normalized_str(transcript_linked_request.get("outcome")) == payer_final_position
             )
         else:
             for name in p2p_check_names:
@@ -854,5 +839,3 @@ _PAYER_SIDE_E2E_CHECK_NAMES_FOR_NO_SUBMIT = (
     "e2e.p2p_record_outcome_phase_legal",
     "e2e.p2p_no_direct_session_tools",
 )
-
-

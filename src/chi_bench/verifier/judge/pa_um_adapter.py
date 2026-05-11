@@ -188,14 +188,18 @@ def _text_content(value: Any) -> str:
 def _row_matches_case(row: dict[str, Any], case_id: str) -> bool:
     if not case_id:
         return True
-    return _normalized_str(row.get("case_id")) == case_id or _normalized_str(row.get("id")) == case_id
+    return (
+        _normalized_str(row.get("case_id")) == case_id or _normalized_str(row.get("id")) == case_id
+    )
 
 
 def _case_rows(exported: dict[str, Any], case_id: str) -> list[dict[str, Any]]:
     rows = [row for row in _dict_rows(exported.get("cases")) if _row_matches_case(row, case_id)]
     target_case = exported.get("target_case")
     if isinstance(target_case, dict) and _row_matches_case(target_case, case_id):
-        if not any(_normalized_str(row.get("id")) == _normalized_str(target_case.get("id")) for row in rows):
+        if not any(
+            _normalized_str(row.get("id")) == _normalized_str(target_case.get("id")) for row in rows
+        ):
             rows.append(target_case)
     return rows
 
@@ -217,17 +221,13 @@ def _service_request_rows(
 
     if service_request_ids:
         return [
-            row
-            for row in service_requests
-            if _normalized_str(row.get("id")) in service_request_ids
+            row for row in service_requests if _normalized_str(row.get("id")) in service_request_ids
         ]
 
     patient_id = _normalized_str(expectations.get("target_patient_id"))
     if patient_id:
         return [
-            row
-            for row in service_requests
-            if _normalized_str(row.get("patient_id")) == patient_id
+            row for row in service_requests if _normalized_str(row.get("patient_id")) == patient_id
         ]
     return service_requests
 
@@ -396,7 +396,11 @@ def _add_document_files(
             metadata=metadata,
             content=_text_content(document.get("content")),
         )
-        structured = document.get("structured_data") if isinstance(document.get("structured_data"), dict) else {}
+        structured = (
+            document.get("structured_data")
+            if isinstance(document.get("structured_data"), dict)
+            else {}
+        )
         items.append(
             {
                 "surface": surface,
@@ -565,14 +569,14 @@ def _world_case_context(
     cases = _rows_for_world_case(world, "cases", case_id) or _case_rows(exported, case_id)
     target_case = exported.get("target_case")
     case = cases[0] if cases else target_case if isinstance(target_case, dict) else {}
-    service_request_id = _normalized_str(case.get("service_request_id")) if isinstance(case, dict) else ""
+    service_request_id = (
+        _normalized_str(case.get("service_request_id")) if isinstance(case, dict) else ""
+    )
     service_requests = [
         row
-        for row in _dict_rows(world.get("service_requests")) + _dict_rows(exported.get("service_requests"))
-        if (
-            service_request_id
-            and _normalized_str(row.get("id")) == service_request_id
-        )
+        for row in _dict_rows(world.get("service_requests"))
+        + _dict_rows(exported.get("service_requests"))
+        if (service_request_id and _normalized_str(row.get("id")) == service_request_id)
         or (
             not service_request_id
             and patient_id
@@ -594,7 +598,11 @@ def _world_case_context(
         "service_requests": _unique_by_id(service_requests),
         "lines": _rows_for_world_case(world, "lines", case_id),
         "submission_packets": _rows_for_world_case(world, "submission_packets", case_id)
-        or [row for row in _dict_rows(exported.get("submission_packets")) if _row_matches_case(row, case_id)],
+        or [
+            row
+            for row in _dict_rows(exported.get("submission_packets"))
+            if _row_matches_case(row, case_id)
+        ],
         "source_context_note": (
             "UM judge context is limited to payer-visible case and submission evidence; "
             "provider full-chart resources are intentionally not included."
@@ -613,7 +621,9 @@ def _build_um_source_context(
 
     world_documents = _rows_for_world_case(world, "documents", case_id)
     submitted_documents = world_documents or [
-        row for row in _dict_rows(exported.get("target_documents")) if _row_matches_case(row, case_id)
+        row
+        for row in _dict_rows(exported.get("target_documents"))
+        if _row_matches_case(row, case_id)
     ]
     raw_artifacts = _unique_by_id(
         [

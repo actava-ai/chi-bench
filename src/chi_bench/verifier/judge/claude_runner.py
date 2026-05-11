@@ -1386,9 +1386,7 @@ class ClaudeAgentRunner:
             # due to hook/plugin cleanup even when the agent succeeded).
             filtered_stdout = _strip_ignored_stream_json_lines(stdout)
             hook_only_exit = (
-                result.returncode != 0
-                and not filtered_stdout.strip()
-                and stdout.strip()
+                result.returncode != 0 and not filtered_stdout.strip() and stdout.strip()
             )
             if result.returncode == 0 or hook_only_exit:
                 self._write_debug_artifacts(

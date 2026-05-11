@@ -102,7 +102,9 @@ def run_session_verifier(
     try:
         if workers <= 1:
             for task_id in task_ids:
-                result = _verify_one(task_id, fixtures_dir, output_dir, verifier_host, verifier_port)
+                result = _verify_one(
+                    task_id, fixtures_dir, output_dir, verifier_host, verifier_port
+                )
                 task_results.append(result)
                 status = "PASS" if result["passed"] else "FAIL"
                 print(f"[{status}] {task_id}  reward={result['reward']:.3f}", flush=True)
@@ -110,13 +112,17 @@ def run_session_verifier(
             futures = {}
             with ThreadPoolExecutor(max_workers=workers) as pool:
                 for task_id in task_ids:
-                    f = pool.submit(_verify_one, task_id, fixtures_dir, output_dir, verifier_host, verifier_port)
+                    f = pool.submit(
+                        _verify_one, task_id, fixtures_dir, output_dir, verifier_host, verifier_port
+                    )
                     futures[f] = task_id
                 for f in as_completed(futures):
                     result = f.result()
                     task_results.append(result)
                     status = "PASS" if result["passed"] else "FAIL"
-                    print(f"[{status}] {result['task_id']}  reward={result['reward']:.3f}", flush=True)
+                    print(
+                        f"[{status}] {result['task_id']}  reward={result['reward']:.3f}", flush=True
+                    )
 
             # Restore manifest order for deterministic output.
             order = {tid: i for i, tid in enumerate(task_ids)}
@@ -132,9 +138,7 @@ def run_session_verifier(
         # most checks right but failing one per task.
         binary_pass_rate = passed / total if total > 0 else 0.0
         mean_fractional = (
-            sum(r.get("fractional_reward", 0.0) for r in task_results) / total
-            if total > 0
-            else 0.0
+            sum(r.get("fractional_reward", 0.0) for r in task_results) / total if total > 0 else 0.0
         )
 
         (output_dir / "reward.json").write_text(json.dumps({"reward": binary_pass_rate}))

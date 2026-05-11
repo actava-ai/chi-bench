@@ -9,7 +9,8 @@ class AppealVerifier(StageVerifier):
 
     def verify(self) -> StageResult:
         appeals = filter_by_case_id(
-            self.exported.get("appeals", []), self.case_id,
+            self.exported.get("appeals", []),
+            self.case_id,
         )
 
         checks: dict[str, CheckStatus] = {}

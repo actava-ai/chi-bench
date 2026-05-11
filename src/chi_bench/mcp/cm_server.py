@@ -14,9 +14,7 @@ from chi_bench.mcp.tool_naming import resolve_tool_name_separator
 try:
     from mcp.server.fastmcp import FastMCP
 except ImportError as error:  # pragma: no cover
-    raise RuntimeError(
-        "The mcp package is required to run the ChiBench CM MCP server."
-    ) from error
+    raise RuntimeError("The mcp package is required to run the ChiBench CM MCP server.") from error
 
 
 @lru_cache(maxsize=1)

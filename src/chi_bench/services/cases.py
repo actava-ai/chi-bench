@@ -154,6 +154,7 @@ def build_policy(case_id: str, task_kind: str, service_request: ServiceRequest) 
         defaults.expedited_turnaround_hours = 72
     return defaults
 
+
 _CASE_ID_PATTERN = re.compile(r"^CASE-ACT-(\d+)$")
 _SERVICE_REQUEST_ID_PATTERN = re.compile(r"^SR-(\d+)$")
 

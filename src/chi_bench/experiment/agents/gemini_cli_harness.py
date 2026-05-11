@@ -81,9 +81,7 @@ class GeminiCliHarness(GeminiCli):
                     ),
                 )
             except Exception:
-                self.logger.debug(
-                    "gemini-cli JSONL session copy failed", exc_info=True
-                )
+                self.logger.debug("gemini-cli JSONL session copy failed", exc_info=True)
 
     def populate_context_post_run(self, context: AgentContext) -> None:
         # `gemini-cli.trajectory.json` is the filename harbor's parent
@@ -96,11 +94,7 @@ class GeminiCliHarness(GeminiCli):
             try:
                 shim = _convert_session_jsonl_to_harbor_doc(jsonl_path.read_text())
                 if shim is not None:
-                    (self.logs_dir / "gemini-cli.trajectory.json").write_text(
-                        json.dumps(shim)
-                    )
+                    (self.logs_dir / "gemini-cli.trajectory.json").write_text(json.dumps(shim))
             except Exception:
-                self.logger.debug(
-                    "gemini-cli JSONL→harbor shim failed", exc_info=True
-                )
+                self.logger.debug("gemini-cli JSONL→harbor shim failed", exc_info=True)
         super().populate_context_post_run(context)

@@ -11,6 +11,7 @@ in a single place. Layer dependencies stay one-way: this module sits in
 ``core/`` so both ``experiment/`` and ``verifier/`` can import it without
 introducing a verifier→harness dependency.
 """
+
 from __future__ import annotations
 
 from typing import Any, Literal
@@ -70,10 +71,7 @@ def compute_agent_path(exported: dict[str, Any]) -> AgentPath:
     if final_action == "submit_pa":
         case_id = _clean(latest.get("case_id"))
         submissions = exported.get("submission_packets") or []
-        if any(
-            isinstance(s, dict) and _clean(s.get("case_id")) == case_id
-            for s in submissions
-        ):
+        if any(isinstance(s, dict) and _clean(s.get("case_id")) == case_id for s in submissions):
             return "submit"
         return "submit_incomplete"
     return "no_decision"

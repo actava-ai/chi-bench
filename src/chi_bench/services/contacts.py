@@ -52,9 +52,7 @@ class ContactsService:
                 continue
             if practitioner.role not in {"clinician", "provider"}:
                 continue
-            contact = contact_by_org_name.get(
-                (practitioner.organization_id, practitioner.name)
-            )
+            contact = contact_by_org_name.get((practitioner.organization_id, practitioner.name))
             items.append(
                 {
                     "id": practitioner.id,

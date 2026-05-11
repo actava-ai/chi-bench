@@ -97,7 +97,11 @@ def _extract_offer_slots(artifact: dict[str, Any] | None) -> list[str]:
     slots = _artifact_details_list(artifact, "offered_slots")
     if slots:
         return slots
-    return [match.strip() for match in _BULLET_LINE_RE.findall(_artifact_content(artifact)) if match.strip()]
+    return [
+        match.strip()
+        for match in _BULLET_LINE_RE.findall(_artifact_content(artifact))
+        if match.strip()
+    ]
 
 
 def _extract_selected_slot(artifact: dict[str, Any] | None) -> str | None:
@@ -137,7 +141,9 @@ def _extract_thread_state(artifact: dict[str, Any] | None) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _matches_slot_selection_rule(rule: str, offered_slots: list[str], selected_slot: str | None) -> bool:
+def _matches_slot_selection_rule(
+    rule: str, offered_slots: list[str], selected_slot: str | None
+) -> bool:
     if not offered_slots or not selected_slot:
         return False
     normalized = (rule or "first_offered").strip().lower()
@@ -159,7 +165,9 @@ def _audit_timestamps(exported: dict[str, Any], case_id: str, action: str) -> li
     return sorted(timestamps)
 
 
-def _artifact_sequence_ordered(artifacts: list[dict[str, Any]], required_suffixes: list[str]) -> CheckStatus:
+def _artifact_sequence_ordered(
+    artifacts: list[dict[str, Any]], required_suffixes: list[str]
+) -> CheckStatus:
     timestamps: list[datetime] = []
     for suffix in required_suffixes:
         artifact = _latest_artifact_by_suffix(artifacts, suffix)
@@ -217,10 +225,12 @@ class P2PVerifier(StageVerifier):
                 return StageResult(stage="p2p", checks=checks)
 
         p2p_requests = filter_by_case_id(
-            self.exported.get("payer_peer_to_peer_requests", []), self.case_id,
+            self.exported.get("payer_peer_to_peer_requests", []),
+            self.case_id,
         )
         sessions = filter_by_case_id(
-            self.exported.get("payer_p2p_session_records", []), self.case_id,
+            self.exported.get("payer_p2p_session_records", []),
+            self.case_id,
         )
         latest = p2p_requests[-1] if p2p_requests else {}
         latest_session = sessions[-1] if sessions else {}
@@ -294,12 +304,22 @@ class P2PVerifier(StageVerifier):
                 ]
             selection_rule = str(coordination.get("slot_selection_rule") or "first_offered")
 
-            offer_artifact = _latest_artifact_by_suffix(shared_artifacts, "coordination/01_offer.eml")
-            slot_response_artifact = _latest_artifact_by_suffix(shared_artifacts, "coordination/02_slot_response.eml")
-            confirmation_artifact = _latest_artifact_by_suffix(shared_artifacts, "coordination/03_confirmation.eml")
-            thread_state_artifact = _latest_artifact_by_suffix(shared_artifacts, "thread_state.json")
+            offer_artifact = _latest_artifact_by_suffix(
+                shared_artifacts, "coordination/01_offer.eml"
+            )
+            slot_response_artifact = _latest_artifact_by_suffix(
+                shared_artifacts, "coordination/02_slot_response.eml"
+            )
+            confirmation_artifact = _latest_artifact_by_suffix(
+                shared_artifacts, "coordination/03_confirmation.eml"
+            )
+            thread_state_artifact = _latest_artifact_by_suffix(
+                shared_artifacts, "thread_state.json"
+            )
 
-            offered_slots = [str(slot).strip() for slot in latest.get("offered_slots") or [] if str(slot).strip()]
+            offered_slots = [
+                str(slot).strip() for slot in latest.get("offered_slots") or [] if str(slot).strip()
+            ]
             offer_artifact_slots = _extract_offer_slots(offer_artifact)
             selected_slot = str(latest.get("provider_selected_slot") or "").strip() or None
             selected_slot_artifact = _extract_selected_slot(slot_response_artifact)
@@ -308,10 +328,18 @@ class P2PVerifier(StageVerifier):
             thread_state = _extract_thread_state(thread_state_artifact)
 
             checks["p2p.session_exists"] = has_session
-            checks["p2p.offer_written"] = any(path.endswith("/coordination/01_offer.eml") for path in relative_paths)
-            checks["p2p.slot_response_written"] = any(path.endswith("/coordination/02_slot_response.eml") for path in relative_paths)
-            checks["p2p.confirmation_written"] = any(path.endswith("/coordination/03_confirmation.eml") for path in relative_paths)
-            checks["p2p.event_opened"] = any(path.endswith("/event/00_opening.md") for path in relative_paths)
+            checks["p2p.offer_written"] = any(
+                path.endswith("/coordination/01_offer.eml") for path in relative_paths
+            )
+            checks["p2p.slot_response_written"] = any(
+                path.endswith("/coordination/02_slot_response.eml") for path in relative_paths
+            )
+            checks["p2p.confirmation_written"] = any(
+                path.endswith("/coordination/03_confirmation.eml") for path in relative_paths
+            )
+            checks["p2p.event_opened"] = any(
+                path.endswith("/event/00_opening.md") for path in relative_paths
+            )
             checks["p2p.summary_written"] = (
                 check_not_applicable()
                 if known_contract
@@ -348,7 +376,9 @@ class P2PVerifier(StageVerifier):
                     )
                 )
                 checks["p2p.audit"] = has_audit_action(
-                    self.exported, self.case_id, "respond_to_peer_to_peer",
+                    self.exported,
+                    self.case_id,
+                    "respond_to_peer_to_peer",
                 )
 
             selected_slot_present = bool(selected_slot or selected_slot_artifact)
@@ -422,13 +452,18 @@ class P2PVerifier(StageVerifier):
                 checks["p2p.thread_state_consistent"] = False
 
             determinations = filter_by_case_id(
-                self.exported.get("payer_determinations", []), self.case_id,
+                self.exported.get("payer_determinations", []),
+                self.case_id,
             )
             latest_determination = determinations[-1] if determinations else {}
             determination_contract = workflow.get("determination_contract") or {}
             if stage_in_scope(self.expectations, "outcome"):
-                expected_decision = str(determination_contract.get("expected_decision") or "").strip()
-                expected_case_status = str(determination_contract.get("expected_case_status") or "").strip()
+                expected_decision = str(
+                    determination_contract.get("expected_decision") or ""
+                ).strip()
+                expected_case_status = str(
+                    determination_contract.get("expected_case_status") or ""
+                ).strip()
                 target_case = self.exported.get("target_case") or {}
                 checks["p2p.determination_matches_contract"] = bool(latest_determination) and (
                     latest_determination.get("final_decision") == expected_decision
@@ -440,10 +475,14 @@ class P2PVerifier(StageVerifier):
             gt = ground_truth_fields_for_model(self.ground_truth, "PayerPeerToPeerRequest")
             if gt.get("outcome"):
                 checks["p2p.outcome_matches"] = (
-                    latest.get("outcome") == gt["outcome"] if has_request else check_not_applicable()
+                    latest.get("outcome") == gt["outcome"]
+                    if has_request
+                    else check_not_applicable()
                 )
             checks["p2p.slots_offered"] = (
-                len(latest.get("offered_slots") or []) > 0 if has_request else check_not_applicable()
+                len(latest.get("offered_slots") or []) > 0
+                if has_request
+                else check_not_applicable()
             )
             checks["p2p.scheduled"] = (
                 latest.get("scheduled_at") is not None if has_request else check_not_applicable()

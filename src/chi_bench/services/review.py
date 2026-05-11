@@ -92,7 +92,10 @@ class ReviewService:
         parsed_evals = self._parse_review_evaluations(
             stage="nurse_review",
             line_number=line_number,
-            evaluations=[e.model_dump() if isinstance(e, NurseCriterionEvaluation) else e for e in (evaluations or [])],
+            evaluations=[
+                e.model_dump() if isinstance(e, NurseCriterionEvaluation) else e
+                for e in (evaluations or [])
+            ],
         )
 
         now = self.ctx.now
@@ -194,7 +197,9 @@ class ReviewService:
         result: dict[str, Any] = {"case_recommendation": case_rec.model_dump(mode="json")}
 
         if rec == NurseReviewRecommendation.REQUEST_INFO:
-            follow_up_note = clinical_notes or f"Additional information required: {effective_info_requested}"
+            follow_up_note = (
+                clinical_notes or f"Additional information required: {effective_info_requested}"
+            )
             result["missing_information"] = self.ctx.request_missing_information_internal(
                 case_id,
                 [effective_info_requested],
@@ -269,7 +274,10 @@ class ReviewService:
         parsed_evals = self._parse_review_evaluations(
             stage="md_review",
             line_number=line_number,
-            evaluations=[e.model_dump() if isinstance(e, NurseCriterionEvaluation) else e for e in (evaluations or [])],
+            evaluations=[
+                e.model_dump() if isinstance(e, NurseCriterionEvaluation) else e
+                for e in (evaluations or [])
+            ],
         )
 
         now = self.ctx.now

@@ -1,6 +1,5 @@
 from pathlib import Path
 
-import pytest
 
 from chi_bench.experiment.docker_env import ChiBenchDockerEnvironment
 

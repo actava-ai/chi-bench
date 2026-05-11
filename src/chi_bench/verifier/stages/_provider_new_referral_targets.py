@@ -189,17 +189,11 @@ def _linked_case_candidates(
         and normalized_str(case.get("service_request_id")) == service_request_id
     ]
     if target_case_id:
-        return [
-            case
-            for case in candidates
-            if normalized_str(case.get("id")) == target_case_id
-        ]
+        return [case for case in candidates if normalized_str(case.get("id")) == target_case_id]
     if target_order_id:
         return candidates
     return [
-        case
-        for case in candidates
-        if normalized_str(case.get("patient_id")) == target_patient_id
+        case for case in candidates if normalized_str(case.get("patient_id")) == target_patient_id
     ]
 
 
@@ -227,8 +221,7 @@ def _resolve_case_candidate(
     matching_status_cases = [
         case
         for case in case_candidates
-        if expected_status
-        and normalized_str(case.get("status")) == expected_status
+        if expected_status and normalized_str(case.get("status")) == expected_status
     ]
     if len(matching_status_cases) == 1:
         return matching_status_cases[0], "expected_status"

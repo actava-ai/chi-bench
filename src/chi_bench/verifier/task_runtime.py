@@ -1615,13 +1615,7 @@ def _load_optional_world(expectations_path: Path) -> dict[str, Any] | None:
     world_dirs.extend(
         [
             repo_root / "datasets" / "care_management" / "shared" / "worlds",
-            repo_root
-            / "datasets"
-            / "archive"
-            / "legacy"
-            / "care_management"
-            / "shared"
-            / "worlds",
+            repo_root / "datasets" / "archive" / "legacy" / "care_management" / "shared" / "worlds",
         ]
     )
 

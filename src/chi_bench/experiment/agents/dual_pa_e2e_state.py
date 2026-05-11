@@ -178,7 +178,7 @@ def logical_phase(role_phase: str) -> LogicalPhase:
 # Kept under the original private names so existing imports (harness +
 # tests) keep working without a wider rename. Single source of truth lives
 # in core/.
-from chi_bench.core.agent_path import (
+from chi_bench.core.agent_path import (  # noqa: E402
     has_provider_decision as _has_provider_decision,
     latest_provider_determination as _provider_determination,
 )
