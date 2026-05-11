@@ -9,15 +9,15 @@
 
 ## 1. Goal
 
-Ship a clean, minimal OSS repository that lets a third party reproduce the **main-text tables and figures** of the chi-Bench paper:
+Ship a clean, minimal OSS repository that lets a third party reproduce the **main-text numerical results** of the chi-Bench paper. v1 produces CSV / JSON tables only — no plotting.
 
 - **Table 1** — 30 (harness × model) cells × 75 tasks × 3 trials. Overall + per-domain pass@1 / pass@3 / pass^3, Steps, Cost.
 - **Table 2** — chi-Bench-Arena: dual-agent end-to-end PA on 23 tasks.
 - **Table 3** — chi-Bench-Marathon: all 25 tasks per domain in one agent session.
-- **Skill-ablation figure** — 4 conditions × 75 tasks (full / −Domain / −Medical / −Both).
+- **Skill-ablation results** — 4 conditions × 75 tasks (full / −Domain / −Medical / −Both); reported as a per-condition CSV (paper renders it as Fig. 4, but v1 stops at the numbers).
 - **Table 5** — MCP vs. CLI: tool-surface ablation on 75 tasks.
 
-Non-goals for v1: appendix stratification tables, failure-mode taxonomy analyzer, synthesis pipeline, frontend, voice modes, per-row API-key spend isolation.
+Non-goals for v1: appendix stratification tables, failure-mode taxonomy analyzer, **figure rendering (cost-Pareto / pass^k descent / skill-ablation bars / failure-mode bars)**, synthesis pipeline, frontend, voice modes, per-row API-key spend isolation. Users reproducing paper figures bring their own plotting.
 
 ## 2. Top-level repo layout
 
@@ -61,8 +61,7 @@ chi-bench/
 │
 ├── scripts/
 │   ├── run_table.sh           # `./scripts/run_table.sh table1 [filters]`
-│   ├── aggregate.py           # trimmed aggregate_results.py → table CSV + JSON
-│   └── plot_figures.py        # cost_pareto, passk_descent, skill_ablation, failure_modes
+│   └── aggregate.py           # trimmed aggregate_results.py → table CSV + JSON
 │
 ├── data/                      # gitignored; user populates from HF + Google Drive
 │   ├── prior_auth_provider/{registry.json, shared/, tasks/}
@@ -311,14 +310,14 @@ No download command. No HF auth. No content hashes embedded in the repo (HF prov
 
 ## 8. Paper-table configs
 
-Five YAML files under `configs/experiments/`, one per main-text table/figure:
+Five YAML files under `configs/experiments/`, one per main-text result:
 
 | File | Reproduces | Cells | Tasks per row | Trials |
 |---|---|---|---|---|
 | `table1_main_matrix.yaml` | Table 1 (Main) | 30 rows | 75 (25 PA-prov + 25 PA-UM + 25 CM) | 3 |
 | `table2_e2e_arena.yaml` | Table 2 (E2E) | 1 row (provider=Codex+GPT-5.5, payer=Codex+GPT-5.5) | 23 (prior_auth_e2e) | 3 |
 | `table3_marathon.yaml` | Table 3 (Marathon) | 2 rows × 3 domains | 1 marathon task per domain | 3 |
-| `table4_skill_ablation.yaml` | Skill-ablation figure | 4 conditions × 1 row | 75 | 3 |
+| `table4_skill_ablation.yaml` | Skill-ablation numbers (paper Fig. 4 source) | 4 conditions × 1 row | 75 | 3 |
 | `table5_mcp_vs_cli.yaml` | Table 5 (MCP vs CLI) | 2 conditions × 1 row | 75 | 3 |
 
 ### `table1_main_matrix.yaml` structure
@@ -428,7 +427,7 @@ rows:
 
 ### Driver script: `scripts/run_table.sh`
 
-One bash entry point. Iterates `rows × domains × conditions` (where applicable), invokes `chi-bench experiment run` per cell, then `python scripts/aggregate.py` and `python scripts/plot_figures.py` to render the table.
+One bash entry point. Iterates `rows × domains × conditions` (where applicable), invokes `chi-bench experiment run` per cell, then `python scripts/aggregate.py` to render the table CSV.
 
 ```bash
 ./scripts/run_table.sh table1                            # all 30 rows × 3 domains
@@ -459,15 +458,9 @@ python scripts/aggregate.py \
   --out-json logs/table1.json
 ```
 
-### Figures: `scripts/plot_figures.py`
+### No plotting in v1
 
-**Net-new code, not a port.** Cross-checked: the source repo contains zero matplotlib code — paper figures were authored outside this repo. v1 ships three figures derived from the aggregated CSVs:
-
-- `cost_pareto.pdf` — Table 1's ROI quadrant scatter (x: log-cost, y: pass@1, median crosshairs, Pareto frontier line).
-- `passk_descent.pdf` — pass@k vs pass^k for k∈{1,2,3} pooled across 75 tasks.
-- `skill_ablation.pdf` — bar chart of 4 conditions × 3 domains for Table 4.
-
-**`failure_modes_main.pdf` is out of scope for v1.** The paper's failure-mode taxonomy was an offline post-hoc analysis of trial transcripts; the verifier does not emit `failure_l1` / `failure_l2` fields, and no analyzer exists in the source repo. Listed in §12 as a deferred follow-up.
+All paper figures (`cost_pareto.pdf`, `passk_descent.pdf`, `skill_ablation.pdf`, `failure_modes_main.pdf`) are out of scope. The aggregated CSV / JSON contain every number the figures depend on; users who want plots bring their own matplotlib / R / pgfplots pipeline. Rationale: the source repo has zero plotting code (paper figures were authored externally), and the v1 release should focus on a reproducible numerical pipeline before adding rendering surface.
 
 ## 9. Tests + CI
 
@@ -525,7 +518,7 @@ Detailed plan is the writing-plans step; the phases this spec implies:
 3. **Single-image Docker** — port `Dockerfile.modal` → `Dockerfile`, port `modal-entrypoint.sh` → `entrypoint.sh`, add `ChiBenchDockerEnvironment`.
 4. **Strip per-row keys** — remove `key_groups`, `*_key_env`, `_resolve_agent_key_overrides`, related warnings.
 5. **HF dataset packaging** — one-shot script to strip `environment/` dirs, rewrite `task.toml` MCP host, upload to `actava/chi-bench`.
-6. **Configs + driver** — five table YAMLs, `run_table.sh`, trimmed `aggregate.py`, `plot_figures.py`.
+6. **Configs + driver** — five table YAMLs, `run_table.sh`, trimmed `aggregate.py`.
 7. **CLI trim** — keep only `serve`, `mcp`, `experiment.{run,status,rejudge}`, `data.verify`, `docker.build`.
 8. **Tests + CI** — ~12 tests, three CI jobs.
 9. **Docs + README** — write README + 3 `docs/` files. Verify single-task quickstart end-to-end on a clean machine.
@@ -541,12 +534,12 @@ Performed during spec self-review; recording the deltas so implementation doesn'
 | Table 2 — E2E | Source ships `curated25_e2e_codex_gpt55.yaml` with `n_attempts: 1` + a `run_e2e_codex_gpt55_pass3_supplement.sh` script that adds 2 more. Spec ships `n_attempts: 3` directly, no supplement needed. `agent_kwargs` (phase_max_turns, max_cycles, p2p_*) are required and listed in §8. |
 | Table 3 — Marathon | Source has 3 marathon "tasks" (one per domain), each a single task dir whose fixtures pack all 25 cases. NOT 4. Spec text fixed. |
 | Wilson 95% CIs | Paper claims Wilson; both source aggregators use bootstrap or no CI. `scripts/aggregate.py` must add a Wilson helper (~15 LoC). Called out in §8. |
-| Failure-mode figure | Verifier emits no `failure_l1` / `failure_l2`; no analyzer in source. Out of scope for v1, declared in §8 + §13. |
+| Failure-mode analysis | Verifier emits no `failure_l1` / `failure_l2`; no analyzer in source. Out of scope for v1 (also subsumed by the no-plotting policy). |
 | Cost/walltime | `configs/prices.yaml` exists, covers GPT-5.x / Claude 4.x / Gemini 3.x / OpenRouter pricing as of April 2026. Port as-is; verify before release that no model price has shifted. |
 | `HEALTHVERSE_TOOL_MODE` env var | Wired through `runner.py` → `modal-entrypoint.sh` for CLI tool mode. Single-image `entrypoint.sh` must port the same `npm install -g mcporter` step. |
 | `HEALTHVERSE_SKILLS_ABLATE` env var | Wired through `runner.py` → `modal-entrypoint.sh`. Same: port to `entrypoint.sh`. Reference subdir names verified in §11. |
 | Dual-PA-E2E harness | Source: `dual_pa_e2e_harness.py` + `dual_pa_e2e_phase_runner.py` + `dual_pa_e2e_relay.py` + `dual_pa_e2e_state.py`. All four ship; depend on Harbor's `BaseInstalledAgent`. |
-| Plotting | Source has zero matplotlib code. `scripts/plot_figures.py` is net-new (~200 LoC). Three figures: cost_pareto, passk_descent, skill_ablation. |
+| Plotting | Source has zero matplotlib code. **No plotting in v1** — aggregate.py emits CSV / JSON only; users render figures themselves. |
 | Modal env import path | Source: `healthverse.experiment.modal_env:HealthverseModalEnvironment`. Renamed in §4. |
 
 ## 13. Open items (to settle during implementation, not blockers for the spec)
@@ -554,5 +547,5 @@ Performed during spec self-review; recording the deltas so implementation doesn'
 - **License**: Apache-2.0 assumed; confirm with project owners. Same question for the data license on the HF dataset card.
 - **Skills-ablate subdir names**: confirmed in source as `care-manager`, `medical-library`, `payer-um`, `platform`, `provider-pa`. `platform` is never ablated. Re-confirm after the HF handbook upload.
 - **`verifier/compat/` + `judge_legacy.py`**: keep in v1; investigate during impl whether any current paper task still hits the legacy code path. If not, drop in a follow-up.
-- **Failure-mode figure (`failure_modes_main.pdf`, `failure_l2_topbar.pdf`)**: explicitly out of scope for v1. The verifier emits no `failure_l1` / `failure_l2` fields; the paper's analysis was offline post-hoc and no analyzer exists in the source repo. Deferred until a separate failure-taxonomy classifier is built.
+- **Failure-mode analysis**: explicitly out of scope for v1. The verifier emits no `failure_l1` / `failure_l2` fields and no analyzer exists in source. Deferred until a separate failure-taxonomy classifier is built. (Plotting was also dropped for v1; see §8 "No plotting in v1".)
 - **`scripts/smoke.sh`**: small wrapper around `chi-bench experiment run` on one task per domain. Trivial to write; called out here so it doesn't get forgotten.
