@@ -149,9 +149,7 @@ class CMOutreachService:
         if not isinstance(persona_payload, dict):
             return None
         try:
-            from chi_bench.synth.cm.models.persona_contract import (
-                PatientPersonaContract,
-            )
+            from chi_bench.core.contracts import PatientPersonaContract
 
             return PatientPersonaContract.model_validate(persona_payload)
         except Exception:

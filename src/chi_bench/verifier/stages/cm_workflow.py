@@ -21,7 +21,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
-from chi_bench.synth.cm.models.cm_export_contract import CMExportContract
+from chi_bench.core.contracts import CMExportContract
 
 
 # ---------------------------------------------------------------------------

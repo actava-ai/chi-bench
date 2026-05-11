@@ -28,7 +28,7 @@ from __future__ import annotations
 from typing import Any
 
 from chi_bench.core.scenario import InitialState, SharedWorldDefinition
-from chi_bench.synth.models import StageArtifact
+from chi_bench.core.contracts import StageArtifact
 
 # Per initial_state, the ordered (owning_stage, model_name) pairs that must
 # exist in the world before the agent takes control. Derived directly from

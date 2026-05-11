@@ -4,7 +4,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
-from chi_bench.synth.hotfix.normalizers import (
+from ._normalizers import (
     normalize_place_of_service,
     normalize_service_type,
 )

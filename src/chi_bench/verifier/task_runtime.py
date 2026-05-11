@@ -1243,8 +1243,7 @@ def _run_cm_verifier(
     (NOT_APPLICABLE for degraded rubrics) so scoring/debug reports can tell
     "judge said no" from "judge never answered".
     """
-    from chi_bench.synth.cm.models.cm_export_contract import CMExportContract
-    from chi_bench.synth.cm.models.persona_contract import PatientPersonaContract
+    from chi_bench.core.contracts import CMExportContract, PatientPersonaContract
     from chi_bench.verifier.judge.cm_adapter import CmJudgeAdapter
     from chi_bench.verifier.judge.workspace_judge import WorkspaceJudge
     from chi_bench.verifier.stages._base import NOT_APPLICABLE
