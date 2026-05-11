@@ -8,7 +8,7 @@ from chi_bench.core.enums import PayerMode, TaskActor
 from chi_bench.core.loaders import load_copilot_world
 from chi_bench.core.scenario import ExpectationDefinition, TaskManifest
 
-DEFAULT_COPILOT_WORLD_ID = "chi_bench-prior-auth-canonical-v2"
+DEFAULT_COPILOT_WORLD_ID = "chi-bench-pa-v2-provider"
 
 
 def _default_target_case_id(world) -> str:

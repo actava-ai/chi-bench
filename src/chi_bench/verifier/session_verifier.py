@@ -13,7 +13,7 @@ from chi_bench.verifier.task_runtime import run_verifier
 
 DEFAULT_FIXTURES_DIR = Path("/fixtures")
 DEFAULT_OUTPUT_DIR = Path("/logs/verifier")
-DEFAULT_VERIFIER_HOST = "chi_bench-server"
+DEFAULT_VERIFIER_HOST = "chi-bench-server"
 # WorldStore's SQLite layer is not thread-safe under burst concurrent reads:
 # 5 parallel /export calls reproduce
 # `sqlite3.ProgrammingError: Cannot operate on a closed database.` in
@@ -89,7 +89,7 @@ def run_session_verifier(
     session-level reward.json and session_score.json are always written.
 
     ``workers`` controls parallelism. /export is a read-only GET so concurrent
-    calls to the shared chi_bench-server are safe. Use workers=1 to force
+    calls to the shared chi-bench-server are safe. Use workers=1 to force
     sequential execution (useful for debugging).
     """
     session_manifest = load_session_manifest(fixtures_dir)

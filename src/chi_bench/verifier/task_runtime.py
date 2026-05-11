@@ -1644,7 +1644,7 @@ def run_verifier(
     scorecard_path: Path = DEFAULT_SCORECARD_PATH,
     exported_state_path: Path = DEFAULT_EXPORTED_STATE_PATH,
     verifier_context_path: Path = DEFAULT_VERIFIER_CONTEXT_PATH,
-    verifier_host: str = "chi_bench-server",
+    verifier_host: str = "chi-bench-server",
     verifier_port: int | None = None,
 ) -> int:
     expectations = load_expectations(expectations_path)
@@ -1733,7 +1733,7 @@ def run_verifier(
 
 def run_oracle(
     expectations_path: Path = DEFAULT_EXPECTATIONS_PATH,
-    agent_host: str = "chi_bench-server",
+    agent_host: str = "chi-bench-server",
     agent_port: int | None = None,
 ) -> int:
     expectations = load_expectations(expectations_path)
@@ -1758,7 +1758,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     verify_parser = subparsers.add_parser("verify")
     verify_parser.add_argument("--expectations-path", type=Path, default=DEFAULT_EXPECTATIONS_PATH)
-    verify_parser.add_argument("--verifier-host", default="chi_bench-server")
+    verify_parser.add_argument("--verifier-host", default="chi-bench-server")
     verify_parser.add_argument("--reward-path", type=Path, default=DEFAULT_REWARD_PATH)
     verify_parser.add_argument("--scorecard-path", type=Path, default=DEFAULT_SCORECARD_PATH)
     verify_parser.add_argument(
@@ -1771,7 +1771,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     solve_parser = subparsers.add_parser("solve")
     solve_parser.add_argument("--expectations-path", type=Path, default=DEFAULT_EXPECTATIONS_PATH)
-    solve_parser.add_argument("--agent-host", default="chi_bench-server")
+    solve_parser.add_argument("--agent-host", default="chi-bench-server")
     solve_parser.add_argument("--agent-port", type=int, default=None)
 
     healthcheck_parser = subparsers.add_parser("healthcheck")

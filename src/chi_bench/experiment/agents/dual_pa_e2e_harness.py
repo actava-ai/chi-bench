@@ -89,7 +89,7 @@ def _select_role_mcp_urls(servers: Iterable[Any]) -> tuple[str, str]:
 
 def _http_base_from_mcp_url(mcp_url: str) -> str:
     parsed = urlparse(mcp_url)
-    host = parsed.hostname or "chi_bench-server"
+    host = parsed.hostname or "chi-bench-server"
     return urlunparse((parsed.scheme or "http", f"{host}:8023", "", "", "", ""))
 
 

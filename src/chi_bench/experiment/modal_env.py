@@ -103,7 +103,7 @@ def _terminate_tracked_sandboxes() -> None:
 
 # Host env vars forwarded into the Modal sandbox at container start.
 # Mirrors the interpolations in each task's `environment/docker-compose.yaml`
-# for the chi_bench-server service: Modal doesn't parse compose, so we
+# for the chi-bench-server service: Modal doesn't parse compose, so we
 # propagate these explicitly here. Only keys with non-empty host values are
 # forwarded — empty strings would defeat the `os.environ.get(KEY) or DEFAULT`
 # patterns inside chi_bench (e.g. judge.timeout_s).

@@ -17,7 +17,7 @@ def _seed_cm_fixtures(store: WorldStore) -> None:
     cm_worlds_dir = (
         Path(__file__).resolve().parents[2] / "data" / "care_management" / "shared" / "worlds"
     )
-    cm_world_path = cm_worlds_dir / "chi_bench-care-mgmt-canonical-v1.json"
+    cm_world_path = cm_worlds_dir / "chi-bench-cm-curated25-v1.json"
     if not cm_world_path.exists():
         return
 

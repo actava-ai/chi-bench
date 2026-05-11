@@ -35,6 +35,25 @@ RUN apt-get update \
     && command -v claude \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Resolver shim so the WorkspaceJudge subprocess can always find `claude`.
+# Harbor's stock claude-code agent install runs `curl claude.ai/install.sh | bash`,
+# which deletes /usr/bin/claude (the npm-baked symlink) and installs into
+# ~/.local/bin — a path NOT on the default container PATH for non-login
+# `docker exec` shells. The verifier's `subprocess.run(["claude", ...])`
+# (claude_runner.py) therefore raises FileNotFoundError post-install. This
+# shim sits earlier on PATH than /usr/bin and routes to whichever real
+# binary exists at exec time, surviving any installer rearrangement.
+RUN printf '%s\n' \
+    '#!/bin/sh' \
+    'for p in "$HOME/.local/bin/claude" /root/.local/bin/claude /home/agent/.local/bin/claude /usr/bin/claude.real; do' \
+    '  [ -x "$p" ] && exec "$p" "$@"' \
+    'done' \
+    'echo "claude binary not found in standard locations (~/.local/bin)" >&2' \
+    'exit 127' \
+    > /usr/local/bin/claude \
+    && chmod +x /usr/local/bin/claude \
+    && cp -L /usr/bin/claude /usr/bin/claude.real
+
 WORKDIR /workspace
 
 RUN pip install --no-cache-dir uv

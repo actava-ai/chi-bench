@@ -46,7 +46,3 @@ chi-bench experiment run \
 ```
 
 Each should produce a `result.json` under `logs/experiments/.../trial-*/`.
-
-If `chi-bench experiment run` fails on the docker engine wiring (the
-known `ChiBenchDockerEnvironment` Harbor-protocol gap), the smoke is
-deferred until that's complete.

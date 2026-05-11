@@ -15,7 +15,7 @@ from __future__ import annotations
 
 
 CM_MCP_PORT: int = 8200
-"""HTTP port the CM MCP server listens on inside the chi_bench-server container."""
+"""HTTP port the CM MCP server listens on inside the chi-bench-server container."""
 
 CM_MCP_NAMESPACES: tuple[str, ...] = (
     "cm_intake",

@@ -1,9 +1,32 @@
-# chi-Bench
+<p align="center">
+  <img src="assets/figures/logo.svg" alt="chi-Bench" width="520"/>
+</p>
 
-> **C**linical **H**ealthcare **I**n-Situ Environment and Evaluation **Bench**mark — long-horizon, policy-rich healthcare workflows for AI agents.
+<h1 align="center">Χ-Bench</h1>
 
-- Paper: [arXiv link — fill in once posted]
+<p align="center">
+  <b>C</b>linical <b>H</b>ealthcare <b>I</b>n-Situ Environment and Evaluation <b>Bench</b>mark<br/>
+  Long-horizon, policy-rich healthcare workflows for AI agents.
+</p>
+
+<p align="center">
+  <a href="https://arxiv.org/abs/XXXX.XXXXX">
+    <img src="https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b?logo=arxiv&logoColor=white" alt="arXiv"/>
+  </a>
+  <a href="https://huggingface.co/datasets/actava/chi-bench">
+    <img src="assets/figures/huggingface.png" alt="Hugging Face" height="28"/>
+  </a>
+  <a href="https://actava-ai.github.io/chi-bench/leaderboard">
+    <img src="assets/figures/leaderboard.png" alt="Leaderboard" height="28"/>
+  </a>
+  <a href="https://www.python.org/downloads/">
+    <img src="assets/figures/python.png" alt="Python 3.12+" height="28"/>
+  </a>
+</p>
+
+- Paper: https://arxiv.org/abs/XXXX.XXXXX *(fill in once posted)*
 - Dataset: https://huggingface.co/datasets/actava/chi-bench
+- Leaderboard: https://actava-ai.github.io/chi-bench/leaderboard
 - Skills handbook (separate download): <GOOGLE_DRIVE_SHARE_URL_PLACEHOLDER>
 
 ## What this benchmark measures

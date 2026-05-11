@@ -4,7 +4,7 @@ Usage::
 
     python -m chi_bench.experiment.agents.openai_agents_runner \
         --instruction-file /tmp/instruction.md \
-        --mcp-url http://chi_bench-server:8000/mcp
+        --mcp-url http://chi-bench-server:8000/mcp
 
 Produces three artifacts in ``$OPENAI_AGENTS_LOGS_DIR`` (default ``/logs/agent``):
 
