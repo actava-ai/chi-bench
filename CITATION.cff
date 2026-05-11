@@ -1,0 +1,148 @@
+cff-version: 1.2.0
+message: "If you use chi-Bench, please cite the following paper."
+title: "chi-Bench: Can AI Agents Automate End-to-End, Long-Horizon, Policy-Rich Healthcare Workflows?"
+authors:
+  - family-names: Chen
+    given-names: Haolin
+  - family-names: Metelski
+    given-names: Deon
+  - family-names: Qi
+    given-names: Leon
+  - family-names: Xia
+    given-names: Tao
+  - family-names: Lee
+    given-names: Joonyul
+  - family-names: Brown
+    given-names: Steve
+  - family-names: Riley
+    given-names: Kevin
+  - family-names: Wang
+    given-names: Frank
+  - family-names: Liu
+    given-names: "T. Y. Alvin"
+    name-suffix: MD
+  - family-names: Capps
+    given-names: Hank
+    name-suffix: MD
+  - family-names: Tang
+    given-names: Zeyu
+  - family-names: Song
+    given-names: Xiangchen
+  - family-names: Kong
+    given-names: Lingjing
+  - family-names: Feng
+    given-names: Fan
+  - family-names: Zeng
+    given-names: Tianyi
+  - family-names: Liu
+    given-names: Zhiwei
+  - family-names: Ma
+    given-names: Zixian
+  - family-names: Jiang
+    given-names: Hang
+  - family-names: Geng
+    given-names: Fangli
+  - family-names: Yuan
+    given-names: Yuan
+  - family-names: You
+    given-names: Chenyu
+  - family-names: Wen
+    given-names: Qingsong
+  - family-names: Wei
+    given-names: Hua
+  - family-names: Fu
+    given-names: Yanjie
+  - family-names: Zhao
+    given-names: Yue
+  - family-names: Yang
+    given-names: Carl
+  - family-names: Huang
+    given-names: Biwei
+  - family-names: Zhang
+    given-names: Kun
+  - family-names: Xiong
+    given-names: Caiming
+  - family-names: Koyejo
+    given-names: Sanmi
+  - family-names: Xing
+    given-names: "Eric P."
+  - family-names: Yu
+    given-names: "Philip S."
+  - family-names: Yao
+    given-names: Weiran
+preferred-citation:
+  type: conference-paper
+  conference:
+    name: "NeurIPS 2026 (Datasets and Benchmarks track)"
+  year: 2026
+  title: "chi-Bench: Can AI Agents Automate End-to-End, Long-Horizon, Policy-Rich Healthcare Workflows?"
+  authors:
+    - family-names: Chen
+      given-names: Haolin
+    - family-names: Metelski
+      given-names: Deon
+    - family-names: Qi
+      given-names: Leon
+    - family-names: Xia
+      given-names: Tao
+    - family-names: Lee
+      given-names: Joonyul
+    - family-names: Brown
+      given-names: Steve
+    - family-names: Riley
+      given-names: Kevin
+    - family-names: Wang
+      given-names: Frank
+    - family-names: Liu
+      given-names: "T. Y. Alvin"
+      name-suffix: MD
+    - family-names: Capps
+      given-names: Hank
+      name-suffix: MD
+    - family-names: Tang
+      given-names: Zeyu
+    - family-names: Song
+      given-names: Xiangchen
+    - family-names: Kong
+      given-names: Lingjing
+    - family-names: Feng
+      given-names: Fan
+    - family-names: Zeng
+      given-names: Tianyi
+    - family-names: Liu
+      given-names: Zhiwei
+    - family-names: Ma
+      given-names: Zixian
+    - family-names: Jiang
+      given-names: Hang
+    - family-names: Geng
+      given-names: Fangli
+    - family-names: Yuan
+      given-names: Yuan
+    - family-names: You
+      given-names: Chenyu
+    - family-names: Wen
+      given-names: Qingsong
+    - family-names: Wei
+      given-names: Hua
+    - family-names: Fu
+      given-names: Yanjie
+    - family-names: Zhao
+      given-names: Yue
+    - family-names: Yang
+      given-names: Carl
+    - family-names: Huang
+      given-names: Biwei
+    - family-names: Zhang
+      given-names: Kun
+    - family-names: Xiong
+      given-names: Caiming
+    - family-names: Koyejo
+      given-names: Sanmi
+    - family-names: Xing
+      given-names: "Eric P."
+    - family-names: Yu
+      given-names: "Philip S."
+    - family-names: Yao
+      given-names: Weiran
+url: "https://github.com/actava-ai/chi-bench"
