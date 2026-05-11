@@ -277,10 +277,11 @@ vs. today's:
   ├── prior_auth_um/              # 25 tasks + shared/worlds   (~23 MB)
   ├── care_management/            # 25 tasks + shared/worlds   (~4.6 MB)
   ├── prior_auth_e2e/             # 23 tasks + worlds          (~5 MB)
-  └── marathon/                   # 4 long-horizon tasks       (~135 MB)
+  └── marathon/                   # 3 long-horizon tasks (one per domain)  (~135 MB)
                                   #   prior_auth_provider/{instruction.md, task.toml, fixtures/, tests/, tool_reference.md}
                                   #   prior_auth_um/...
                                   #   care_management/...
+                                  # Each "task" packs all 25 cases of its domain into a single agent session.
   ```
 
 - **Google Drive**: skills handbook only (~34 MB), one `.tar.gz`, stable share URL in README.
@@ -315,7 +316,7 @@ Five YAML files under `configs/experiments/`, one per main-text table/figure:
 | File | Reproduces | Cells | Tasks per row | Trials |
 |---|---|---|---|---|
 | `table1_main_matrix.yaml` | Table 1 (Main) | 30 rows | 75 (25 PA-prov + 25 PA-UM + 25 CM) | 3 |
-| `table2_e2e_arena.yaml` | Table 2 (E2E) | 1 row | 23 (prior_auth_e2e) | 3 |
+| `table2_e2e_arena.yaml` | Table 2 (E2E) | 1 row (provider=Codex+GPT-5.5, payer=Codex+GPT-5.5) | 23 (prior_auth_e2e) | 3 |
 | `table3_marathon.yaml` | Table 3 (Marathon) | 2 rows × 3 domains | 1 marathon task per domain | 3 |
 | `table4_skill_ablation.yaml` | Skill-ablation figure | 4 conditions × 1 row | 75 | 3 |
 | `table5_mcp_vs_cli.yaml` | Table 5 (MCP vs CLI) | 2 conditions × 1 row | 75 | 3 |
@@ -372,6 +373,29 @@ rows:
   - { agent: deepagents,    model: openrouter/x-ai/grok-4.3 }
 ```
 
+### `table2_e2e_arena.yaml` (dual-agent harness)
+
+```yaml
+name: table2_e2e_arena
+defaults: { environment: docker, env_file: .env, concurrency: 5, n_attempts: 3, trials_root: logs/experiments/table2_e2e_arena, agent_timeout_multiplier: 2 }
+dataset: data/prior_auth_e2e/tasks
+registry_path: data/prior_auth_e2e/registry.json
+agent: dual-pa-e2e
+model: openai/gpt-5.5
+provider_agent: codex
+provider_model: openai/gpt-5.5
+payer_agent: codex
+payer_model: openai/gpt-5.5
+agent_kwargs:           # required by dual_pa_e2e_phase_runner
+  phase_max_turns: "50"
+  max_cycles: "6"
+  p2p_coordination_cycles: "4"
+  p2p_max_turn_pairs: "4"
+  p2p_repair_attempts: "1"
+```
+
+The `agent_kwargs` values are not optional — they bound the phase runner's turn budget, P2P coordination loops, and repair attempts. Defaults verified against `configs/experiments/curated25_e2e_codex_gpt55.yaml`.
+
 ### `table4_skill_ablation.yaml` (driving `CHI_BENCH_SKILLS_ABLATE`)
 
 ```yaml
@@ -420,7 +444,9 @@ One bash entry point. Iterates `rows × domains × conditions` (where applicable
 
 ### Aggregation: `scripts/aggregate.py`
 
-Trimmed port of today's `scripts/experiments/aggregate_results.py` (currently 34 KB / ~1000 LoC). Keep the trial parsing, pass@k / pass^k / Wilson CI math, cost computation. Drop the skill-condition / ablation-tag detection regex spaghetti (we now drive these by config name and env vars, not job-name string matching). Drop the appendix-stratification code paths. Target ~500 LoC.
+Trimmed port of today's `scripts/experiments/aggregate_results.py` (922 LoC) plus the simpler `summarize_curated25_full_matrix.py` (442 LoC). Keep the trial parsing, pass@k / pass^k math, cost computation. Drop the skill-condition / ablation-tag detection regex spaghetti (we now drive these by config name and env vars, not job-name string matching). Drop the appendix-stratification code paths. Target ~500 LoC.
+
+**Wilson 95% CI is missing from both source aggregators** (the source uses bootstrap CIs; the paper uses Wilson). Add `_wilson_score_interval(k, n, z=1.96)` as a ~15-LoC helper and emit `pass@1_lo`, `pass@1_hi`, etc. columns in the CSV. n=225 (75 tasks × 3 trials) for pass@1; n=75 (task-level) for pass@3 and pass^3, matching the paper's footnote.
 
 ```bash
 python scripts/aggregate.py \
@@ -435,7 +461,13 @@ python scripts/aggregate.py \
 
 ### Figures: `scripts/plot_figures.py`
 
-Generates the four PDF figures referenced from main-text tables: `cost_pareto.pdf`, `passk_descent.pdf`, `skill_ablation.pdf`, `failure_modes_main.pdf`. Pulled from existing notebook code in `actava-bench/notebooks/` and consolidated into one matplotlib script. Failure-mode bar chart in v1 is fed from `verifier_result.failure_l1` if present; otherwise prints "failure-mode classification deferred — see paper appendix".
+**Net-new code, not a port.** Cross-checked: the source repo contains zero matplotlib code — paper figures were authored outside this repo. v1 ships three figures derived from the aggregated CSVs:
+
+- `cost_pareto.pdf` — Table 1's ROI quadrant scatter (x: log-cost, y: pass@1, median crosshairs, Pareto frontier line).
+- `passk_descent.pdf` — pass@k vs pass^k for k∈{1,2,3} pooled across 75 tasks.
+- `skill_ablation.pdf` — bar chart of 4 conditions × 3 domains for Table 4.
+
+**`failure_modes_main.pdf` is out of scope for v1.** The paper's failure-mode taxonomy was an offline post-hoc analysis of trial transcripts; the verifier does not emit `failure_l1` / `failure_l2` fields, and no analyzer exists in the source repo. Listed in §12 as a deferred follow-up.
 
 ## 9. Tests + CI
 
@@ -499,10 +531,28 @@ Detailed plan is the writing-plans step; the phases this spec implies:
 9. **Docs + README** — write README + 3 `docs/` files. Verify single-task quickstart end-to-end on a clean machine.
 10. **Data hosting** — upload HF dataset, host skills handbook .tar.gz on Google Drive, fill placeholders in README.
 
-## 12. Open items (to settle during implementation, not blockers for the spec)
+## 12. Cross-validation against paper draft + actava-bench source
+
+Performed during spec self-review; recording the deltas so implementation doesn't re-discover them.
+
+| Paper claim / source artefact | Cross-check result |
+|---|---|
+| Table 1 — 30 cells | Source `curated25_full_matrix.yaml` has 28 rows. The remaining 2 (Claude Code + Opus 4.6, OpenClaw + Opus 4.7) live in `extra_claude_code_opus_4_6_*.yaml` and `curated25_openclaw_first_party.yaml`. Spec consolidates all 30 into one `table1_main_matrix.yaml`. |
+| Table 2 — E2E | Source ships `curated25_e2e_codex_gpt55.yaml` with `n_attempts: 1` + a `run_e2e_codex_gpt55_pass3_supplement.sh` script that adds 2 more. Spec ships `n_attempts: 3` directly, no supplement needed. `agent_kwargs` (phase_max_turns, max_cycles, p2p_*) are required and listed in §8. |
+| Table 3 — Marathon | Source has 3 marathon "tasks" (one per domain), each a single task dir whose fixtures pack all 25 cases. NOT 4. Spec text fixed. |
+| Wilson 95% CIs | Paper claims Wilson; both source aggregators use bootstrap or no CI. `scripts/aggregate.py` must add a Wilson helper (~15 LoC). Called out in §8. |
+| Failure-mode figure | Verifier emits no `failure_l1` / `failure_l2`; no analyzer in source. Out of scope for v1, declared in §8 + §13. |
+| Cost/walltime | `configs/prices.yaml` exists, covers GPT-5.x / Claude 4.x / Gemini 3.x / OpenRouter pricing as of April 2026. Port as-is; verify before release that no model price has shifted. |
+| `HEALTHVERSE_TOOL_MODE` env var | Wired through `runner.py` → `modal-entrypoint.sh` for CLI tool mode. Single-image `entrypoint.sh` must port the same `npm install -g mcporter` step. |
+| `HEALTHVERSE_SKILLS_ABLATE` env var | Wired through `runner.py` → `modal-entrypoint.sh`. Same: port to `entrypoint.sh`. Reference subdir names verified in §11. |
+| Dual-PA-E2E harness | Source: `dual_pa_e2e_harness.py` + `dual_pa_e2e_phase_runner.py` + `dual_pa_e2e_relay.py` + `dual_pa_e2e_state.py`. All four ship; depend on Harbor's `BaseInstalledAgent`. |
+| Plotting | Source has zero matplotlib code. `scripts/plot_figures.py` is net-new (~200 LoC). Three figures: cost_pareto, passk_descent, skill_ablation. |
+| Modal env import path | Source: `healthverse.experiment.modal_env:HealthverseModalEnvironment`. Renamed in §4. |
+
+## 13. Open items (to settle during implementation, not blockers for the spec)
 
 - **License**: Apache-2.0 assumed; confirm with project owners. Same question for the data license on the HF dataset card.
 - **Skills-ablate subdir names**: confirmed in source as `care-manager`, `medical-library`, `payer-um`, `platform`, `provider-pa`. `platform` is never ablated. Re-confirm after the HF handbook upload.
 - **`verifier/compat/` + `judge_legacy.py`**: keep in v1; investigate during impl whether any current paper task still hits the legacy code path. If not, drop in a follow-up.
-- **Failure-mode figure**: v1 plots only if `verifier_result.failure_l1` is present. If we want full failure-taxonomy reproduction we'd need to port the analyzer; deferred.
+- **Failure-mode figure (`failure_modes_main.pdf`, `failure_l2_topbar.pdf`)**: explicitly out of scope for v1. The verifier emits no `failure_l1` / `failure_l2` fields; the paper's analysis was offline post-hoc and no analyzer exists in the source repo. Deferred until a separate failure-taxonomy classifier is built.
 - **`scripts/smoke.sh`**: small wrapper around `chi-bench experiment run` on one task per domain. Trivial to write; called out here so it doesn't get forgotten.
