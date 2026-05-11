@@ -38,6 +38,52 @@ experiment_app = typer.Typer(help="Experiment runner commands.", no_args_is_help
 
 app.add_typer(experiment_app, name="experiment")
 
+data_app = typer.Typer(help="Data layout commands.", no_args_is_help=True)
+app.add_typer(data_app, name="data")
+
+
+@data_app.command("verify")
+def data_verify(
+    data_dir: Path = typer.Option(Path("data"), "--data-dir", help="Root of the downloaded dataset tree."),
+) -> None:
+    """Check that the downloaded data tree matches what the runner expects."""
+    EXPECTED_TASKS = {
+        "prior_auth_provider": 25,
+        "prior_auth_um": 25,
+        "care_management": 25,
+        "prior_auth_e2e": 23,
+    }
+    missing: list[str] = []
+    bad_counts: list[str] = []
+
+    for dom, n_expected in EXPECTED_TASKS.items():
+        tasks_dir = data_dir / dom / "tasks"
+        if not tasks_dir.exists():
+            missing.append(str(tasks_dir))
+            continue
+        n_actual = sum(1 for p in tasks_dir.iterdir() if p.is_dir())
+        if n_actual != n_expected:
+            bad_counts.append(f"{tasks_dir}: expected {n_expected}, got {n_actual}")
+
+    for dom in ("prior_auth_provider", "prior_auth_um", "care_management"):
+        m = data_dir / "marathon" / dom
+        if not m.exists():
+            missing.append(str(m))
+
+    handbook = data_dir / "skills" / "managed-care-operations-handbook"
+    if not (handbook / "SKILL.md").exists():
+        missing.append(str(handbook))
+
+    if missing or bad_counts:
+        typer.echo("Data layout INCOMPLETE — see README §'Download data' for setup steps.", err=True)
+        for path in missing:
+            typer.echo(f"  missing: {path}", err=True)
+        for line in bad_counts:
+            typer.echo(f"  count mismatch: {line}", err=True)
+        raise typer.Exit(1)
+
+    typer.echo("OK — data layout matches expectations.")
+
 
 def _configure_logging(level: str) -> None:
     """Shared logging setup for all CLI commands."""
