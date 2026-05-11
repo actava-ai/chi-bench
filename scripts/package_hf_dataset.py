@@ -27,6 +27,7 @@ def repackage_task_dir(task_dir: Path) -> tuple[bool, bool]:
     env_dir = task_dir / "environment"
     if env_dir.exists():
         import shutil
+
         shutil.rmtree(env_dir)
         env_removed = True
 

@@ -111,7 +111,9 @@ def aggregate(
         for x in gs:
             by_task[x.task_name].append(x)
         k3 = sum(1 for ts in by_task.values() if any(x.reward >= 1.0 for x in ts))
-        kpow3 = sum(1 for ts in by_task.values() if len(ts) >= 3 and all(x.reward >= 1.0 for x in ts))
+        kpow3 = sum(
+            1 for ts in by_task.values() if len(ts) >= 3 and all(x.reward >= 1.0 for x in ts)
+        )
         nT = len(by_task)
 
         pass1_lo, pass1_hi = wilson_score_interval(k1, n1)
@@ -121,23 +123,25 @@ def aggregate(
         total_cost = sum(_cost(x, prices) for x in gs)
         mean_walltime = sum(x.wall_clock_seconds for x in gs) / max(1, n1)
 
-        rows.append({
-            "agent": agent,
-            "model": model,
-            "n_trials": n1,
-            "n_tasks": nT,
-            "pass_at_1": k1 / max(1, n1),
-            "pass_at_1_lo": pass1_lo,
-            "pass_at_1_hi": pass1_hi,
-            "pass_at_3": k3 / max(1, nT),
-            "pass_at_3_lo": pass3_lo,
-            "pass_at_3_hi": pass3_hi,
-            "pass_pow_3": kpow3 / max(1, nT),
-            "pass_pow_3_lo": passpow3_lo,
-            "pass_pow_3_hi": passpow3_hi,
-            "mean_cost_usd": total_cost / max(1, n1),
-            "mean_walltime_s": mean_walltime,
-        })
+        rows.append(
+            {
+                "agent": agent,
+                "model": model,
+                "n_trials": n1,
+                "n_tasks": nT,
+                "pass_at_1": k1 / max(1, n1),
+                "pass_at_1_lo": pass1_lo,
+                "pass_at_1_hi": pass1_hi,
+                "pass_at_3": k3 / max(1, nT),
+                "pass_at_3_lo": pass3_lo,
+                "pass_at_3_hi": pass3_hi,
+                "pass_pow_3": kpow3 / max(1, nT),
+                "pass_pow_3_lo": passpow3_lo,
+                "pass_pow_3_hi": passpow3_hi,
+                "mean_cost_usd": total_cost / max(1, n1),
+                "mean_walltime_s": mean_walltime,
+            }
+        )
 
     if rows:
         with out_csv.open("w", newline="") as f:
@@ -155,7 +159,12 @@ def main() -> int:
     ap.add_argument("--out-csv", type=Path, required=True)
     ap.add_argument("--out-json", type=Path, default=None)
     args = ap.parse_args()
-    aggregate(trials_dir=args.trials_dir, prices_path=args.prices, out_csv=args.out_csv, out_json=args.out_json)
+    aggregate(
+        trials_dir=args.trials_dir,
+        prices_path=args.prices,
+        out_csv=args.out_csv,
+        out_json=args.out_json,
+    )
     return 0
 
 
