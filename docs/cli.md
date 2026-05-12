@@ -19,7 +19,7 @@ Exit-code convention used throughout:
 
 - `0` — success.
 - `1` — runtime/validation failure (missing files, preflight errors, command returned non-zero).
-- `2` — schema or YAML-load failure (typically `cb submission validate` / `cb submission run` / `cb submission status` / `cb submission package`).
+- `2` — schema or YAML-load failure (typically `cb submission validate` / `cb submission run` / `cb submission status` / `cb submission prepare`).
 
 ---
 
@@ -297,26 +297,36 @@ uv run cb submission status -f configs/submissions/my-team.yaml
 uv run cb submission status -f configs/submissions/my-team.yaml --json
 ```
 
-### `cb submission package`
+### `cb submission prepare`
 
-Build the upload-ready zip at `<output_root>/<submission_id>.zip` (or `-o <path>`).
+Curate a `submission run` output tree into a leaderboard-ready packet directory.
 
 ```
-cb submission package -f <sub.yaml> [-o <output.zip>]
+cb submission prepare -f <sub.yaml> [-o <out-dir>] [--date YYYY-MM-DD] [--force]
 ```
 
 **Behavior**
 
-- Always refreshes the manifest (`submission.json` + `results.csv`) before zipping, so the packet is coherent even if trials were added after the initial `submission run`.
-- Packet contents: `submission.json`, `results.csv`, frozen `sub.yaml`, `provenance.json`, and per-trial `result.json` + `verifier/scorecard.json` + `verifier/reward.json` + `agent/trajectory.json`. Workspace artifacts, server logs, agent session caches, and Harbor scratch are deliberately excluded (typical packet size: <50 MB for a 75-trial pass@1 run).
+- Writes `<out-dir>/<YYYY-MM-DD>-<submission_id>/` containing `submission.json` (leaderboard-spec shape with nested `results.overall` + `results.per_domain`), `results.csv` (one row per domain + overall, with `benchmark` and `dataset_version` columns), frozen `sub.yaml`, `provenance.json`, an auto-generated `README.md`, and per-trial `result.json` + `verifier/scorecard.json` + `verifier/reward.json` + `agent/trajectory.jsonl.zst`.
+- Trajectories are re-serialized as JSONL and zstd-compressed (level 19). Inspect with `zstdcat trajectory.jsonl.zst | jq .`.
+- Workspace artifacts, server logs, agent session caches, and Harbor scratch are deliberately excluded. Typical packet size: <100 MB for a 75-trial pass@1 run; trajectories typically compress 5–20×.
 - The raw trial tree on disk is unchanged.
+
+**Flags**
+
+- `-f` / `--config` — submission YAML (required).
+- `-o` / `--out` — packet base directory. Default: `<output_root>/packet/`.
+- `--date` — override the `YYYY-MM-DD` prefix on the packet directory name. Default: today (UTC).
+- `--force` — overwrite an existing packet at the target path.
 
 **Example**
 
 ```bash
-uv run cb submission package -f configs/submissions/my-team.yaml
-uv run cb submission package -f configs/submissions/my-team.yaml -o /tmp/my-team.zip
+uv run cb submission prepare -f configs/submissions/my-team.yaml
+# Packet ready: logs/submissions/my-team/packet/2026-05-12-my-team-claude-code-opus-4-6/
 ```
+
+Submit the packet via the [actava-ai/leaderboard](https://github.com/actava-ai/leaderboard) repo (manual `cp + git + gh pr` or `python scripts/submit.py`). See the leaderboard's README for the current submission flow.
 
 ---
 

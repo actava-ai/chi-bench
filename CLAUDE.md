@@ -107,7 +107,7 @@ uv run cb experiment run --dataset <task-dir> --agent <id> --model <id>
 uv run cb submission validate -f configs/submissions/<id>.yaml
 uv run cb submission run      -f configs/submissions/<id>.yaml
 uv run cb submission status   -f configs/submissions/<id>.yaml
-uv run cb submission package  -f configs/submissions/<id>.yaml
+uv run cb submission prepare  -f configs/submissions/<id>.yaml
 
 # Reproduce a paper table (decomposes a matrix YAML into per-row commands)
 ./scripts/run_table.sh table1            # add --modal for parallel execution
