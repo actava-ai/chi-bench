@@ -528,8 +528,8 @@ def run_submission(
     ``verdicts.json``, ``result.json``, agent ``run_log.txt``, workspace
     artifacts) into ``output_root/<domain>/<trial_id>/`` — this raw tree is
     preserved for human verification and is NOT what gets uploaded. The
-    upload-ready bundle is produced separately by ``submission package``,
-    which downsamples to a smaller zip.
+    leaderboard-ready packet is produced separately by ``submission prepare``,
+    which curates a smaller directory ready to commit to the leaderboard repo.
 
     After every selected domain finishes, aggregate results into
     ``output_root/results.csv`` (pass@1 only — see ``_SUBMISSION_RESULT_KEYS``)
@@ -828,20 +828,6 @@ _PACKET_TRIAL_SMALL_FILES: tuple[str, ...] = (
     "verifier/reward.json",
 )
 
-# Legacy aliases used only by package_submission() (deleted in Task 6).
-_PACKET_TOP_LEVEL_FILES: tuple[str, ...] = (
-    "submission.json",
-    "results.csv",
-    "sub.yaml",
-    "provenance.json",
-)
-_PACKET_TRIAL_FILES: tuple[str, ...] = (
-    "result.json",
-    "verifier/scorecard.json",
-    "verifier/reward.json",
-    "agent/trajectory.json",
-)
-
 # CSV column order for the packet's results.csv. Stable across benchmarks at
 # the leading columns (benchmark, dataset_version, submission_id, ...) so a
 # multi-benchmark consumer can `cat */results.csv` without losing rows.
@@ -1075,91 +1061,6 @@ def prepare_packet(
 
     logger.info("packet prepared: %s (trials=%d)", target, n_included)
     return target
-
-
-def package_submission(
-    cfg: SubmissionConfig,
-    output_root: Path | None = None,
-    zip_path: Path | None = None,
-    refresh_manifest: bool = True,
-    prices_path: Path | None = None,
-) -> Path:
-    """Build an upload-ready zip of evidence for human verification.
-
-    Includes:
-      - submission.json, results.csv, sub.yaml, provenance.json (at zip root)
-      - per trial: result.json + verifier/scorecard.json + verifier/reward.json
-        + agent/trajectory.json  (under ``trials/<domain>/<trial_id>/``)
-
-    Skipped: workspace artifacts, server logs, agent session caches, Harbor
-    config.json, trial.log, verifier intermediates. The raw trial tree on
-    disk is untouched — this command is read-only.
-
-    ``refresh_manifest=True`` (default) re-runs aggregation and rewrites
-    ``submission.json`` + ``results.csv`` before zipping, so the packet is
-    coherent with the current trial state even if the user re-ran some
-    trials after the initial ``submission run``.
-
-    Returns the zip path. Default location:
-    ``<output_root>/<submission_id>.zip``.
-    """
-    import zipfile
-
-    root = output_root or cfg.paths.output_root
-    assert root is not None
-    if not root.is_dir():
-        raise FileNotFoundError(f"output_root not found: {root}")
-
-    if refresh_manifest:
-        try:
-            write_manifest(cfg, output_root=root, prices_path=prices_path)
-        except Exception:  # noqa: BLE001
-            logger.exception("refresh_manifest failed; packaging stale manifest if present")
-
-    out_zip = zip_path or root / f"{cfg.submission.id}.zip"
-    out_zip.parent.mkdir(parents=True, exist_ok=True)
-
-    trials = _iter_trial_dirs(root, list(cfg.dataset.domains))
-    n_included = 0
-    n_missing_files = 0
-    missing_top: list[str] = []
-
-    with zipfile.ZipFile(out_zip, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        # Top-level files
-        for name in _PACKET_TOP_LEVEL_FILES:
-            src = root / name
-            if src.exists():
-                zf.write(src, arcname=name)
-            else:
-                missing_top.append(name)
-
-        # Per-trial files
-        for dom, trial_dir in trials:
-            arc_trial_prefix = f"trials/{dom}/{trial_dir.name}"
-            for rel in _PACKET_TRIAL_FILES:
-                src = trial_dir / rel
-                if src.exists():
-                    zf.write(src, arcname=f"{arc_trial_prefix}/{rel}")
-                else:
-                    n_missing_files += 1
-                    logger.debug("packet: %s missing from %s", rel, trial_dir)
-            n_included += 1
-
-    if missing_top:
-        logger.warning(
-            "packet: top-level files missing from output_root: %s — "
-            "the zip is incomplete for upload; ensure `submission run` "
-            "completed successfully.",
-            missing_top,
-        )
-
-    logger.info(
-        "packet written: %s  (trials=%d, missing-file-warnings=%d)",
-        out_zip,
-        n_included,
-        n_missing_files,
-    )
-    return out_zip
 
 
 # ─── Data download (HF dataset + .chi-bench-version) ─────────────────────────

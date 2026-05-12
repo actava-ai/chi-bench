@@ -19,7 +19,6 @@ from chi_bench.experiment.submission import (
     aggregate_submission,
     build_manifest,
     capture_provenance,
-    package_submission,
     preflight_agent,
     preflight_dataset,
     preflight_environment,
@@ -575,8 +574,8 @@ def _make_trial_with_layout(
     reward: float,
     add_trajectory: bool = True,
 ) -> Path:
-    """Produce a trial dir matching the real Harbor layout (so package_submission
-    has the files it expects under verifier/ and agent/)."""
+    """Produce a trial dir matching the real Harbor layout (with files under
+    verifier/ and agent/)."""
     d = trials_root / trial_name
     (d / "verifier").mkdir(parents=True, exist_ok=True)
     (d / "agent").mkdir(parents=True, exist_ok=True)
@@ -701,129 +700,3 @@ def test_status_ignores_run_level_aggregate_result_json(tmp_path: Path) -> None:
     assert by_domain["pa_um"]["n_failed"] == 1
 
 
-# ─── package ─────────────────────────────────────────────────────────────────
-
-
-def test_package_includes_required_files_and_skips_artifacts(tmp_path: Path) -> None:
-    """The packet must include manifest + CSV + sub.yaml + provenance + per-trial
-    {result, scorecard, reward, trajectory} — and exclude artifacts / scratch."""
-    import zipfile
-
-    cfg = _populated_submission(tmp_path, {})  # set up cfg + version file
-    out_root = cfg.paths.output_root
-    assert out_root is not None
-
-    # Build trials in the real Harbor layout
-    _make_trial_with_layout(out_root / "pa_um", "t0__abc", 1.0)
-    _make_trial_with_layout(out_root / "pa_um", "t1__abc", 0.0)
-
-    # Add "junk" that MUST be excluded
-    junk_dir = out_root / "pa_um" / "t0__abc" / "artifacts"
-    junk_dir.mkdir()
-    (junk_dir / "workspace.tar").write_bytes(b"x" * 1000)
-    (out_root / "pa_um" / "t0__abc" / "config.json").write_text("{}")
-    (out_root / "pa_um" / "t0__abc" / "trial.log").write_text("noisy log")
-
-    # Simulate _freeze_inputs (real flow copies sub.yaml here) then aggregate
-    (out_root / "sub.yaml").write_text((tmp_path / "sub.yaml").read_text())
-    write_manifest(cfg)
-
-    zip_path = package_submission(cfg)
-    assert zip_path.exists()
-
-    with zipfile.ZipFile(zip_path) as zf:
-        names = set(zf.namelist())
-
-    # Top-level evidence
-    assert "submission.json" in names
-    assert "results.csv" in names
-    assert "sub.yaml" in names
-    assert "provenance.json" in names
-
-    # Per-trial evidence
-    assert "trials/pa_um/t0__abc/result.json" in names
-    assert "trials/pa_um/t0__abc/verifier/scorecard.json" in names
-    assert "trials/pa_um/t0__abc/verifier/reward.json" in names
-    assert "trials/pa_um/t0__abc/agent/trajectory.json" in names
-    assert "trials/pa_um/t1__abc/agent/trajectory.json" in names
-
-    # Skipped
-    assert "trials/pa_um/t0__abc/artifacts/workspace.tar" not in names
-    assert "trials/pa_um/t0__abc/config.json" not in names
-    assert "trials/pa_um/t0__abc/trial.log" not in names
-
-
-def test_package_auto_refreshes_manifest_before_zip(tmp_path: Path) -> None:
-    """package_submission should regenerate submission.json + results.csv from
-    the current trial tree so the packet is always coherent — even if the
-    user added trials after the initial `submission run`."""
-    import zipfile
-
-    cfg = _populated_submission(tmp_path, {})
-    out_root = cfg.paths.output_root
-    assert out_root is not None
-    (out_root / "sub.yaml").write_text((tmp_path / "sub.yaml").read_text())
-    _make_trial_with_layout(out_root / "pa_um", "t0__abc", 1.0)
-
-    # NOTE: no prior write_manifest call — submission.json / results.csv do
-    # not yet exist. package_submission must create them.
-    assert not (out_root / "submission.json").exists()
-
-    zip_path = package_submission(cfg)
-
-    with zipfile.ZipFile(zip_path) as zf:
-        names = set(zf.namelist())
-    assert "submission.json" in names
-    assert "results.csv" in names
-
-
-def test_package_skips_run_level_aggregate_result_json(tmp_path: Path) -> None:
-    """The aggregate result.json Harbor writes alongside trial dirs must not be
-    treated as a trial — otherwise the packet zips up a stray
-    ``trials/<dom>/<run-dir>/result.json`` entry and the manifest's n_included
-    is inflated by one per domain."""
-    import zipfile
-
-    cfg = _populated_submission(tmp_path, {})
-    out_root = cfg.paths.output_root
-    assert out_root is not None
-    (out_root / "sub.yaml").write_text((tmp_path / "sub.yaml").read_text())
-
-    run_dir = out_root / "pa_um" / "sub__pa_um"
-    run_dir.mkdir(parents=True)
-    _make_trial_with_layout(run_dir, "t0__abc", 1.0)
-    _make_trial_with_layout(run_dir, "t1__abc", 0.0)
-    (run_dir / "result.json").write_text(
-        json.dumps({"id": "agg", "n_total_trials": 2, "stats": {"n_trials": 2}})
-    )
-
-    zip_path = package_submission(cfg)
-    with zipfile.ZipFile(zip_path) as zf:
-        names = set(zf.namelist())
-
-    # Packager flattens to trials/<dom>/<trial_dir.name>/... — so the per-trial
-    # leaves land here:
-    assert "trials/pa_um/t0__abc/result.json" in names
-    assert "trials/pa_um/t1__abc/result.json" in names
-    # …and the run-level aggregate (parent name = sub__pa_um) must NOT be
-    # packed as a stray trial.
-    assert "trials/pa_um/sub__pa_um/result.json" not in names
-
-
-def test_package_works_when_some_trial_files_missing(tmp_path: Path) -> None:
-    """Trials that crashed mid-trajectory may be missing some files; package
-    should include what's available and not raise."""
-    import zipfile
-
-    cfg = _populated_submission(tmp_path, {})
-    out_root = cfg.paths.output_root
-    assert out_root is not None
-    # Trial without trajectory.json (agent crashed early)
-    _make_trial_with_layout(out_root / "pa_um", "t0__abc", 1.0, add_trajectory=False)
-    write_manifest(cfg)
-
-    zip_path = package_submission(cfg)
-    with zipfile.ZipFile(zip_path) as zf:
-        names = set(zf.namelist())
-    assert "trials/pa_um/t0__abc/result.json" in names
-    assert "trials/pa_um/t0__abc/agent/trajectory.json" not in names

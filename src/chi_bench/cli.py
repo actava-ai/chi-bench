@@ -45,7 +45,7 @@ data_app = typer.Typer(help="Data layout commands.", no_args_is_help=True)
 app.add_typer(data_app, name="data")
 
 submission_app = typer.Typer(
-    help="Leaderboard submission commands (validate / run / status / package).",
+    help="Leaderboard submission commands (validate / run / status / prepare).",
     no_args_is_help=True,
 )
 app.add_typer(submission_app, name="submission")
@@ -843,44 +843,6 @@ def submission_prepare_cmd(
     typer.echo("")
     typer.echo("Submit it via the leaderboard repo:")
     typer.echo("  https://github.com/actava-ai/leaderboard")
-
-
-@submission_app.command("package")
-def submission_package_cmd(
-    config: Path = typer.Option(..., "-f", "--config", help="Submission YAML."),
-    output_zip: Path | None = typer.Option(
-        None,
-        "-o",
-        "--output",
-        help="Zip output path. Default: <output_root>/<submission_id>.zip.",
-    ),
-) -> None:
-    """Build the upload-ready submission packet.
-
-    Bundles the manifest + CSV + frozen sub.yaml + per-trial scorecard /
-    reward / result / trajectory.json. Workspace artifacts, server logs,
-    agent session caches, and Harbor scratch files are deliberately
-    excluded so the zip stays small (typically <50 MB for a 75-trial
-    pass@1 submission). The raw trial tree on disk is unchanged.
-    """
-    from pydantic import ValidationError
-
-    from chi_bench.experiment.submission import SubmissionConfig, package_submission
-
-    try:
-        cfg = SubmissionConfig.from_yaml(config)
-    except (ValidationError, yaml.YAMLError, ValueError, OSError) as e:
-        typer.echo(f"Could not load {config}: {e}", err=True)
-        raise typer.Exit(2) from None
-
-    try:
-        zip_path = package_submission(cfg, zip_path=output_zip)
-    except FileNotFoundError as e:
-        typer.echo(f"Cannot package: {e}", err=True)
-        raise typer.Exit(1) from None
-
-    size_mb = zip_path.stat().st_size / (1024 * 1024)
-    typer.echo(f"Packet written: {zip_path} ({size_mb:.1f} MB)")
 
 
 # ─── data download (writes data/.chi-bench-version) ─────────────────────────
