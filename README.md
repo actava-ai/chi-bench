@@ -1,33 +1,24 @@
-<table>
+<table border="0" cellspacing="0" cellpadding="0">
   <tr>
-    <td width="200">
-      <img src="assets/figures/logo.svg" alt="X-Bench" width="160"/>
+    <td width="400">
+      <p align="center">
+        <img src="assets/figures/logo.svg" alt="Χ-Bench" width="400"/>
+      </p>
     </td>
     <td>
-      <p><b>C</b>linical <b>H</b>ealthcare <b>I</b>n-Situ Environment and Evaluation <b>Bench</b>mark<br/></p>
+      <h1><b>C</b>linical <b>H</b>ealthcare <b>I</b>n-Situ</h1>
+      <p>
+        <b>Benchmark for Long-horizon, policy-rich healthcare workflows agent</b>
+      </p>
+      <p>
+        <a href="https://arxiv.org/abs/XXXX.XXXXX"><img src="https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b.svg" alt="arXiv"/></a>
+        <a href="https://huggingface.co/datasets/actava/chi-bench"><img src="https://img.shields.io/badge/🤗_Dataset-chi--bench-yellow" alt="Dataset"/></a>
+        <a href="https://actava-ai.github.io/chi-bench/leaderboard"><img src="https://img.shields.io/badge/🏆_Leaderboard-chi--bench-blue" alt="Leaderboard"/></a>
+        <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-purple.svg" alt="License"/></a>
+      </p>
     </td>
   </tr>
 </table>
-
-<p align="center">
-  <a href="https://arxiv.org/abs/XXXX.XXXXX">
-    <img src="https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b?logo=arxiv&logoColor=white" alt="arXiv"/>
-  </a>
-  <a href="https://huggingface.co/datasets/actava/chi-bench">
-    <img src="assets/figures/huggingface.png" alt="Hugging Face" height="28"/>
-  </a>
-  <a href="https://actava-ai.github.io/chi-bench/leaderboard">
-    <img src="assets/figures/leaderboard.png" alt="Leaderboard" height="28"/>
-  </a>
-  <a href="https://www.python.org/downloads/">
-    <img src="assets/figures/python.png" alt="Python 3.12+" height="28"/>
-  </a>
-</p>
-
-- Paper: https://arxiv.org/abs/XXXX.XXXXX *(fill in once posted)*
-- Dataset: https://huggingface.co/datasets/actava/chi-bench
-- Leaderboard: https://actava-ai.github.io/chi-bench/leaderboard
-- Skills handbook (separate download): <GOOGLE_DRIVE_SHARE_URL_PLACEHOLDER>
 
 ## What this benchmark measures
 
