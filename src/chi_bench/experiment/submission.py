@@ -817,25 +817,48 @@ def _count_tasks(cfg: SubmissionConfig, domain: str) -> int:
     return sum(1 for p in ds.iterdir() if p.is_dir())
 
 
-# ─── Package (audit zip) ─────────────────────────────────────────────────────
+# ─── Packet (leaderboard-ready directory) ───────────────────────────────────
 
 
-# Files copied verbatim from output_root → packet root.
+# Per-trial files curated into the packet (paths relative to each trial dir).
+# trajectory.json is recoded into trajectory.jsonl.zst by prepare_packet().
+_PACKET_TRIAL_SMALL_FILES: tuple[str, ...] = (
+    "result.json",
+    "verifier/scorecard.json",
+    "verifier/reward.json",
+)
+
+# Legacy aliases used only by package_submission() (deleted in Task 6).
 _PACKET_TOP_LEVEL_FILES: tuple[str, ...] = (
     "submission.json",
     "results.csv",
     "sub.yaml",
     "provenance.json",
 )
-
-# Per-trial files kept in the packet. Paths are relative to each trial dir.
-# Everything else (config.json, trial.log, artifacts/, verifier scratch,
-# agent session caches) is dropped to keep the packet ≲50 MB zipped.
 _PACKET_TRIAL_FILES: tuple[str, ...] = (
     "result.json",
     "verifier/scorecard.json",
     "verifier/reward.json",
     "agent/trajectory.json",
+)
+
+# CSV column order for the packet's results.csv. Stable across benchmarks at
+# the leading columns (benchmark, dataset_version, submission_id, ...) so a
+# multi-benchmark consumer can `cat */results.csv` without losing rows.
+_PACKET_CSV_COLUMNS: tuple[str, ...] = (
+    "benchmark",
+    "dataset_version",
+    "submission_id",
+    "team",
+    "agent",
+    "model",
+    "domain",
+    "pass_at_1",
+    "n_trials",
+    "n_tasks",
+    "mean_cost_usd",
+    "mean_walltime_s",
+    "submitted_at",
 )
 
 
@@ -860,6 +883,198 @@ def _iter_trial_dirs(output_root: Path, domains: list[str]) -> list[tuple[str, P
                 continue
             trials.append((dom, result_json.parent))
     return trials
+
+
+def _build_packet_manifest(
+    cfg: SubmissionConfig,
+    output_root: Path,
+    submitted_at: str,
+    prices_path: Path | None = None,
+) -> dict[str, object]:
+    """Build the leaderboard-spec submission.json shape.
+
+    Differs from build_manifest() (legacy in-place format) in that results
+    are nested under {overall, per_domain} and submission carries submitted_at.
+    The schema field uses SUBMISSION_SCHEMA_V1.
+    """
+    results = aggregate_submission(cfg, output_root=output_root, prices_path=prices_path)
+    submission_block = cfg.submission.model_dump()
+    submission_block["submitted_at"] = submitted_at
+
+    provenance_path = output_root / "provenance.json"
+    if provenance_path.exists():
+        provenance = json.loads(provenance_path.read_text())
+    else:
+        provenance = {}
+
+    overall = results.get("overall") or {}
+    per_domain = results.get("per_domain") or {}
+
+    # Hoist cost / walltime to a sibling of per_domain to match the spec shape.
+    mean_cost = overall.get("mean_cost_usd")
+    mean_walltime = overall.get("mean_walltime_s")
+    results_block: dict[str, object] = {
+        "overall": {k: v for k, v in overall.items() if k not in ("agent", "model")},
+        "per_domain": {
+            dom: {k: v for k, v in row.items() if k not in ("agent", "model")}
+            for dom, row in per_domain.items()
+        },
+    }
+    if mean_cost is not None:
+        results_block["mean_cost_usd"] = mean_cost
+    if mean_walltime is not None:
+        results_block["mean_walltime_s"] = mean_walltime
+
+    dataset_block = cfg.dataset.model_dump()
+    # The leaderboard packet contract requires dataset.name (used by the
+    # validator to route to the right per-benchmark schema). chi-bench is
+    # the only benchmark this producer ever emits for.
+    dataset_block.setdefault("name", "chi-bench")
+
+    return {
+        "schema": SUBMISSION_SCHEMA_V1,
+        "submission": submission_block,
+        "dataset": dataset_block,
+        "results": results_block,
+        "provenance": provenance,
+    }
+
+
+def _write_packet_results_csv(manifest: dict[str, object], out_path: Path) -> None:
+    """Write results.csv with the leaderboard-spec column shape.
+
+    One row per domain plus an 'overall' row. Columns are stable across
+    benchmarks at the leading positions so multi-benchmark consumers can
+    `cat */results.csv`.
+    """
+    import csv as _csv
+
+    sub = manifest["submission"]  # type: ignore[index]
+    ds = manifest["dataset"]  # type: ignore[index]
+    res = manifest["results"]  # type: ignore[index]
+
+    bench = ds["name"]
+    version = ds["version"]
+    sid = sub["id"]
+    team = sub["team"]
+    agent = sub["agent"]
+    model = sub["model"]
+    submitted_at = sub["submitted_at"]
+
+    def _row(domain: str, score: dict) -> dict[str, object]:
+        return {
+            "benchmark": bench,
+            "dataset_version": version,
+            "submission_id": sid,
+            "team": team,
+            "agent": agent,
+            "model": model,
+            "domain": domain,
+            "pass_at_1": score.get("pass_at_1"),
+            "n_trials": score.get("n_trials"),
+            "n_tasks": score.get("n_tasks"),
+            "mean_cost_usd": score.get("mean_cost_usd"),
+            "mean_walltime_s": score.get("mean_walltime_s"),
+            "submitted_at": submitted_at,
+        }
+
+    rows: list[dict[str, object]] = []
+    overall = res.get("overall") or {}
+    rows.append(_row("overall", overall))
+    for domain, score in (res.get("per_domain") or {}).items():
+        rows.append(_row(domain, score))
+
+    with out_path.open("w", newline="", encoding="utf-8") as fh:
+        writer = _csv.DictWriter(fh, fieldnames=list(_PACKET_CSV_COLUMNS))
+        writer.writeheader()
+        for r in rows:
+            writer.writerow(r)
+
+
+def prepare_packet(
+    cfg: SubmissionConfig,
+    out_dir: Path | None = None,
+    date: str | None = None,
+    force: bool = False,
+    prices_path: Path | None = None,
+) -> Path:
+    """Curate a ``submission run`` output tree into a leaderboard-ready packet.
+
+    Writes ``<out_dir>/<YYYY-MM-DD>-<submission.id>/`` containing:
+      - submission.json (leaderboard spec shape: nested results, submitted_at)
+      - results.csv (one row per domain + overall, with benchmark/version columns)
+      - sub.yaml (copied from output_root)
+      - provenance.json (copied from output_root)
+      - README.md (auto-generated)
+      - trials/<domain>/<trial_id>/ with result.json, verifier/{scorecard,reward}.json,
+        and agent/trajectory.jsonl.zst (recoded from the raw trajectory.json).
+
+    Returns the packet directory path. Raises FileExistsError if the target
+    exists and ``force`` is False.
+    """
+    from chi_bench.experiment.packet_readme import render_packet_readme
+    from chi_bench.experiment.trajectory_pack import pack_trajectory_to_jsonl_zst
+
+    output_root = cfg.paths.output_root
+    assert output_root is not None
+    if not output_root.is_dir():
+        raise FileNotFoundError(f"output_root not found: {output_root}")
+
+    date_str = date or dt.datetime.now(dt.UTC).strftime("%Y-%m-%d")
+    submitted_at = f"{date_str}T{dt.datetime.now(dt.UTC).strftime('%H:%M:%SZ')}"
+    base = out_dir or (output_root / "packet")
+    target = base / f"{date_str}-{cfg.submission.id}"
+    if target.exists():
+        if not force:
+            raise FileExistsError(f"packet exists: {target} (pass force=True to overwrite)")
+        shutil.rmtree(target)
+    target.mkdir(parents=True)
+
+    # Build + write the packet's submission.json (spec shape).
+    manifest = _build_packet_manifest(
+        cfg, output_root=output_root, submitted_at=submitted_at, prices_path=prices_path
+    )
+    (target / "submission.json").write_text(
+        json.dumps(manifest, indent=2, default=str), encoding="utf-8"
+    )
+
+    # Write results.csv from the (just-built) manifest.
+    _write_packet_results_csv(manifest, target / "results.csv")
+
+    # Copy sub.yaml + provenance.json verbatim if they exist.
+    for name in ("sub.yaml", "provenance.json"):
+        src = output_root / name
+        if src.exists():
+            shutil.copy2(src, target / name)
+        else:
+            logger.warning("packet: %s missing from %s", name, output_root)
+
+    # Per-trial tree
+    trials = _iter_trial_dirs(output_root, list(cfg.dataset.domains))
+    n_included = 0
+    for dom, trial_dir in trials:
+        out_trial = target / "trials" / dom / trial_dir.name
+        out_trial.mkdir(parents=True)
+        for rel in _PACKET_TRIAL_SMALL_FILES:
+            src = trial_dir / rel
+            if not src.exists():
+                logger.debug("packet: %s missing from %s", rel, trial_dir)
+                continue
+            dst = out_trial / rel
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+        traj_src = trial_dir / "agent" / "trajectory.json"
+        if traj_src.exists():
+            pack_trajectory_to_jsonl_zst(traj_src, out_trial / "agent" / "trajectory.jsonl.zst")
+        else:
+            logger.debug("packet: agent/trajectory.json missing from %s", trial_dir)
+        n_included += 1
+
+    # Auto-generated README.md (from the just-written manifest).
+    (target / "README.md").write_text(render_packet_readme(manifest), encoding="utf-8")
+
+    logger.info("packet prepared: %s (trials=%d)", target, n_included)
+    return target
 
 
 def package_submission(
