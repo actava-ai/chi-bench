@@ -785,6 +785,66 @@ def submission_status_cmd(
         )
 
 
+@submission_app.command("prepare")
+def submission_prepare_cmd(
+    config: Path = typer.Option(..., "-f", "--config", help="Submission YAML."),
+    out: Path | None = typer.Option(
+        None,
+        "-o",
+        "--out",
+        help="Packet output base directory. Default: <output_root>/packet/.",
+    ),
+    date: str | None = typer.Option(
+        None,
+        "--date",
+        help="Override the YYYY-MM-DD prefix on the packet directory. Default: today (UTC).",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Overwrite an existing packet directory at the target path.",
+    ),
+) -> None:
+    """Build a leaderboard-ready submission packet directory.
+
+    Curates the trial tree from ``submission run`` into
+    ``<out>/<YYYY-MM-DD>-<submission_id>/`` containing the manifest,
+    results.csv, frozen sub.yaml, provenance, auto-generated README, and
+    per-trial scorecards + zstd-compressed trajectories. The raw trial tree
+    on disk is unchanged.
+
+    Submit the packet via the actava-ai/leaderboard repo. See
+    https://github.com/actava-ai/leaderboard for the current submission flow.
+    """
+    from pydantic import ValidationError
+
+    from chi_bench.experiment.submission import SubmissionConfig, prepare_packet
+
+    try:
+        cfg = SubmissionConfig.from_yaml(config)
+    except (ValidationError, yaml.YAMLError, ValueError, OSError) as e:
+        typer.echo(f"Could not load {config}: {e}", err=True)
+        raise typer.Exit(2) from None
+
+    try:
+        packet_dir = prepare_packet(cfg, out_dir=out, date=date, force=force)
+    except FileExistsError as e:
+        typer.echo(f"{e}", err=True)
+        typer.echo(
+            "Re-run with --force to overwrite, or pass --date to use a different prefix.",
+            err=True,
+        )
+        raise typer.Exit(1) from None
+    except FileNotFoundError as e:
+        typer.echo(f"Cannot prepare: {e}", err=True)
+        raise typer.Exit(1) from None
+
+    typer.echo(f"Packet ready: {packet_dir}")
+    typer.echo("")
+    typer.echo("Submit it via the leaderboard repo:")
+    typer.echo("  https://github.com/actava-ai/leaderboard")
+
+
 @submission_app.command("package")
 def submission_package_cmd(
     config: Path = typer.Option(..., "-f", "--config", help="Submission YAML."),
