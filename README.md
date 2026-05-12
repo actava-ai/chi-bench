@@ -1,6 +1,6 @@
 <div align="center">
   <img src="assets/figures/logo.svg" alt="Χ-Bench" width="300"/>
-  <h1><b><u>C</u></b>linical <b><u>H</u></b>ealthcare <b><u>I</u></b>n-Situ Environment</h1>
+  <h1><ins>C</ins>linical <ins>H</ins>ealthcare <ins>I</ins>n-Situ Environment</h1>
   <p><b>Benchmark for long-horizon, policy-rich healthcare workflow agents</b></p>
   <p>
     <a href="https://arxiv.org/abs/XXXX.XXXXX"><img src="https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b.svg" alt="arXiv"/></a>
