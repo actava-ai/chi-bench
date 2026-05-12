@@ -99,8 +99,10 @@ CSV columns: `agent, model, n_trials, n_tasks, pass_at_1, pass_at_1_lo, pass_at_
 
 ```bash
 uv pip install -U "huggingface_hub[cli]"
-uv run huggingface-cli download actava/chi-bench --repo-type dataset --local-dir data/
+uv run chi-bench data download --revision chi-bench-v1.0.0
 ```
+
+This wraps `huggingface-cli download actava/chi-bench` and writes the revision tag to `data/.chi-bench-version` — submission preflight verifies this against your config's `dataset.version`. Use this command rather than raw `huggingface-cli` so the version pin works.
 
 ### 2. Managed-Care Operations Handbook (Google Drive)
 
@@ -117,15 +119,58 @@ tar -xzf managed-care-operations-handbook.tar.gz -C data/skills/
 uv run chi-bench data verify
 ```
 
+## Submit your agent
+
+Submitting to the [leaderboard](https://actava-ai.github.io/chi-bench/leaderboard) is a four-command flow over one YAML. Copy `configs/submission_example.yaml`, edit the highlighted fields, then:
+
+```bash
+# 1. Schema + preflight check (dataset pin, Modal token / Docker image, agent name)
+uv run chi-bench submission validate -f my_submission.yaml
+
+# 2. Run all 3 domains. Default: one trial per task (pass@1).
+#    Raw Harbor trial trees stay on disk under logs/submissions/<id>/ for human verification.
+uv run chi-bench submission run -f my_submission.yaml
+
+# 3. Check progress (safe to run while step 2 is still going).
+uv run chi-bench submission status -f my_submission.yaml
+
+# 4. Build the upload-ready zip (~30–50 MB).
+uv run chi-bench submission package -f my_submission.yaml
+```
+
+The packet (`logs/submissions/<id>/<id>.zip`) contains everything needed for human verification:
+
+```
+submission.json   # manifest: agent, model, provenance (code_sha, dataset_version, ...), results, per_domain
+results.csv       # leaderboard row: agent, model, n_trials, n_tasks, pass_at_1, mean_cost_usd, mean_walltime_s
+sub.yaml          # frozen copy of your input config
+provenance.json   # captured at run start (git SHA, image digest, timestamps, host)
+trials/<domain>/<trial_id>/
+    result.json                 # Harbor reward + agent metadata
+    verifier/scorecard.json     # per-check verdicts
+    verifier/reward.json        # verifier's reward breakdown
+    agent/trajectory.json       # full agent message trace (for replay/audit)
+```
+
+Workspace artifacts, server logs, and Harbor scratch files are deliberately excluded so the zip stays uploadable while remaining sufficient for a human to replay any single trial.
+
+**Partial submissions** (development only): `--domain pa | um | cm` on `submission run` restricts to one domain at a time. Partial submissions are flagged as such on the leaderboard.
+
+**Leaderboard policy**: one run per task — pass@3 / pass^3 / Wilson CIs are not included in the submission manifest. If you want those for your own analysis, set `run.n_attempts: 3` in the YAML; the extra trials are kept on disk and the manifest still publishes pass@1.
+
 ## Architecture
 
 A single Python package (`chi_bench`) wraps a FastAPI server + 3 MCP servers (provider :8020, payer :8100, CM :8200) + an LLM-based verifier ("workspace judge"). Each trial runs in a fresh Docker container that bundles the server, the judge, the agent harness, and the per-task fixtures. See `docs/architecture.md`.
 
 ## Modal (optional)
 
+Modal parallelizes trials across remote sandboxes — recommended for full submissions and matrix reproduction (local Docker is bounded to one host).
+
 ```bash
 uv run modal token set --profile chi-bench
-uv run chi-bench experiment run -f configs/experiments/table1_main_matrix.yaml --environment modal
+# Submitters: just set `run.environment: modal` in sub.yaml.
+# Paper-table reproduction: run_table.sh accepts --modal.
+./scripts/run_table.sh table1 --modal
 ```
 
 ## Citation

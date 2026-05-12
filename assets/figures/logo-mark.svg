@@ -1,7 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 200" role="img" aria-label="Χ-Bench">
-  <title>Χ-Bench</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Χ-Bench mark">
+  <title>Χ-Bench mark</title>
   <defs>
-    <!-- Crimson-to-coral gradient, tightened to the Χ's actual vertical extent -->
     <linearGradient id="chiGrad" x1="100" y1="50" x2="100" y2="150" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="#8B1029"/>
       <stop offset="50%" stop-color="#DC2626"/>
@@ -25,27 +24,17 @@
     </filter>
   </defs>
 
-  <!-- Solid white canvas -->
   <rect width="100%" height="100%" fill="#FFFFFF"/>
 
-  <!-- White badge with soft drop shadow -->
   <circle cx="100" cy="100" r="90" fill="url(#badgeGrad)" filter="url(#badgeShadow)"/>
   <circle cx="100" cy="100" r="90" fill="none" stroke="#000000" stroke-opacity="0.07"/>
 
-  <!-- Upper-left gloss highlight -->
   <ellipse cx="72" cy="58" rx="44" ry="22" fill="url(#glossGrad)"/>
 
-  <!-- Χ mark: two crossing capsules -->
   <g>
     <rect x="28" y="85" width="144" height="30" rx="15" ry="15"
           fill="url(#chiGrad)" transform="rotate(-45 100 100)"/>
     <rect x="28" y="85" width="144" height="30" rx="15" ry="15"
           fill="url(#chiGrad)" transform="rotate(45 100 100)"/>
   </g>
-
-  <!-- "-Bench" wordmark -->
-  <text x="208" y="132"
-        font-family="'Helvetica Neue','Arial Black',Helvetica,Arial,sans-serif"
-        font-weight="900" font-size="94" fill="#171717"
-        letter-spacing="-2.5">-Bench</text>
 </svg>

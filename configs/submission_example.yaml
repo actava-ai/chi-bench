@@ -1,0 +1,61 @@
+# chi-Bench submission template.
+# Copy this to your own file (e.g. configs/submissions/<your-id>.yaml),
+# edit the highlighted fields, then:
+#
+#   chi-bench submission validate -f <your-sub>.yaml
+#   chi-bench submission run      -f <your-sub>.yaml
+#   chi-bench submission status   -f <your-sub>.yaml
+#   chi-bench submission package  -f <your-sub>.yaml
+#
+# The packet (<output_root>/<id>.zip) is what you upload to the leaderboard.
+
+schema: chi-bench/submission/v1
+
+submission:
+  # REQUIRED — slug-safe (lowercase letters, digits, '-', '_'). Used for
+  # output paths and the manifest. Stable across re-runs.
+  id: my-team-claude-code-opus-4-7
+  # REQUIRED — appears on the leaderboard.
+  team: My Team
+  # REQUIRED — for follow-up only; not published.
+  contact: you@example.com
+  # REQUIRED — registered harness name. Built-ins: claude-code, codex,
+  # gemini-cli, openclaw, hermes, openai-agents, deepagents.
+  # Custom harnesses are accepted with a soft warning.
+  agent: claude-code
+  # REQUIRED — model id passed verbatim to the harness.
+  model: anthropic/claude-sonnet-4-6
+  # Optional free-text notes.
+  notes: |
+    Default config; no custom prompting.
+
+run:
+  # 'modal' (default, parallel, recommended for full submissions) or 'docker'
+  # (local single-image; needs `chi-bench docker build` first).
+  environment: modal
+  # Leaderboard policy is one run per task. >1 logs a warning and the
+  # submission manifest still publishes pass@1 only.
+  n_attempts: 1
+  # In-flight parallelism per domain. Modal scales horizontally; docker
+  # is bounded by your host.
+  concurrency: 5
+  # Harbor infra-retry budget (NOT model retries).
+  max_retries: 2
+  # Multiplies all task timeouts in the slice.
+  timeout_multiplier: 2.0
+  # Provider API keys + CLAUDE_CODE_OAUTH_TOKEN (judge token) come from here.
+  env_file: .env
+
+dataset:
+  # REQUIRED — must match data/.chi-bench-version (written by
+  # `chi-bench data download --revision <tag>`). Preflight rejects mismatches.
+  version: chi-bench-v1.0.0
+  # All three domains for a complete submission. Override with `--domain pa|um|cm`
+  # on the CLI for partial runs (development only — partial submissions are
+  # marked as such on the leaderboard).
+  domains: [pa_provider, pa_um, cm]
+
+# Optional. Defaults shown.
+# paths:
+#   data_root: data
+#   output_root: logs/submissions/<submission.id>

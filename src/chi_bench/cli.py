@@ -24,7 +24,10 @@ from collections.abc import Callable
 from pathlib import Path
 from urllib.request import urlopen
 
+import subprocess
+
 import typer
+import yaml
 
 app = typer.Typer(
     name="chi_bench",
@@ -40,6 +43,12 @@ app.add_typer(experiment_app, name="experiment")
 
 data_app = typer.Typer(help="Data layout commands.", no_args_is_help=True)
 app.add_typer(data_app, name="data")
+
+submission_app = typer.Typer(
+    help="Leaderboard submission commands (validate / run / status / package).",
+    no_args_is_help=True,
+)
+app.add_typer(submission_app, name="submission")
 
 
 @data_app.command("verify")
@@ -603,3 +612,257 @@ def experiment_status(
         status = "complete" if reward_file.exists() else "running"
         reward = reward_file.read_text().strip() if reward_file.exists() else "-"
         typer.echo(f"  {trial_dir.name}: {status} (reward={reward})")
+
+
+# ─── submission ──────────────────────────────────────────────────────────────
+
+
+@submission_app.command("validate")
+def submission_validate(
+    config: Path = typer.Option(
+        ..., "-f", "--config", help="Submission YAML to validate."
+    ),
+    skip_preflight: bool = typer.Option(
+        False,
+        "--skip-preflight",
+        help="Schema-check only; don't probe Docker / Modal / dataset state.",
+    ),
+) -> None:
+    """Validate a submission YAML.
+
+    Schema check is always performed. Without ``--skip-preflight`` the command
+    also verifies dataset version pinning, the chosen environment's CLI/token,
+    and (warns) on unknown agent names.
+
+    Exit code 0 only when there are no errors; warnings are printed but
+    non-blocking.
+    """
+    from pydantic import ValidationError
+
+    from chi_bench.experiment.submission import SubmissionConfig, run_all_preflight
+
+    try:
+        cfg = SubmissionConfig.from_yaml(config)
+    except ValidationError as e:
+        typer.echo(f"Schema error in {config}:", err=True)
+        typer.echo(str(e), err=True)
+        raise typer.Exit(2) from None
+    except (yaml.YAMLError, ValueError, OSError) as e:
+        typer.echo(f"Could not load {config}: {e}", err=True)
+        raise typer.Exit(2) from None
+
+    typer.echo(f"Schema OK ({cfg.schema_})")
+    typer.echo(f"  id:       {cfg.submission.id}")
+    typer.echo(f"  agent:    {cfg.submission.agent}")
+    typer.echo(f"  model:    {cfg.submission.model}")
+    typer.echo(f"  domains:  {', '.join(cfg.dataset.domains)}")
+    typer.echo(f"  env:      {cfg.run.environment}")
+    typer.echo(f"  attempts: {cfg.run.n_attempts}")
+    typer.echo(f"  output:   {cfg.paths.output_root}")
+
+    if skip_preflight:
+        return
+
+    issues = run_all_preflight(cfg)
+    errors = [i for i in issues if i.severity == "error"]
+    warnings = [i for i in issues if i.severity == "warning"]
+
+    for w in warnings:
+        typer.echo(f"warning [{w.code}]: {w.message}")
+    for e in errors:
+        typer.echo(f"ERROR   [{e.code}]: {e.message}", err=True)
+
+    if errors:
+        raise typer.Exit(1)
+    typer.echo("Preflight OK." if not warnings else f"Preflight OK ({len(warnings)} warning(s)).")
+
+
+@submission_app.command("run")
+def submission_run(
+    config: Path = typer.Option(
+        ..., "-f", "--config", help="Submission YAML to execute."
+    ),
+    domain: list[str] = typer.Option(
+        [],
+        "--domain",
+        help=(
+            "Restrict to one or more domains (pa | um | cm or canonical names). "
+            "Repeatable. Default: every domain listed in sub.yaml."
+        ),
+    ),
+    skip_preflight: bool = typer.Option(
+        False,
+        "--skip-preflight",
+        help="Skip dataset/environment/agent preflight checks (NOT recommended).",
+    ),
+) -> None:
+    """Run a submission end-to-end.
+
+    Loads sub.yaml, runs preflight (unless skipped), then runs each selected
+    domain through ``run_experiment()``. Outputs land under
+    ``logs/submissions/<id>/`` by default. Aggregation + manifest writing is
+    layered on in subsequent commands; this command produces the raw trial
+    tree.
+    """
+    from pydantic import ValidationError
+
+    from chi_bench.experiment.submission import (
+        SubmissionConfig,
+        run_all_preflight,
+        run_submission,
+    )
+
+    try:
+        cfg = SubmissionConfig.from_yaml(config)
+    except ValidationError as e:
+        typer.echo(f"Schema error in {config}:\n{e}", err=True)
+        raise typer.Exit(2) from None
+    except (yaml.YAMLError, ValueError, OSError) as e:
+        typer.echo(f"Could not load {config}: {e}", err=True)
+        raise typer.Exit(2) from None
+
+    if not skip_preflight:
+        issues = run_all_preflight(cfg)
+        errors = [i for i in issues if i.severity == "error"]
+        for w in (i for i in issues if i.severity == "warning"):
+            typer.echo(f"warning [{w.code}]: {w.message}")
+        if errors:
+            for e in errors:
+                typer.echo(f"ERROR   [{e.code}]: {e.message}", err=True)
+            raise typer.Exit(1)
+
+    try:
+        output_root = run_submission(
+            cfg=cfg,
+            source_yaml=config,
+            domain_filter=domain or None,
+        )
+    except (ValueError, RuntimeError) as e:
+        typer.echo(f"Submission failed: {e}", err=True)
+        raise typer.Exit(1) from None
+
+    typer.echo(f"Submission '{cfg.submission.id}' finished. Outputs: {output_root}")
+
+
+@submission_app.command("status")
+def submission_status_cmd(
+    config: Path = typer.Option(
+        ..., "-f", "--config", help="Submission YAML."
+    ),
+    json_out: bool = typer.Option(
+        False, "--json", help="Emit machine-readable JSON instead of the table."
+    ),
+) -> None:
+    """Show progress per domain for a submission's output tree.
+
+    Counts completed trials and pass/fail tallies under
+    ``logs/submissions/<id>/`` (or whatever ``paths.output_root`` points at).
+    Trials without ``result.json`` are running and not yet counted.
+    """
+    from pydantic import ValidationError
+
+    from chi_bench.experiment.submission import SubmissionConfig, status_submission
+
+    try:
+        cfg = SubmissionConfig.from_yaml(config)
+    except (ValidationError, yaml.YAMLError, ValueError, OSError) as e:
+        typer.echo(f"Could not load {config}: {e}", err=True)
+        raise typer.Exit(2) from None
+
+    status = status_submission(cfg)
+
+    if json_out:
+        import json as _json
+
+        typer.echo(_json.dumps(status, indent=2))
+        return
+
+    typer.echo(f"Submission: {status['submission_id']}")
+    typer.echo(f"Output:     {status['output_root']}")
+    typer.echo(f"Started:    {status['started_at'] or '(not yet)'}")
+    typer.echo(f"Finished:   {status['finished_at'] or '(in progress)'}")
+    typer.echo("")
+    typer.echo(f"{'Domain':<14} {'Expected':>9} {'Trials':>7} {'Pass':>6} {'Fail':>6}  State")
+    for d in status["domains"]:
+        expected = d["expected_tasks"] or "?"
+        typer.echo(
+            f"{d['domain']:<14} {str(expected):>9} {d['n_trials']:>7} "
+            f"{d['n_passed']:>6} {d['n_failed']:>6}  {d['state']}"
+        )
+
+
+@submission_app.command("package")
+def submission_package_cmd(
+    config: Path = typer.Option(
+        ..., "-f", "--config", help="Submission YAML."
+    ),
+    output_zip: Path | None = typer.Option(
+        None,
+        "-o",
+        "--output",
+        help="Zip output path. Default: <output_root>/<submission_id>.zip.",
+    ),
+) -> None:
+    """Build the upload-ready submission packet.
+
+    Bundles the manifest + CSV + frozen sub.yaml + per-trial scorecard /
+    reward / result / trajectory.json. Workspace artifacts, server logs,
+    agent session caches, and Harbor scratch files are deliberately
+    excluded so the zip stays small (typically <50 MB for a 75-trial
+    pass@1 submission). The raw trial tree on disk is unchanged.
+    """
+    from pydantic import ValidationError
+
+    from chi_bench.experiment.submission import SubmissionConfig, package_submission
+
+    try:
+        cfg = SubmissionConfig.from_yaml(config)
+    except (ValidationError, yaml.YAMLError, ValueError, OSError) as e:
+        typer.echo(f"Could not load {config}: {e}", err=True)
+        raise typer.Exit(2) from None
+
+    try:
+        zip_path = package_submission(cfg, zip_path=output_zip)
+    except FileNotFoundError as e:
+        typer.echo(f"Cannot package: {e}", err=True)
+        raise typer.Exit(1) from None
+
+    size_mb = zip_path.stat().st_size / (1024 * 1024)
+    typer.echo(f"Packet written: {zip_path} ({size_mb:.1f} MB)")
+
+
+# ─── data download (writes data/.chi-bench-version) ─────────────────────────
+
+
+@data_app.command("download")
+def data_download(
+    revision: str = typer.Option(
+        ...,
+        "--revision",
+        help=(
+            "HF dataset revision tag (e.g. 'chi-bench-v1.0.0'). Pinned in "
+            "data/.chi-bench-version so submission preflight can verify it."
+        ),
+    ),
+    repo_id: str = typer.Option(
+        "actava/chi-bench", "--repo-id", help="HF repo id."
+    ),
+    data_dir: Path = typer.Option(
+        Path("data"), "--data-dir", help="Local data root."
+    ),
+) -> None:
+    """Download the chi-Bench dataset from Hugging Face at a pinned revision.
+
+    Equivalent to ``huggingface-cli download <repo> --revision <rev>
+    --local-dir data/``, plus writing the revision tag to
+    ``data/.chi-bench-version``. Submitters MUST use this command (not raw
+    ``huggingface-cli``) so the version pin works.
+    """
+    from chi_bench.experiment.submission import download_dataset
+
+    try:
+        download_dataset(revision=revision, repo_id=repo_id, data_root=data_dir)
+    except (RuntimeError, subprocess.CalledProcessError) as e:
+        typer.echo(f"Download failed: {e}", err=True)
+        raise typer.Exit(1) from None
+    typer.echo(f"Dataset downloaded into {data_dir} (revision={revision}).")
