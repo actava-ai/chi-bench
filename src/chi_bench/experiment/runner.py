@@ -180,6 +180,11 @@ def _mirror_task_for_modal(src_task_dir: Path, dst_task_dir: Path) -> None:
             shutil.copytree(entry, dst_entry, symlinks=False)
         else:
             dst_entry.symlink_to(entry.resolve())
+    # Harbor's TaskPaths.is_valid() requires an environment/ subdir to consider
+    # a task discoverable. Chi-bench tasks are packaged for HF without one (the
+    # custom ChiBenchModalEnvironment builds from docker/Dockerfile.modal), so
+    # materialize an empty stub when the source lacks it.
+    (dst_task_dir / "environment").mkdir(exist_ok=True)
 
 
 @contextmanager

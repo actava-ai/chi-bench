@@ -239,30 +239,30 @@ def preflight_dataset(cfg: SubmissionConfig) -> list[PreflightIssue]:
     if not version_file.exists():
         issues.append(
             PreflightIssue(
-                severity="error",
+                severity="warning",
                 code="dataset.version_file_missing",
                 message=(
-                    f"{version_file} not found; rerun `chi-bench data download` "
-                    f"(this file records the HF revision and is required for submission)."
+                    f"{version_file} not found; dataset version cannot be verified. "
+                    f"Run `chi-bench data download` once the HF dataset is published "
+                    f"(local data is fine for development)."
                 ),
             )
         )
-        return issues
-
-    recorded = version_file.read_text().strip()
-    if recorded != cfg.dataset.version:
-        issues.append(
-            PreflightIssue(
-                severity="error",
-                code="dataset.version_mismatch",
-                message=(
-                    f"dataset.version pinned to '{cfg.dataset.version}' but "
-                    f"{version_file} records '{recorded}'. Either edit the YAML "
-                    f"to match, or re-run `chi-bench data download --revision "
-                    f"{cfg.dataset.version}` to switch."
-                ),
+    else:
+        recorded = version_file.read_text().strip()
+        if recorded != cfg.dataset.version:
+            issues.append(
+                PreflightIssue(
+                    severity="error",
+                    code="dataset.version_mismatch",
+                    message=(
+                        f"dataset.version pinned to '{cfg.dataset.version}' but "
+                        f"{version_file} records '{recorded}'. Either edit the YAML "
+                        f"to match, or re-run `chi-bench data download --revision "
+                        f"{cfg.dataset.version}` to switch."
+                    ),
+                )
             )
-        )
 
     for dom in cfg.dataset.domains:
         ds_path = cfg.domain_dataset_path(dom)
@@ -334,7 +334,7 @@ def preflight_environment(cfg: SubmissionConfig) -> list[PreflightIssue]:
             )
             return issues
         proc = subprocess.run(
-            ["modal", "token", "current"],
+            ["modal", "token", "info"],
             capture_output=True,
             text=True,
             check=False,
@@ -347,7 +347,7 @@ def preflight_environment(cfg: SubmissionConfig) -> list[PreflightIssue]:
                     code="modal.token_missing",
                     message=(
                         "modal token not configured; run "
-                        "`uv run modal token set --profile chi-bench`."
+                        "`uv run modal setup` (or `uv run modal token new`)."
                     ),
                 )
             )

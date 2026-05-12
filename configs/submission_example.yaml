@@ -14,7 +14,7 @@ schema: chi-bench/submission/v1
 submission:
   # REQUIRED — slug-safe (lowercase letters, digits, '-', '_'). Used for
   # output paths and the manifest. Stable across re-runs.
-  id: my-team-claude-code-opus-4-7
+  id: my-team-claude-code-opus-4-6
   # REQUIRED — appears on the leaderboard.
   team: My Team
   # REQUIRED — for follow-up only; not published.
@@ -24,7 +24,7 @@ submission:
   # Custom harnesses are accepted with a soft warning.
   agent: claude-code
   # REQUIRED — model id passed verbatim to the harness.
-  model: anthropic/claude-sonnet-4-6
+  model: anthropic/claude-opus-4-6
   # Optional free-text notes.
   notes: |
     Default config; no custom prompting.

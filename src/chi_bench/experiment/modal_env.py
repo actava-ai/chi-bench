@@ -221,6 +221,12 @@ class ChiBenchModalEnvironment(ModalEnvironment):
         --environment-import-path chi_bench.experiment.modal_env:ChiBenchModalEnvironment
     """
 
+    def _validate_definition(self) -> None:
+        # Single-image design: start() builds from docker/Dockerfile (repo root),
+        # not the per-task environment/ dir. The stub environment/ created by
+        # _prepare_modal_dataset has no Dockerfile, so skip the base check.
+        return
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         # Harbor 0.4.0 auto-selects `_ModalDinD` when `environment/docker-compose.yaml`
         # exists. Our tasks ship one for local-Docker runs, so harbor defaults to

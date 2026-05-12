@@ -106,17 +106,17 @@ Submitting to the [leaderboard](https://actava-ai.github.io/chi-bench/leaderboar
 
 ```bash
 # 1. Schema + preflight check (dataset pin, Modal token / Docker image, agent name)
-uv run chi-bench submission validate -f my_submission.yaml
+uv run chi-bench submission validate -f configs/submission_example.yaml
 
 # 2. Run all 3 domains. Default: one trial per task (pass@1).
 #    Raw Harbor trial trees stay on disk under logs/submissions/<id>/ for human verification.
-uv run chi-bench submission run -f my_submission.yaml
+uv run chi-bench submission run -f configs/submission_example.yaml
 
 # 3. Check progress (safe to run while step 2 is still going).
-uv run chi-bench submission status -f my_submission.yaml
+uv run chi-bench submission status -f configs/submission_example.yaml
 
 # 4. Build the upload-ready zip (~30–50 MB).
-uv run chi-bench submission package -f my_submission.yaml
+uv run chi-bench submission package -f configs/submission_example.yaml
 ```
 
 The packet (`logs/submissions/<id>/<id>.zip`) contains everything needed for human verification:

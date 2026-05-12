@@ -30,6 +30,7 @@ dependencies = [
     "deepagents>=0.5.2",
     "markdown-it-py>=3.0.0",
     "playwright>=1.48.0",
+    "modal>=1.4.2",
 ]
 
 [project.optional-dependencies]
