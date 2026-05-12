@@ -1,13 +1,13 @@
-<p align="center">
-  <img src="assets/figures/logo.svg" alt="chi-Bench" width="520"/>
-</p>
-
-<h1 align="center">Χ-Bench</h1>
-
-<p align="center">
-  <b>C</b>linical <b>H</b>ealthcare <b>I</b>n-Situ Environment and Evaluation <b>Bench</b>mark<br/>
-  Long-horizon, policy-rich healthcare workflows for AI agents.
-</p>
+<table>
+  <tr>
+    <td width="200">
+      <img src="assets/figures/logo.svg" alt="X-Bench" width="160"/>
+    </td>
+    <td>
+      <p><b>C</b>linical <b>H</b>ealthcare <b>I</b>n-Situ Environment and Evaluation <b>Bench</b>mark<br/></p>
+    </td>
+  </tr>
+</table>
 
 <p align="center">
   <a href="https://arxiv.org/abs/XXXX.XXXXX">
