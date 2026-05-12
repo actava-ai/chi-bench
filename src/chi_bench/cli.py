@@ -619,9 +619,7 @@ def experiment_status(
 
 @submission_app.command("validate")
 def submission_validate(
-    config: Path = typer.Option(
-        ..., "-f", "--config", help="Submission YAML to validate."
-    ),
+    config: Path = typer.Option(..., "-f", "--config", help="Submission YAML to validate."),
     skip_preflight: bool = typer.Option(
         False,
         "--skip-preflight",
@@ -679,9 +677,7 @@ def submission_validate(
 
 @submission_app.command("run")
 def submission_run(
-    config: Path = typer.Option(
-        ..., "-f", "--config", help="Submission YAML to execute."
-    ),
+    config: Path = typer.Option(..., "-f", "--config", help="Submission YAML to execute."),
     domain: list[str] = typer.Option(
         [],
         "--domain",
@@ -746,9 +742,7 @@ def submission_run(
 
 @submission_app.command("status")
 def submission_status_cmd(
-    config: Path = typer.Option(
-        ..., "-f", "--config", help="Submission YAML."
-    ),
+    config: Path = typer.Option(..., "-f", "--config", help="Submission YAML."),
     json_out: bool = typer.Option(
         False, "--json", help="Emit machine-readable JSON instead of the table."
     ),
@@ -793,9 +787,7 @@ def submission_status_cmd(
 
 @submission_app.command("package")
 def submission_package_cmd(
-    config: Path = typer.Option(
-        ..., "-f", "--config", help="Submission YAML."
-    ),
+    config: Path = typer.Option(..., "-f", "--config", help="Submission YAML."),
     output_zip: Path | None = typer.Option(
         None,
         "-o",
@@ -844,19 +836,16 @@ def data_download(
             "data/.chi-bench-version so submission preflight can verify it."
         ),
     ),
-    repo_id: str = typer.Option(
-        "actava/chi-bench", "--repo-id", help="HF repo id."
-    ),
-    data_dir: Path = typer.Option(
-        Path("data"), "--data-dir", help="Local data root."
-    ),
+    repo_id: str = typer.Option("actava/chi-bench", "--repo-id", help="HF repo id."),
+    data_dir: Path = typer.Option(Path("data"), "--data-dir", help="Local data root."),
 ) -> None:
     """Download the chi-Bench dataset from Hugging Face at a pinned revision.
 
-    Equivalent to ``huggingface-cli download <repo> --revision <rev>
-    --local-dir data/``, plus writing the revision tag to
-    ``data/.chi-bench-version``. Submitters MUST use this command (not raw
-    ``huggingface-cli``) so the version pin works.
+    Convenience wrapper equivalent to ``huggingface-cli download <repo>
+    --revision <rev> --local-dir data/`` plus writing the revision tag to
+    ``data/.chi-bench-version``. The README documents the raw-CLI path as
+    the primary route; this command is provided so the pin file is written
+    in one step.
     """
     from chi_bench.experiment.submission import download_dataset
 

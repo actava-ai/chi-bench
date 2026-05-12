@@ -7,7 +7,7 @@
 │           chi-bench:latest (single image)                    │
 │                                                              │
 │   ┌─────────────────┐    ┌────────────────────────────────┐  │
-│   │  Agent harness  │    │  chi-bench serve               │  │
+│   │  Agent harness  │    │  cb serve                      │  │
 │   │  (codex,        │◄──►│   • FastAPI :8023              │  │
 │   │   claude-code,  │    │   • provider MCP :8020         │  │
 │   │   openclaw, ...)│    │   • payer MCP :8100            │  │
@@ -35,7 +35,9 @@
 
 ## Trial lifecycle
 
-1. `chi-bench experiment run -f <config>` shells out to Harbor.
+> Flag-by-flag CLI reference: [`docs/cli.md`](cli.md).
+
+1. `cb experiment run -f <config>` shells out to Harbor.
 2. Harbor spawns one container per trial via `ChiBenchDockerEnvironment` (or `ChiBenchModalEnvironment` for `-e modal`).
 3. The container entrypoint:
    - reads `CHI_BENCH_TASK_ID`, wires `/opt/chi-bench/tasks/<task_id>/fixtures` → `/fixtures`;

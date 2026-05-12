@@ -31,9 +31,9 @@ def test_emit_table1_first_row_pa_um():
         ]
     )
     assert len(lines) == 1
-    # Line shape: chi-bench experiment run -f <path-to-slice-yaml>
+    # Line shape: cb experiment run -f <path-to-slice-yaml>
     tokens = lines[0].split()
-    assert tokens[0] == "chi-bench"
+    assert tokens[0] == "cb"
     f_idx = tokens.index("-f")
     slice_yaml = REPO_ROOT / tokens[f_idx + 1]
     cfg = ExperimentConfig.from_yaml(str(slice_yaml))

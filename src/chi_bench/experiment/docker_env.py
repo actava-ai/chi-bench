@@ -1,7 +1,7 @@
 """Local-Docker Harbor Environment for the chi-Bench single-image layout.
 
 One ``chi-bench:latest`` container per trial: the image is pre-built once via
-``chi-bench docker build`` (or rebuilt here when ``force_build=True``) and the
+``cb docker build`` (or rebuilt here when ``force_build=True``) and the
 per-task fixtures are selected by ``CHI_BENCH_TASK_ID``. The in-container
 ``docker/entrypoint.sh`` boots the chi-Bench HTTP server + three MCP session
 managers as PID 1, then ``exec``s ``sleep infinity`` so harbor's lifecycle
@@ -58,7 +58,7 @@ FORWARDED_ENV_KEYS: tuple[str, ...] = (
 )
 
 
-# Default image tag — matches what ``chi-bench docker build`` produces.
+# Default image tag — matches what ``cb docker build`` produces.
 DEFAULT_IMAGE = "chi-bench:latest"
 
 
@@ -209,7 +209,7 @@ class ChiBenchDockerEnvironment(BaseEnvironment):
       ``download``: ``docker cp <name>:<src> <dst>``
       ``stop``:     ``docker rm -f <name>``
 
-    The image must be pre-built (``chi-bench docker build``) unless
+    The image must be pre-built (``cb docker build``) unless
     ``force_build=True`` is passed at construction, in which case ``start``
     rebuilds it from ``docker/Dockerfile`` with repo root as context.
     """
@@ -262,7 +262,7 @@ class ChiBenchDockerEnvironment(BaseEnvironment):
         if shutil.which("docker") is None:
             raise SystemExit(
                 "docker CLI not found on PATH — install Docker Desktop or "
-                "the docker engine before running chi-bench experiment run "
+                "the docker engine before running cb experiment run "
                 "with --environment docker."
             )
 
@@ -402,7 +402,7 @@ class ChiBenchDockerEnvironment(BaseEnvironment):
             raise RuntimeError(
                 "force_build=True but chi_bench is not installed from a source "
                 "checkout (no docker/Dockerfile found above the package). "
-                "Build the image manually with `chi-bench docker build`."
+                "Build the image manually with `cb docker build`."
             )
         dockerfile = repo_root / "docker" / "Dockerfile"
         self.logger.info(

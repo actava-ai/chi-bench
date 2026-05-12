@@ -1,7 +1,7 @@
 """chi-Bench submission configuration + validation.
 
 A submission YAML names one (agent, model) pair and runs it across one or more
-chi-Bench domains. The CLI fan-out lives in ``cli.py`` (``chi-bench submission``);
+chi-Bench domains. The CLI fan-out lives in ``cli.py`` (``cb submission``);
 this module owns the schema, loader, preflight checks, run loop, and provenance
 capture.
 
@@ -228,8 +228,9 @@ def preflight_dataset(cfg: SubmissionConfig) -> list[PreflightIssue]:
                 severity="error",
                 code="dataset.missing_root",
                 message=(
-                    f"data_root {data_root} does not exist; run "
-                    "`chi-bench data download` first."
+                    f"data_root {data_root} does not exist; download the dataset with "
+                    "`huggingface-cli download actava/chi-bench --repo-type dataset "
+                    "--revision <rev> --local-dir data/` first."
                 ),
             )
         )
@@ -243,8 +244,8 @@ def preflight_dataset(cfg: SubmissionConfig) -> list[PreflightIssue]:
                 code="dataset.version_file_missing",
                 message=(
                     f"{version_file} not found; dataset version cannot be verified. "
-                    f"Run `chi-bench data download` once the HF dataset is published "
-                    f"(local data is fine for development)."
+                    f"Download via `huggingface-cli` and write the revision tag into "
+                    f"{version_file} (local data is fine for development)."
                 ),
             )
         )
@@ -258,8 +259,8 @@ def preflight_dataset(cfg: SubmissionConfig) -> list[PreflightIssue]:
                     message=(
                         f"dataset.version pinned to '{cfg.dataset.version}' but "
                         f"{version_file} records '{recorded}'. Either edit the YAML "
-                        f"to match, or re-run `chi-bench data download --revision "
-                        f"{cfg.dataset.version}` to switch."
+                        f"to match, or re-download with `huggingface-cli` at revision "
+                        f"'{cfg.dataset.version}' and update {version_file}."
                     ),
                 )
             )
@@ -318,7 +319,7 @@ def preflight_environment(cfg: SubmissionConfig) -> list[PreflightIssue]:
                     code="docker.image_missing",
                     message=(
                         "chi-bench:latest not present locally; "
-                        "run `chi-bench docker build` (or it will build at trial start, "
+                        "run `cb docker build` (or it will build at trial start, "
                         "which delays the first slice by ~5 min)."
                     ),
                 )
@@ -459,9 +460,7 @@ def capture_provenance(cfg: SubmissionConfig) -> dict[str, object]:
 # ─── Run loop ────────────────────────────────────────────────────────────────
 
 
-def _resolve_domains(
-    cfg: SubmissionConfig, domain_filter: list[str] | None
-) -> list[str]:
+def _resolve_domains(cfg: SubmissionConfig, domain_filter: list[str] | None) -> list[str]:
     """Intersect cfg.dataset.domains with an optional CLI filter."""
     if not domain_filter:
         return list(cfg.dataset.domains)
@@ -524,7 +523,7 @@ def run_submission(
 
     For each domain: synthesize a single-slice ``ExperimentConfig`` YAML under
     ``output_root/<domain>/slice.yaml`` and hand it to ``run_experiment()`` —
-    which is the same codepath ``chi-bench experiment run -f`` uses. Harbor
+    which is the same codepath ``cb experiment run -f`` uses. Harbor
     writes the full per-trial tree (``trajectory.json``, ``scorecard.json``,
     ``verdicts.json``, ``result.json``, agent ``run_log.txt``, workspace
     artifacts) into ``output_root/<domain>/<trial_id>/`` — this raw tree is
@@ -763,13 +762,17 @@ def status_submission(
         n_passed = 0
         n_failed = 0
         for result_json in dom_dir.rglob("result.json"):
-            n_trials += 1
             try:
                 data = json.loads(result_json.read_text())
             except (OSError, json.JSONDecodeError):
                 continue
-            vr = data.get("verifier_result") or {}
-            rb = vr.get("rewards") if isinstance(vr, dict) else None
+            vr = data.get("verifier_result")
+            if not isinstance(vr, dict):
+                # Skip run-level aggregate result.json files; only per-trial
+                # results carry a verifier_result block.
+                continue
+            n_trials += 1
+            rb = vr.get("rewards")
             reward = float((rb or {}).get("reward", 0.0)) if rb else float(vr.get("reward", 0.0))
             if reward >= 1.0:
                 n_passed += 1
@@ -839,16 +842,22 @@ _PACKET_TRIAL_FILES: tuple[str, ...] = (
 def _iter_trial_dirs(output_root: Path, domains: list[str]) -> list[tuple[str, Path]]:
     """Yield (domain, trial_dir) for every trial under output_root/<domain>/.
 
-    A "trial dir" is identified by the presence of ``result.json`` — Harbor
-    only writes that once the trial completes. Incomplete trials are skipped
-    so the packet never claims more evidence than exists.
+    A "trial dir" is identified by a per-trial ``result.json`` (verified via
+    ``is_per_trial_result`` so the run-level aggregate file Harbor writes
+    next to the trial dirs is skipped). Incomplete trials — those without
+    ``result.json`` — are likewise excluded so the packet never claims more
+    evidence than exists.
     """
+    from chi_bench.aggregator import is_per_trial_result
+
     trials: list[tuple[str, Path]] = []
     for dom in domains:
         dom_dir = output_root / dom
         if not dom_dir.is_dir():
             continue
         for result_json in dom_dir.rglob("result.json"):
+            if not is_per_trial_result(result_json):
+                continue
             trials.append((dom, result_json.parent))
     return trials
 
@@ -890,9 +899,7 @@ def package_submission(
         try:
             write_manifest(cfg, output_root=root, prices_path=prices_path)
         except Exception:  # noqa: BLE001
-            logger.exception(
-                "refresh_manifest failed; packaging stale manifest if present"
-            )
+            logger.exception("refresh_manifest failed; packaging stale manifest if present")
 
     out_zip = zip_path or root / f"{cfg.submission.id}.zip"
     out_zip.parent.mkdir(parents=True, exist_ok=True)
@@ -955,13 +962,10 @@ def download_dataset(
     """
     if not shutil.which("huggingface-cli"):
         raise RuntimeError(
-            "huggingface-cli not on PATH; install with "
-            "`uv pip install -U 'huggingface_hub[cli]'`."
+            "huggingface-cli not on PATH; install with `uv pip install -U 'huggingface_hub[cli]'`."
         )
     data_root.mkdir(parents=True, exist_ok=True)
-    logger.info(
-        "downloading %s revision %s into %s", repo_id, revision, data_root
-    )
+    logger.info("downloading %s revision %s into %s", repo_id, revision, data_root)
     subprocess.run(
         [
             "huggingface-cli",

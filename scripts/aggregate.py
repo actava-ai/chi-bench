@@ -2,7 +2,7 @@
 
 Thin CLI wrapper. The implementation lives in ``chi_bench.aggregator`` so the
 same code is reachable from the installed ``chi-bench`` package (e.g. when
-``chi-bench submission package`` refreshes the manifest).
+``cb submission package`` refreshes the manifest).
 """
 
 from __future__ import annotations

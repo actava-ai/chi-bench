@@ -75,27 +75,21 @@ def test_loads_valid_submission(tmp_path: Path) -> None:
 
 
 def test_domain_aliases_normalized(tmp_path: Path) -> None:
-    yaml_body = _valid_yaml().replace(
-        "domains: [pa, um, cm]", "domains: [PA-Provider, Pa_UM, CM]"
-    )
+    yaml_body = _valid_yaml().replace("domains: [pa, um, cm]", "domains: [PA-Provider, Pa_UM, CM]")
     p = _write(tmp_path / "sub.yaml", yaml_body)
     cfg = SubmissionConfig.from_yaml(p)
     assert cfg.dataset.domains == ["pa_provider", "pa_um", "cm"]
 
 
 def test_duplicate_domains_dedup(tmp_path: Path) -> None:
-    yaml_body = _valid_yaml().replace(
-        "domains: [pa, um, cm]", "domains: [pa, pa_provider, um]"
-    )
+    yaml_body = _valid_yaml().replace("domains: [pa, um, cm]", "domains: [pa, pa_provider, um]")
     p = _write(tmp_path / "sub.yaml", yaml_body)
     cfg = SubmissionConfig.from_yaml(p)
     assert cfg.dataset.domains == ["pa_provider", "pa_um"]
 
 
 def test_unknown_domain_rejected(tmp_path: Path) -> None:
-    yaml_body = _valid_yaml().replace(
-        "domains: [pa, um, cm]", "domains: [marathon]"
-    )
+    yaml_body = _valid_yaml().replace("domains: [pa, um, cm]", "domains: [marathon]")
     p = _write(tmp_path / "sub.yaml", yaml_body)
     with pytest.raises(ValidationError) as excinfo:
         SubmissionConfig.from_yaml(p)
@@ -144,9 +138,7 @@ def test_domain_dataset_path_helper(tmp_path: Path) -> None:
     p = _write(tmp_path / "sub.yaml", _valid_yaml())
     cfg = SubmissionConfig.from_yaml(p)
     assert cfg.domain_dataset_path("pa_um") == Path("data/prior_auth_um/tasks")
-    assert cfg.domain_registry_path("cm") == Path(
-        "data/" + DOMAIN_REGISTRY["cm"]["registry"]
-    )
+    assert cfg.domain_registry_path("cm") == Path("data/" + DOMAIN_REGISTRY["cm"]["registry"])
 
 
 # ─── preflight: dataset ──────────────────────────────────────────────────────
@@ -358,10 +350,13 @@ def test_run_submission_iterates_domains_and_writes_artifacts(tmp_path: Path) ->
         # Verify the slice YAML exists at the path we were given
         assert Path(config).exists()
 
-    with patch(
-        "chi_bench.experiment.submission.preflight_environment",
-        return_value=[],
-    ), patch("chi_bench.experiment.runner.run_experiment", _fake_run_experiment):
+    with (
+        patch(
+            "chi_bench.experiment.submission.preflight_environment",
+            return_value=[],
+        ),
+        patch("chi_bench.experiment.runner.run_experiment", _fake_run_experiment),
+    ):
         out = run_submission(cfg, source_yaml=p, domain_filter=["pa", "cm"])
 
     assert out == out_root
@@ -498,14 +493,18 @@ def test_aggregate_submission_strips_wilson_and_pass3_columns(tmp_path: Path) ->
     results = aggregate_submission(cfg)
     overall = results["overall"]
     forbidden = {
-        "pass_at_1_lo", "pass_at_1_hi",
-        "pass_at_3", "pass_at_3_lo", "pass_at_3_hi",
-        "pass_pow_3", "pass_pow_3_lo", "pass_pow_3_hi",
+        "pass_at_1_lo",
+        "pass_at_1_hi",
+        "pass_at_3",
+        "pass_at_3_lo",
+        "pass_at_3_hi",
+        "pass_pow_3",
+        "pass_pow_3_lo",
+        "pass_pow_3_hi",
     }
     assert overall is not None
     assert forbidden.isdisjoint(overall.keys()), (
-        f"submission overall row leaked paper-Table-1 columns: "
-        f"{forbidden & overall.keys()}"
+        f"submission overall row leaked paper-Table-1 columns: {forbidden & overall.keys()}"
     )
     for dom, row in results["per_domain"].items():
         assert forbidden.isdisjoint(row.keys()), (
@@ -522,9 +521,7 @@ def test_aggregate_submission_skips_domain_with_no_trials(tmp_path: Path) -> Non
 
 
 def test_build_manifest_shape(tmp_path: Path) -> None:
-    cfg = _populated_submission(
-        tmp_path, {"pa_um": [1.0, 0.0], "cm": [1.0]}
-    )
+    cfg = _populated_submission(tmp_path, {"pa_um": [1.0, 0.0], "cm": [1.0]})
     manifest = build_manifest(cfg)
     assert manifest["schema"] == SUBMISSION_SCHEMA_V1
     assert manifest["submission"]["id"] == "my-team-claude-code-opus-4-7"
@@ -551,7 +548,10 @@ def test_write_manifest_creates_files(tmp_path: Path) -> None:
     assert rows[0]["agent"] == "codex"
     # CSV header reflects the submission projection — no Wilson, no pass@3.
     forbidden = {
-        "pass_at_1_lo", "pass_at_1_hi", "pass_at_3", "pass_pow_3",
+        "pass_at_1_lo",
+        "pass_at_1_hi",
+        "pass_at_3",
+        "pass_pow_3",
     }
     assert forbidden.isdisjoint(rows[0].keys())
 
@@ -671,6 +671,36 @@ def test_status_no_dataset_root_marks_expected_zero(tmp_path: Path) -> None:
     assert by_domain["pa_um"]["state"] == "done"
 
 
+def test_status_ignores_run_level_aggregate_result_json(tmp_path: Path) -> None:
+    # Harbor writes a per-run aggregate result.json next to the trial dirs
+    # (no verifier_result block, just n_total_trials + stats). Status must
+    # skip it; otherwise rglob double-counts and inflates n_failed.
+    out_root = tmp_path / "out"
+    body = _valid_yaml() + textwrap.dedent(
+        f"""
+        paths:
+          data_root: {tmp_path / "absent_data"}
+          output_root: {out_root}
+        """
+    )
+    p = _write(tmp_path / "sub.yaml", body)
+    cfg = SubmissionConfig.from_yaml(p)
+
+    run_dir = out_root / "pa_um" / "sub__pa_um"
+    run_dir.mkdir(parents=True)
+    _make_trial_with_layout(run_dir, "t0__abc", 1.0)
+    _make_trial_with_layout(run_dir, "t1__abc", 0.0)
+    (run_dir / "result.json").write_text(
+        json.dumps({"id": "agg", "n_total_trials": 2, "stats": {"n_trials": 2}})
+    )
+
+    status = status_submission(cfg)
+    by_domain = {d["domain"]: d for d in status["domains"]}
+    assert by_domain["pa_um"]["n_trials"] == 2
+    assert by_domain["pa_um"]["n_passed"] == 1
+    assert by_domain["pa_um"]["n_failed"] == 1
+
+
 # ─── package ─────────────────────────────────────────────────────────────────
 
 
@@ -745,6 +775,39 @@ def test_package_auto_refreshes_manifest_before_zip(tmp_path: Path) -> None:
         names = set(zf.namelist())
     assert "submission.json" in names
     assert "results.csv" in names
+
+
+def test_package_skips_run_level_aggregate_result_json(tmp_path: Path) -> None:
+    """The aggregate result.json Harbor writes alongside trial dirs must not be
+    treated as a trial — otherwise the packet zips up a stray
+    ``trials/<dom>/<run-dir>/result.json`` entry and the manifest's n_included
+    is inflated by one per domain."""
+    import zipfile
+
+    cfg = _populated_submission(tmp_path, {})
+    out_root = cfg.paths.output_root
+    assert out_root is not None
+    (out_root / "sub.yaml").write_text((tmp_path / "sub.yaml").read_text())
+
+    run_dir = out_root / "pa_um" / "sub__pa_um"
+    run_dir.mkdir(parents=True)
+    _make_trial_with_layout(run_dir, "t0__abc", 1.0)
+    _make_trial_with_layout(run_dir, "t1__abc", 0.0)
+    (run_dir / "result.json").write_text(
+        json.dumps({"id": "agg", "n_total_trials": 2, "stats": {"n_trials": 2}})
+    )
+
+    zip_path = package_submission(cfg)
+    with zipfile.ZipFile(zip_path) as zf:
+        names = set(zf.namelist())
+
+    # Packager flattens to trials/<dom>/<trial_dir.name>/... — so the per-trial
+    # leaves land here:
+    assert "trials/pa_um/t0__abc/result.json" in names
+    assert "trials/pa_um/t1__abc/result.json" in names
+    # …and the run-level aggregate (parent name = sub__pa_um) must NOT be
+    # packed as a stray trial.
+    assert "trials/pa_um/sub__pa_um/result.json" not in names
 
 
 def test_package_works_when_some_trial_files_missing(tmp_path: Path) -> None:

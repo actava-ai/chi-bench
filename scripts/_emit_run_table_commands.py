@@ -1,11 +1,11 @@
-"""Emit one `chi-bench experiment run` command per (row x domain x condition) slice.
+"""Emit one `cb experiment run` command per (row x domain x condition) slice.
 
 Read by scripts/run_table.sh; one command per line on stdout.
 
 For each slice, we materialize a flat ExperimentConfig YAML on disk under
 ``logs/.slices/<table>/<slice-id>.yaml`` and emit::
 
-    [CHI_BENCH_*=...] chi-bench experiment run -f logs/.slices/<table>/<slice-id>.yaml
+    [CHI_BENCH_*=...] cb experiment run -f logs/.slices/<table>/<slice-id>.yaml
 
 This avoids the schema-mismatch problem where the matrix-style table configs
 (``defaults: / domains: / rows: / conditions:``) are not directly consumable by
@@ -155,7 +155,7 @@ def _emit_command_for_slice(
     except ValueError:
         path_str = str(slice_yaml_path)
 
-    parts = ["chi-bench", "experiment", "run", "-f", path_str]
+    parts = ["cb", "experiment", "run", "-f", path_str]
     shell = " ".join(shlex.quote(p) for p in parts)
 
     prefixes: list[str] = []

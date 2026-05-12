@@ -52,6 +52,7 @@ deepagents-cli = [
 
 [project.scripts]
 chi-bench = "chi_bench.cli:app"
+cb = "chi_bench.cli:app"
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]

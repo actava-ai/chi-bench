@@ -70,3 +70,25 @@ def test_aggregate_produces_pass_at_1_and_wilson(tmp_path):
     assert abs(float(r["pass_at_3"]) - 2 / 3) < 1e-6
     # pass^3 per-task: 0/3 (no task has all 3 attempts passing)
     assert abs(float(r["pass_pow_3"]) - 0.0) < 1e-6
+
+
+def test_aggregate_ignores_run_level_aggregate_result_json(tmp_path):
+    # Harbor writes a per-run aggregate result.json (no verifier_result block)
+    # alongside the per-trial dirs. _parse_trial must skip it; otherwise it
+    # surfaces as a stray ("unknown", "unknown/unknown") group with reward 0.
+    from chi_bench.aggregator import aggregate_to_rows
+
+    trials = tmp_path / "trials"
+    _make_trial(trials, "t1__abc", 1.0, 1000, 500, 0, 10.0)
+    _make_trial(trials, "t1__def", 0.0, 1000, 500, 0, 10.0)
+    # Run-level aggregate sibling: same filename, different shape.
+    (trials / "result.json").write_text(
+        json.dumps({"id": "agg", "n_total_trials": 2, "stats": {"n_trials": 2}})
+    )
+
+    rows = aggregate_to_rows(trials)
+    assert len(rows) == 1
+    r = rows[0]
+    assert (r["agent"], r["model"]) == ("codex", "openai/gpt-5.5")
+    assert r["n_trials"] == 2
+    assert abs(float(r["pass_at_1"]) - 0.5) < 1e-6

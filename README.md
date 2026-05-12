@@ -1,11 +1,11 @@
 <div align="center">
   <img src="assets/figures/logo.svg" alt="Χ-Bench" width="300"/>
-  <h1><b>C</b>linical <b>H</b>ealthcare <b>I</b>n-Situ Environment</h1>
-  <p><b>Benchmark for long-horizon, policy-rich healthcare workflow agents.</b></p>
+  <h1><b><u>C</u></b>linical <b><u>H</u></b>ealthcare <b><u>I</u></b>n-Situ Environment</h1>
+  <p><b>Benchmark for long-horizon, policy-rich healthcare workflow agents</b></p>
   <p>
     <a href="https://arxiv.org/abs/XXXX.XXXXX"><img src="https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b.svg" alt="arXiv"/></a>
     <a href="https://huggingface.co/datasets/actava/chi-bench"><img src="https://img.shields.io/badge/HF_Dataset-chi--bench-yellow" alt="Dataset"/></a>
-    <a href="https://actava.ai/benchmarks/leaderboards"><img src="https://img.shields.io/badge/Leaderboard-chi--bench-blue" alt="Leaderboard"/></a>
+    <a href="https://actava.ai/benchmarks"><img src="https://img.shields.io/badge/Leaderboard-chi--bench-blue" alt="Leaderboard"/></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-purple.svg" alt="License"/></a>
   </p>
 </div>
@@ -45,23 +45,25 @@ uv sync --extra dev
 
 **2. API keys.** Copy `.env.example` to `.env` and fill in:
 
-- `ANTHROPIC_API_KEY` — **required**. The workspace judge (`claude-opus-4-7`) grades every trial; also used by Claude Code agent rows.
+- `ANTHROPIC_API_KEY` — **required**. The workspace judge (`claude-opus-4-7`) grades every trial; also the default credential for the Claude Code agent harness.
 - `OPENAI_API_KEY` — required for Codex and OAI Agents rows.
 - `GEMINI_API_KEY` — required for Gemini CLI rows.
 - `OPENROUTER_API_KEY` — required for the open-stack rows (Hermes / OpenClaw / OAI Agents / DeepAgents on open-weight models).
-- `CLAUDE_CODE_OAUTH_TOKEN` — required when running the Claude Code agent harness.
-- `HF_TOKEN` — **required** to download the gated Χ-Bench dataset.
-- `MODAL_PROFILE` — optional, name of a Modal profile registered via `modal token set --profile <name>`; recommended for matrix reproduction.
+- `CLAUDE_CODE_OAUTH_TOKEN` — *optional*, cheaper alternative for smoke-testing the Claude Code harness. When set, Claude Code authenticates via OAuth instead of `ANTHROPIC_API_KEY`.
 
-Provide whichever provider keys you need for the rows you intend to run.
+Provide whichever provider keys you need for the rows you intend to run. Hugging Face and Modal credentials are handled by their respective CLIs (see steps 3 and the Modal note below) — no tokens go in `.env`.
 
-**3. Task fixtures from Hugging Face.**
+**3. Task fixtures from Hugging Face.** Authenticate once with the CLI, then download the gated dataset:
 
 ```bash
-uv run chi-bench data download --revision chi-bench-v1.0.0
+uv run huggingface-cli login
+
+REV=chi-bench-v1.0.0
+uv run huggingface-cli download actava/chi-bench --repo-type dataset --revision "$REV" --local-dir data/
+echo "$REV" > data/.chi-bench-version
 ```
 
-The wrapper writes the revision tag to `data/.chi-bench-version`; submission preflight verifies this against your config's `dataset.version`. Use the wrapper rather than raw `huggingface-cli` so the version pin works.
+The `data/.chi-bench-version` pin is what submission preflight verifies against your config's `dataset.version`; write it whenever you change revisions.
 
 **4. Managed-Care Operations Handbook (Google Drive).**
 
@@ -77,15 +79,17 @@ The handbook (1,279 markdown documents) lives off HF because of size and the cur
 **5. Build the Docker image** (~5 min, one-time).
 
 ```bash
-uv run chi-bench docker build
+uv run cb docker build
 ```
+
+> `cb` is the short alias for `chi-bench`; both commands resolve to the same CLI. Pick whichever you prefer (the rest of this README uses `cb`). If your shell already aliases `cb` to something else (e.g. a clipboard tool), use `chi-bench`. For the full command surface and flag reference, read [`docs/cli.md`](docs/cli.md).
 
 The image bundles the FastAPI server, the workspace judge, the agent harness, and per-task fixtures.
 
 **Verify setup:**
 
 ```bash
-uv run chi-bench data verify
+uv run cb data verify
 ```
 
 A clean run means you're ready for the quickstart.
@@ -93,22 +97,25 @@ A clean run means you're ready for the quickstart.
 > **Modal (optional, recommended).** Modal parallelizes trials across remote sandboxes. Set it up now and you won't have to later:
 >
 > ```bash
-> uv run modal token set --profile chi-bench
+> uv run modal setup                            # default profile, or:
+> uv run modal token set --profile chi-bench    # (optional) named profile
 > ```
 >
-> Then set `MODAL_PROFILE=chi-bench` in `.env`.
+> If you use a named profile, export `MODAL_PROFILE=chi-bench` in your shell before running the matrix.
 
 ## Quickstart: run one task
 
 Smoke-test that everything is wired up with a single UM medical-director-review task:
 
 ```bash
-uv run chi-bench experiment run \
+uv run cb experiment run \
   --dataset data/prior_auth_um/tasks/pa_t008_t008_o002_p01_mdreview_payer \
   --agent codex --model openai/gpt-5.5
 ```
 
 Trial output lands under `logs/experiments/.../trial_*/`. Read `result.json` for the verifier reward and `verifier/scorecard.json` for per-check verdicts.
+
+Full flag-by-flag CLI reference: [`docs/cli.md`](docs/cli.md).
 
 If you see a scorecard, you're ready to [submit your agent](#submit-your-agent) or [reproduce the paper](#reproduce-paper-tables).
 
@@ -122,16 +129,16 @@ Submitting to the [leaderboard](https://actava-ai.github.io/chi-bench/leaderboar
 
 ```bash
 # Schema + preflight: dataset pin, Modal token / Docker image, agent name.
-uv run chi-bench submission validate -f configs/submissions/<your-id>.yaml
+uv run cb submission validate -f configs/submissions/<your-id>.yaml
 
 # Run all 3 domains. Default: one trial per task (pass@1). Trials land under logs/submissions/<id>/.
-uv run chi-bench submission run      -f configs/submissions/<your-id>.yaml
+uv run cb submission run      -f configs/submissions/<your-id>.yaml
 
 # Check progress; safe to run while `submission run` is in flight.
-uv run chi-bench submission status   -f configs/submissions/<your-id>.yaml
+uv run cb submission status   -f configs/submissions/<your-id>.yaml
 
 # Build the upload-ready zip (~30–50 MB) at logs/submissions/<id>/<id>.zip.
-uv run chi-bench submission package  -f configs/submissions/<your-id>.yaml
+uv run cb submission package  -f configs/submissions/<your-id>.yaml
 ```
 
 **3. Packet contents.**
@@ -198,7 +205,7 @@ The full 30-row matrix (every model × harness reported in Table 1) lives in [`c
 
 A single Python package (`chi_bench`) hosts a FastAPI server, three MCP servers (provider :8020, payer :8100, CM :8200), and an LLM-based workspace judge. Each trial runs in a fresh Docker container that bundles the server, the judge, the agent harness, and the per-task fixtures. The Managed-Care Operations Handbook (1,279 markdown documents) is mounted into the agent's skill directory at trial start.
 
-System diagram and module boundaries: [`docs/architecture.md`](docs/architecture.md). Verifier details: [`docs/judge.md`](docs/judge.md). Environment chapter from the paper: [`chi-bench-arxiv-submission/sections/approach.tex`](chi-bench-arxiv-submission/sections/approach.tex).
+System diagram and module boundaries: [`docs/architecture.md`](docs/architecture.md). Verifier details: [`docs/judge.md`](docs/judge.md). Full CLI reference: [`docs/cli.md`](docs/cli.md). Environment chapter from the paper: [`chi-bench-arxiv-submission/sections/approach.tex`](chi-bench-arxiv-submission/sections/approach.tex).
 
 ## Citation
 

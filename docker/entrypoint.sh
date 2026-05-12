@@ -3,7 +3,7 @@
 #
 # Resolves the per-trial task id, wires /fixtures to the baked-in
 # fixtures directory, bootstraps the runtime SQLite stores, starts
-# chi-bench serve (HTTP + MCP threads) in the background, then
+# cb serve (HTTP + MCP threads) in the background, then
 # hands off to the requested command (default: sleep infinity).
 set -e
 
@@ -119,7 +119,7 @@ fi
 
 python -m chi_bench.bootstrap
 
-chi-bench serve --host 0.0.0.0 --port 8023 --no-frontend \
+cb serve --host 0.0.0.0 --port 8023 --no-frontend \
     >"$LOG_DIR/chi-bench-server.log" 2>&1 &
 SERVE_PID=$!
 

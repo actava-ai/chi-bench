@@ -4,7 +4,7 @@ These tests exercise integration paths that aren't covered by `tests/unit`.
 
 ## What's automated
 
-- `test_verify_data_layout.py` — `chi-bench data verify` against synthetic data trees.
+- `test_verify_data_layout.py` — `cb data verify` against synthetic data trees.
 - `test_docker_image_builds.py` — `docker build --target ci-skeleton .` (skipped without docker; marked `slow` so it's gated out of the default pytest run).
 
 To opt into the slow docker build test:
@@ -32,15 +32,15 @@ cp .env.example .env
 #   OPENAI_API_KEY=...      (for the codex agent in the example below)
 
 # 2. Build the docker image
-chi-bench docker build
+cb docker build
 
 # 3. Single PA-UM trial
-chi-bench experiment run \
+cb experiment run \
     --dataset data/prior_auth_um/tasks/pa_t008_t008_o002_p01_mdreview_payer \
     --agent codex --model openai/gpt-5.5
 
 # 4. Single CM trial
-chi-bench experiment run \
+cb experiment run \
     --dataset data/care_management/tasks/cm_afib_moderate_anxious_001 \
     --agent claude-code --model anthropic/claude-opus-4-7
 ```

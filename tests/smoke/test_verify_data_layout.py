@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 def _make_complete_data_tree(root: Path) -> None:
-    """Create the minimum directory tree that `chi-bench data verify` accepts."""
+    """Create the minimum directory tree that `cb data verify` accepts."""
     for domain, n in [
         ("prior_auth_provider", 25),
         ("prior_auth_um", 25),
@@ -38,9 +38,7 @@ def test_data_verify_succeeds_on_complete_tree(tmp_path, monkeypatch):
     monkeypatch.chdir(cwd)
     # data/ in current dir
     (cwd / "data").symlink_to(tree_root)
-    res = subprocess.run(
-        ["uv", "run", "chi-bench", "data", "verify"], capture_output=True, text=True
-    )
+    res = subprocess.run(["uv", "run", "cb", "data", "verify"], capture_output=True, text=True)
     assert res.returncode == 0, f"stderr: {res.stderr}"
     assert "OK" in (res.stdout + res.stderr)
 
@@ -57,9 +55,7 @@ def test_data_verify_fails_on_missing_marathon(tmp_path, monkeypatch):
     cwd.mkdir()
     monkeypatch.chdir(cwd)
     (cwd / "data").symlink_to(tree_root)
-    res = subprocess.run(
-        ["uv", "run", "chi-bench", "data", "verify"], capture_output=True, text=True
-    )
+    res = subprocess.run(["uv", "run", "cb", "data", "verify"], capture_output=True, text=True)
     assert res.returncode != 0
     assert "marathon" in (res.stdout + res.stderr).lower()
 
@@ -108,7 +104,7 @@ def test_data_verify_succeeds_on_baked_layout(tmp_path, monkeypatch):
     root.mkdir()
     _make_baked_image_tree(root)
     res = subprocess.run(
-        ["uv", "run", "chi-bench", "data", "verify", "--data-dir", str(root)],
+        ["uv", "run", "cb", "data", "verify", "--data-dir", str(root)],
         capture_output=True,
         text=True,
     )

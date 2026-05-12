@@ -43,10 +43,28 @@ class Trial:
     wall_clock_seconds: float
 
 
+def is_per_trial_result(path: Path) -> bool:
+    """True iff ``path`` is a per-trial Harbor ``result.json`` (not a run-level
+    aggregate). Harbor writes both shapes under the same filename; only
+    per-trial files carry a ``verifier_result`` block, so that's the signal
+    used by status, aggregation, and packaging to skip aggregates.
+    """
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return False
+    return isinstance(data.get("verifier_result"), dict)
+
+
 def _parse_trial(result_path: Path) -> Trial | None:
-    data = json.loads(result_path.read_text())
-    vr = data.get("verifier_result") or {}
-    rb = vr.get("rewards") if isinstance(vr, dict) else None
+    try:
+        data = json.loads(result_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    vr = data.get("verifier_result")
+    if not isinstance(vr, dict):
+        return None
+    rb = vr.get("rewards")
     reward = float((rb or {}).get("reward", 0.0)) if rb else float(vr.get("reward", 0.0))
     ar = data.get("agent_result") or {}
     info = (data.get("agent_info") or {}).get("model_info") or {}

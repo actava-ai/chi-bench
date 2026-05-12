@@ -2,10 +2,10 @@
 # Copy this to your own file (e.g. configs/submissions/<your-id>.yaml),
 # edit the highlighted fields, then:
 #
-#   chi-bench submission validate -f <your-sub>.yaml
-#   chi-bench submission run      -f <your-sub>.yaml
-#   chi-bench submission status   -f <your-sub>.yaml
-#   chi-bench submission package  -f <your-sub>.yaml
+#   cb submission validate -f <your-sub>.yaml
+#   cb submission run      -f <your-sub>.yaml
+#   cb submission status   -f <your-sub>.yaml
+#   cb submission package  -f <your-sub>.yaml
 #
 # The packet (<output_root>/<id>.zip) is what you upload to the leaderboard.
 
@@ -31,7 +31,7 @@ submission:
 
 run:
   # 'modal' (default, parallel, recommended for full submissions) or 'docker'
-  # (local single-image; needs `chi-bench docker build` first).
+  # (local single-image; needs `cb docker build` first).
   environment: modal
   # Leaderboard policy is one run per task. >1 logs a warning and the
   # submission manifest still publishes pass@1 only.
@@ -47,8 +47,9 @@ run:
   env_file: .env
 
 dataset:
-  # REQUIRED — must match data/.chi-bench-version (written by
-  # `chi-bench data download --revision <tag>`). Preflight rejects mismatches.
+  # REQUIRED — must match data/.chi-bench-version (write the revision tag
+  # you downloaded with `huggingface-cli` into that file). Preflight rejects
+  # mismatches.
   version: chi-bench-v1.0.0
   # All three domains for a complete submission. Override with `--domain pa|um|cm`
   # on the CLI for partial runs (development only — partial submissions are

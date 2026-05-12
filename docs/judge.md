@@ -36,8 +36,10 @@ majority-votes per rubric.
 ## Re-judging without re-running agents
 
 ```bash
-chi-bench experiment rejudge --trial-root logs/experiments/<run> -e local
+cb experiment rejudge --trial-root logs/experiments/<run> -e local
 ```
 
 This re-invokes only the judge against existing workspaces — useful
 when the judge prompt is tuned mid-experiment.
+
+Full flag-by-flag reference: [`docs/cli.md`](cli.md#cb-experiment-rejudge).
