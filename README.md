@@ -1,11 +1,11 @@
 <div align="center">
   <img src="assets/figures/logo.svg" alt="Χ-Bench" width="300"/>
-  <h1><b>C</b>linical <b>H</b>ealthcare <b>I</b>n-Situ</h1>
+  <h1><b>C</b>linical <b>H</b>ealthcare <b>I</b>n-Situ Environment</h1>
   <p><b>Benchmark for long-horizon, policy-rich healthcare workflow agents.</b></p>
   <p>
     <a href="https://arxiv.org/abs/XXXX.XXXXX"><img src="https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b.svg" alt="arXiv"/></a>
     <a href="https://huggingface.co/datasets/actava/chi-bench"><img src="https://img.shields.io/badge/HF_Dataset-chi--bench-yellow" alt="Dataset"/></a>
-    <a href="https://actava-ai.github.io/chi-bench/leaderboard"><img src="https://img.shields.io/badge/Leaderboard-chi--bench-blue" alt="Leaderboard"/></a>
+    <a href="https://actava.ai/benchmarks/leaderboards"><img src="https://img.shields.io/badge/Leaderboard-chi--bench-blue" alt="Leaderboard"/></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-purple.svg" alt="License"/></a>
   </p>
 </div>
