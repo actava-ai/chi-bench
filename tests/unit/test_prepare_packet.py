@@ -84,13 +84,14 @@ def _seed_trial_tree(
     (output_root / "sub.yaml").write_text(
         f"schema: {SUBMISSION_SCHEMA_V1}\nsubmission:\n  id: x\n"
     )
+    # Internal chi-bench provenance format (translated by prepare_packet to the
+    # schema-compliant shape).
     (output_root / "provenance.json").write_text(
         json.dumps(
             {
-                "chi_bench_git_sha": "abc123",
-                "image_digest": "sha256:def",
-                "judge_model": "claude-opus-4-7",
-                "harness_version": "1.0.0",
+                "code_sha": "abc123",
+                "docker_image_digest": "sha256:def",
+                "chi_bench_version": "1.0.0",
             }
         )
     )
@@ -137,8 +138,11 @@ def test_prepare_packet_manifest_has_nested_results(tmp_path: Path) -> None:
     assert "per_domain" in manifest["results"]
     assert "pa_provider" in manifest["results"]["per_domain"]
     assert manifest["results"]["per_domain"]["pa_provider"]["pass_at_1"] == 1.0
-    # provenance copied from output_root
+    # provenance translated from chi-bench internal format to leaderboard schema names
     assert manifest["provenance"]["chi_bench_git_sha"] == "abc123"
+    assert manifest["provenance"]["image_digest"] == "sha256:def"
+    assert manifest["provenance"]["harness_version"] == "1.0.0"
+    assert manifest["provenance"]["judge_model"] == "claude-opus-4-7"
 
 
 def test_prepare_packet_results_csv_has_per_domain_rows(tmp_path: Path) -> None:

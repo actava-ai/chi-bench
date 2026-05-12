@@ -883,15 +883,29 @@ def _build_packet_manifest(
     are nested under {overall, per_domain} and submission carries submitted_at.
     The schema field uses SUBMISSION_SCHEMA_V1.
     """
+    import os as _os
+
     results = aggregate_submission(cfg, output_root=output_root, prices_path=prices_path)
     submission_block = cfg.submission.model_dump()
     submission_block["submitted_at"] = submitted_at
+    # Drop optional fields that are None — the leaderboard schema rejects nulls.
+    submission_block = {k: v for k, v in submission_block.items() if v is not None}
 
+    # Translate internal provenance keys to the leaderboard schema names.
     provenance_path = output_root / "provenance.json"
-    if provenance_path.exists():
-        provenance = json.loads(provenance_path.read_text())
-    else:
-        provenance = {}
+    internal = (
+        json.loads(provenance_path.read_text()) if provenance_path.exists() else {}
+    )
+    provenance: dict[str, object] = {
+        "chi_bench_git_sha": internal.get("code_sha"),
+        "image_digest": internal.get("docker_image_digest"),
+        "judge_model": _os.environ.get("CHI_BENCH_JUDGE_MODEL", "claude-opus-4-7"),
+        "harness_version": internal.get("chi_bench_version") or _chi_bench_version() or "unknown",
+    }
+    # Preserve extra debug fields (schema's additionalProperties: true allows it).
+    for k, v in internal.items():
+        if k not in ("code_sha", "docker_image_digest", "chi_bench_version"):
+            provenance.setdefault(k, v)
 
     overall = results.get("overall") or {}
     per_domain = results.get("per_domain") or {}
@@ -1027,13 +1041,16 @@ def prepare_packet(
     # Write results.csv from the (just-built) manifest.
     _write_packet_results_csv(manifest, target / "results.csv")
 
-    # Copy sub.yaml + provenance.json verbatim if they exist.
-    for name in ("sub.yaml", "provenance.json"):
-        src = output_root / name
-        if src.exists():
-            shutil.copy2(src, target / name)
-        else:
-            logger.warning("packet: %s missing from %s", name, output_root)
+    # Copy sub.yaml verbatim if it exists.
+    sub_yaml_src = output_root / "sub.yaml"
+    if sub_yaml_src.exists():
+        shutil.copy2(sub_yaml_src, target / "sub.yaml")
+    else:
+        logger.warning("packet: sub.yaml missing from %s", output_root)
+    # Write the schema-compliant provenance (translated from internal format).
+    (target / "provenance.json").write_text(
+        json.dumps(manifest["provenance"], indent=2, default=str), encoding="utf-8"
+    )
 
     # Per-trial tree
     trials = _iter_trial_dirs(output_root, list(cfg.dataset.domains))
