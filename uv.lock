@@ -501,6 +501,7 @@ dependencies = [
     { name = "tenacity" },
     { name = "typer" },
     { name = "uvicorn" },
+    { name = "zstandard" },
 ]
 
 [package.optional-dependencies]
@@ -551,6 +552,7 @@ requires-dist = [
     { name = "tenacity", specifier = ">=8.2.0" },
     { name = "typer", specifier = ">=0.12.0" },
     { name = "uvicorn", specifier = ">=0.30.0" },
+    { name = "zstandard", specifier = ">=0.22.0" },
 ]
 provides-extras = ["dev", "modal", "openai-agents", "deepagents-cli"]
 

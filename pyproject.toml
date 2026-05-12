@@ -31,6 +31,7 @@ dependencies = [
     "markdown-it-py>=3.0.0",
     "playwright>=1.48.0",
     "modal>=1.4.2",
+    "zstandard>=0.22.0",
 ]
 
 [project.optional-dependencies]
