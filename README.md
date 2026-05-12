@@ -121,43 +121,46 @@ If you see a scorecard, you're ready to [submit your agent](#submit-your-agent) 
 
 ## Submit your agent
 
-Submitting to the [leaderboard](https://actava-ai.github.io/chi-bench/leaderboard) is a four-command flow over one YAML.
+Submitting to the [leaderboard](https://github.com/actava-ai/leaderboard) is a 5-command flow: 4 against chi-bench (validate, run, status, prepare) and the final step against the leaderboard repo (commit + open PR).
 
-**1. Configure.** Copy `configs/submission_example.yaml` to `configs/submissions/<your-id>.yaml` and edit the highlighted fields (`id`, `team`, `contact`, `agent`, `model`; optionally `notes` and `run.*`).
+**1. Configure.** Copy `configs/submission_example.yaml` to `configs/submissions/<your-id>.yaml` and edit `id`, `team`, `contact`, `agent`, `model`; optionally `notes` and `run.*`.
 
-**2. Run the four commands.**
+**2. Run trials and prepare a packet.**
 
 ```bash
 # Schema + preflight: dataset pin, Modal token / Docker image, agent name.
 uv run cb submission validate -f configs/submissions/<your-id>.yaml
 
-# Run all 3 domains. Default: one trial per task (pass@1). Trials land under logs/submissions/<id>/.
+# Run all 3 domains. Default: one trial per task (pass@1).
 uv run cb submission run      -f configs/submissions/<your-id>.yaml
 
 # Check progress; safe to run while `submission run` is in flight.
 uv run cb submission status   -f configs/submissions/<your-id>.yaml
 
-# Build the upload-ready zip (~30–50 MB) at logs/submissions/<id>/<id>.zip.
-uv run cb submission package  -f configs/submissions/<your-id>.yaml
+# Curate the leaderboard-ready packet (a directory you `cp` into the leaderboard repo).
+uv run cb submission prepare  -f configs/submissions/<your-id>.yaml
 ```
 
-**3. Packet contents.**
+The final command writes to `logs/submissions/<id>/packet/YYYY-MM-DD-<id>/`, containing:
 
 ```
-submission.json     # manifest: agent, model, results, per_domain, provenance
-results.csv         # leaderboard row
-sub.yaml            # frozen copy of your config
-provenance.json     # git SHA, image digest, timestamps
+submission.json                # manifest: agent, model, results, provenance
+results.csv                    # leaderboard rows (one per domain + overall)
+sub.yaml                       # frozen copy of your config
+provenance.json                # git SHA, image digest, timestamps
+README.md                      # auto-generated headline summary
 trials/<domain>/<trial_id>/
-    result.json                 # Harbor reward + agent metadata
-    verifier/scorecard.json     # per-check verdicts
-    verifier/reward.json        # verifier's reward breakdown
-    agent/trajectory.json       # full agent message trace
+    result.json                # Harbor reward + agent metadata
+    verifier/scorecard.json    # per-check verdicts
+    verifier/reward.json       # verifier's reward breakdown
+    agent/trajectory.jsonl.zst # full agent trace (zstd-compressed; inspect with `zstdcat | jq .`)
 ```
 
-Workspace artifacts and Harbor scratch files are deliberately excluded so the zip stays uploadable while remaining sufficient for a human to replay any trial.
+Workspace artifacts and Harbor scratch files are deliberately excluded so the packet stays small (typically <100 MB total).
 
-**4. Get on the leaderboard.** The leaderboard submission repo and its PR template will be published alongside the v1.0 release. Until then, keep the packet zip on disk and watch this repo for the announcement — no submissions are accepted yet.
+**3. Submit the packet.** Follow the instructions at **<https://github.com/actava-ai/leaderboard>** — either the one-command helper (`python scripts/submit.py <packet-path>`) or the manual `cp` + `git` + `gh pr create` flow. Either way, the packet is identical; the leaderboard repo owns the submission workflow.
+
+Packet contract (for benchmark authors building their own producers): [`docs/submission-packet.md`](docs/submission-packet.md).
 
 **Policy notes.**
 
