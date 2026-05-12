@@ -12,7 +12,7 @@
 
 ## What this benchmark measures
 
-chi-Bench evaluates AI agents on end-to-end U.S. healthcare workflows across three long-horizon domains: provider prior authorization, payer utilization management, and population care management. Each task hands the agent a clinical case in a high-fidelity simulator of 20 healthcare apps exposed over MCP, with a 1,279-document Managed-Care Operations Handbook skill, and asks it to drive the case to a terminal state through tool calls and artifact authoring.
+Χ-Bench evaluates AI agents on end-to-end U.S. healthcare workflows across three long-horizon domains: provider prior authorization, payer utilization management, and population care management. Each task hands the agent a clinical case in a high-fidelity simulator of 20 healthcare apps exposed over MCP, with a 1,279-document Managed-Care Operations Handbook skill, and asks it to drive the case to a terminal state through tool calls and artifact authoring.
 
 The benchmark stresses three capabilities under-represented in coding-style agent benchmarks: **policy density** (decisions grounded in a large library of medical, insurance, and operational rules), **multi-role composition** (a single workflow spans clinician, UM nurse, medical director, and care manager handoffs that cannot be re-run), and **multilateral interaction** (some steps are multi-turn dialogs — peer-to-peer review, patient outreach — not tool calls).
 
@@ -23,7 +23,7 @@ The benchmark stresses three capabilities under-represented in coding-style agen
 > - End-to-end provider–payer arena: **0%** on the best PA agents
 
 <p align="center">
-  <img src="assets/figures/main_pass_at_1.png" alt="pass@1 across the three chi-Bench environments" width="780"/>
+  <img src="assets/figures/main_pass_at_1.png" alt="pass@1 across the three Χ-Bench environments" width="780"/>
 </p>
 
 | Domain | Tasks | What the agent does |
@@ -50,7 +50,7 @@ uv sync --extra dev
 - `GEMINI_API_KEY` — required for Gemini CLI rows.
 - `OPENROUTER_API_KEY` — required for the open-stack rows (Hermes / OpenClaw / OAI Agents / DeepAgents on open-weight models).
 - `CLAUDE_CODE_OAUTH_TOKEN` — required when running the Claude Code agent harness.
-- `HF_TOKEN` — **required** to download the gated chi-bench dataset.
+- `HF_TOKEN` — **required** to download the gated Χ-Bench dataset.
 - `MODAL_PROFILE` — optional, name of a Modal profile registered via `modal token set --profile <name>`; recommended for matrix reproduction.
 
 Provide whichever provider keys you need for the rows you intend to run.
