@@ -15,6 +15,7 @@ from collections.abc import Callable, Iterator, Mapping
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 from pathlib import Path
 
+from chi_bench.experiment.agents.registry import IN_TREE_AGENT_IMPORT_PATHS
 from chi_bench.experiment.config import Environment, ExperimentConfig, ModalConfig
 
 logger = logging.getLogger(__name__)
@@ -22,17 +23,11 @@ logger = logging.getLogger(__name__)
 MODAL_ENVIRONMENT_IMPORT_PATH = "chi_bench.experiment.modal_env:ChiBenchModalEnvironment"
 DOCKER_ENVIRONMENT_IMPORT_PATH = "chi_bench.experiment.docker_env:ChiBenchDockerEnvironment"
 
-# Agent name → import path mapping for custom harnesses
-_AGENT_IMPORT_PATHS: dict[str, str] = {
-    "openai-agents": "chi_bench.experiment.agents.openai_agents_harness:OpenAIAgentsHarness",
-    "deepagents": "chi_bench.experiment.agents.deepagents_harness:DeepAgentsHarness",
-    "dual-pa-e2e": "chi_bench.experiment.agents.dual_pa_e2e_harness:DualPaE2EHarness",
-    "openclaw": "chi_bench.experiment.agents.openclaw_harness:OpenClawHarness",
-    "gemini-cli": "chi_bench.experiment.agents.gemini_cli_harness:GeminiCliHarness",
-    "hermes": "chi_bench.experiment.agents.hermes_harness:HermesHarness",
-    "codex-cli": "chi_bench.experiment.agents.codex_cli_harness:CodexCLIHarness",
-    "claude-code-cli": "chi_bench.experiment.agents.claude_code_cli_harness:ClaudeCodeCLIHarness",
-}
+# IN_TREE_AGENT_IMPORT_PATHS (imported above) is the single source of truth
+# for harness names dispatched via Harbor's --agent-import-path. Lives in
+# chi_bench.experiment.agents.registry so that submission.py's KNOWN_AGENTS
+# allowlist derives from the same place — avoids the two-registries-drift
+# bug the unified registry exists to prevent.
 
 AGENT_ENV_ALLOWLIST: tuple[str, ...] = (
     # Core providers
@@ -452,7 +447,7 @@ def _build_harbor_command(
         cmd += ["jobs", "start", "-p", cfg.dataset]
 
     # Custom harnesses use --agent-import-path; built-in agents use -a
-    import_path = _AGENT_IMPORT_PATHS.get(cfg.agent)
+    import_path = IN_TREE_AGENT_IMPORT_PATHS.get(cfg.agent)
     if import_path:
         cmd += ["--agent-import-path", import_path]
     else:
