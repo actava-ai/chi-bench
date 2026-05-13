@@ -124,6 +124,15 @@ Trial output lands under `logs/experiments/.../trial_*/`. Read `result.json` for
 
 Full flag-by-flag CLI reference: [`docs/cli.md`](docs/cli.md). Web walkthrough of the same flow: **[actava.ai/benchmarks/docs/quickstart](https://actava.ai/benchmarks/docs/quickstart)**.
 
+### Reading the verifier output
+
+Each trial's `verifier/` directory has three files: `reward.json` (the single binary `{"reward": 0.0 | 1.0}` used for pass@1), `scorecard.json` (per-check breakdown — read this to see *why* a trial passed or failed), and `exported_state.json` (the world snapshot the verifier scored against).
+
+`scorecard.json` carries two reward axes: **`binary_reward`** (strict — `1.0` only when every non-N/A check passes; this is what the leaderboard publishes) and **`fractional_reward = passed_checks / total_checks`** (partial credit for diagnostics; never published). A `0.0 / 0.91` split means a near-miss. Checks are grouped under `stages` (`md_review`, `outcome`, `cross_stage`, `intake`, `nurse_review`, `p2p`, `appeal`, `provider_*`, `cm_*`, `e2e_consistency`); `failed_checks` lists what broke.
+
+> [!TIP]
+> Field-by-field walkthrough — including check-name namespaces, the `judge.*` LLM rubric format, three check states, the Care Management two-axis schema, a worked example, and `cb verifier rejudge` — lives at **[actava.ai/benchmarks/docs/scorecard](https://actava.ai/benchmarks/docs/scorecard)**.
+
 If you see a scorecard, you're ready to [submit your agent](#submit-your-agent) or [reproduce the paper](#reproduce-paper-tables).
 
 ## Submit your agent
