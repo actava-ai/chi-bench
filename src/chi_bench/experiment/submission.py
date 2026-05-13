@@ -27,6 +27,7 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from chi_bench.experiment.agents.registry import KNOWN_AGENTS
 from chi_bench.experiment.config import Environment
 
 logger = logging.getLogger(__name__)
@@ -63,22 +64,12 @@ DOMAIN_REGISTRY: dict[str, dict[str, str]] = {
 
 CANONICAL_DOMAINS: tuple[str, ...] = tuple(DOMAIN_REGISTRY.keys())
 
-# Built-in harness names. Unknown values produce a soft warning rather than an
-# error so custom harnesses (registered out-of-tree) still work.
-KNOWN_AGENTS: frozenset[str] = frozenset(
-    {
-        "claude-code",
-        "codex",
-        "gemini-cli",
-        "openclaw",
-        "hermes",
-        "openai-agents",
-        "deepagents",
-        "claude-code-cli",
-        "codex-cli",
-        "dual-pa-e2e",
-    }
-)
+# KNOWN_AGENTS is imported above from chi_bench.experiment.agents.registry —
+# the union of IN_TREE_AGENT_IMPORT_PATHS (chi-bench harnesses dispatched via
+# --agent-import-path) and HARBOR_BUILTIN_AGENTS (claude-code, codex —
+# dispatched via Harbor's -a). Unknown values produce a soft warning rather
+# than an error so custom (out-of-tree) harnesses still work; see
+# docs/extending.md § 3.
 
 
 class SubmissionMeta(BaseModel):
@@ -893,9 +884,7 @@ def _build_packet_manifest(
 
     # Translate internal provenance keys to the leaderboard schema names.
     provenance_path = output_root / "provenance.json"
-    internal = (
-        json.loads(provenance_path.read_text()) if provenance_path.exists() else {}
-    )
+    internal = json.loads(provenance_path.read_text()) if provenance_path.exists() else {}
     provenance: dict[str, object] = {
         "chi_bench_git_sha": internal.get("code_sha"),
         "image_digest": internal.get("docker_image_digest"),
