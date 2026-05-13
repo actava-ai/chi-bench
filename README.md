@@ -3,7 +3,8 @@
   <h1><ins>C</ins>linical <ins>H</ins>ealthcare <ins>I</ins>n-Situ Environment</h1>
   <p><b>Benchmark for long-horizon, policy-rich healthcare workflow agents</b></p>
 
-[![Leaderboard](https://img.shields.io/badge/Leaderboard-chi--bench-blue?style=for-the-badge)](https://actava.ai/benchmarks)
+[![Leaderboard](https://img.shields.io/badge/Leaderboard-chi--bench-blue?style=for-the-badge)](https://actava.ai/benchmarks/leaderboards)
+[![Docs](https://img.shields.io/badge/Read_the_Docs-chi--bench-ff5baf?style=for-the-badge&logo=readthedocs&logoColor=white)](https://actava.ai/benchmarks/docs)
 [![arXiv](https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b?style=for-the-badge&logo=arxiv&logoColor=white)](https://arxiv.org/abs/XXXX.XXXXX)
 [![Dataset](https://img.shields.io/badge/HF_Dataset-chi--bench-yellow?style=for-the-badge&logo=huggingface&logoColor=white)](https://huggingface.co/datasets/actava/chi-bench)
 [![License](https://img.shields.io/badge/License-Apache_2.0-purple?style=for-the-badge)](LICENSE)
@@ -15,6 +16,8 @@
 ## What this benchmark measures
 
 Χ-Bench evaluates AI agents on end-to-end U.S. healthcare workflows across three long-horizon domains: provider prior authorization, payer utilization management, and population care management. Each task hands the agent a clinical case in a high-fidelity simulator of 20 healthcare apps exposed over MCP, with a 1,279-document Managed-Care Operations Handbook skills, and asks it to drive the case through tool calls and artifact authoring.
+
+> Reading on the web: **[Overview & authors](https://actava.ai/benchmarks/chi-bench)** · **[Live leaderboard](https://actava.ai/benchmarks/leaderboards)** · **[All 75 tasks](https://actava.ai/benchmarks/tasks)** · **[Docs](https://actava.ai/benchmarks/docs)**.
 
 > **Headline numbers from the paper:**
 > - Best agent (Claude Code + Claude Opus 4.6): **28.0%** overall pass@1
@@ -65,16 +68,16 @@ echo "$REV" > data/.chi-bench-version
 
 The `data/.chi-bench-version` pin is what submission preflight verifies against your config's `dataset.version`; write it whenever you change revisions.
 
-**4. Managed-Care Operations Handbook (Google Drive).**
+**4. Managed-Care Operations Handbook (request access).**
 
-Download the handbook tarball from: **<GOOGLE_DRIVE_SHARE_URL>**
+The handbook (1,279 markdown documents) lives off Hugging Face because of size and the curation provenance with clinical collaborators. To request access, fill out the form at **[actava.ai/benchmarks/contact](https://actava.ai/benchmarks/contact)** (check **"Request access to handbook"**); we'll send a download link within one business day upon approval.
+
+Once you have the tarball, extract it into `data/skills/`:
 
 ```bash
 mkdir -p data/skills
 tar -xzf managed-care-operations-handbook.tar.gz -C data/skills/
 ```
-
-The handbook (1,279 markdown documents) lives off HF because of size and the curation provenance with clinical collaborators.
 
 **5. Build the Docker image** (~5 min, one-time).
 
@@ -115,15 +118,15 @@ uv run cb experiment run \
 
 Trial output lands under `logs/experiments/.../trial_*/`. Read `result.json` for the verifier reward and `verifier/scorecard.json` for per-check verdicts.
 
-Full flag-by-flag CLI reference: [`docs/cli.md`](docs/cli.md).
+Full flag-by-flag CLI reference: [`docs/cli.md`](docs/cli.md). Web walkthrough of the same flow: **[actava.ai/benchmarks/docs/quickstart](https://actava.ai/benchmarks/docs/quickstart)**.
 
 If you see a scorecard, you're ready to [submit your agent](#submit-your-agent) or [reproduce the paper](#reproduce-paper-tables).
 
 ## Submit your agent
 
-> **Bringing your own agent harness or model endpoint?** The end-to-end recipe lives in [`docs/extending.md`](docs/extending.md). The rest of this section is identical regardless of whether you submit a built-in agent or a custom one — the packet shape is unchanged.
+> **Bringing your own agent harness or model endpoint?** The end-to-end recipe lives in [`docs/extending.md`](docs/extending.md) and on the web at **[actava.ai/benchmarks/docs/extending](https://actava.ai/benchmarks/docs/extending)**. The rest of this section is identical regardless of whether you submit a built-in agent or a custom one — the packet shape is unchanged.
 
-Submitting to the [leaderboard](https://github.com/actava-ai/leaderboard) is a 5-command flow: 4 against chi-bench (validate, run, status, prepare) and the final step against the leaderboard repo (commit + open PR).
+Submitting to the [leaderboard](https://github.com/actava-ai/leaderboard) is a 5-command flow: 4 against chi-bench (validate, run, status, prepare) and the final step against the leaderboard repo (commit + open PR). Prefer reading on the web? See the **[in-app submission walkthrough](https://actava.ai/benchmarks/submit)** for the same flow with collapsible step UI.
 
 **1. Configure.** Copy `configs/submission_example.yaml` to `configs/submissions/<your-id>.yaml` and edit `id`, `team`, `contact`, `agent`, `model`; optionally `notes` and `run.*`.
 
@@ -192,6 +195,8 @@ CSV columns: `agent, model, n_trials, n_tasks, pass_at_1, pass_at_1_lo, pass_at_
 
 > Add `--modal` to `run_table.sh` for parallel execution on Modal — matrix reproduction on a single host takes days.
 
+Web walkthrough of the same flow (single trial, submission lifecycle, paper-table reproduction, Modal vs Docker): **[actava.ai/benchmarks/docs/run](https://actava.ai/benchmarks/docs/run)**.
+
 ## Supported agents
 
 | `--agent` | Example `--model` | Paper rows |
@@ -204,15 +209,15 @@ CSV columns: `agent, model, n_trials, n_tasks, pass_at_1, pass_at_1_lo, pass_at_
 | `openai-agents` | `deepseek/deepseek-v4-pro`    | OAI Agents |
 | `deepagents`    | `openrouter/x-ai/grok-4.3`    | DeepAgents |
 
-The full 30-row matrix (every model × harness reported in Table 1) lives in [`configs/experiments/table1_main_matrix.yaml`](configs/experiments/table1_main_matrix.yaml).
+The full 30-row matrix (every model × harness reported in Table 1) lives in [`configs/experiments/table1_main_matrix.yaml`](configs/experiments/table1_main_matrix.yaml). Browse all 75 tasks at **[actava.ai/benchmarks/tasks](https://actava.ai/benchmarks/tasks)**.
 
-See [`docs/extending.md`](docs/extending.md) to plug in your own.
+See [`docs/extending.md`](docs/extending.md) (or **[the web version](https://actava.ai/benchmarks/docs/extending)**) to plug in your own.
 
 ## Architecture
 
 A single Python package (`chi_bench`) hosts a FastAPI server, three MCP servers (provider :8020, payer :8100, CM :8200), and an LLM-based workspace judge. Each trial runs in a fresh Docker container that bundles the server, the judge, the agent harness, and the per-task fixtures. The Managed-Care Operations Handbook (1,279 markdown documents) is mounted into the agent's skill directory at trial start.
 
-System diagram and module boundaries: [`docs/architecture.md`](docs/architecture.md). Verifier details: [`docs/judge.md`](docs/judge.md). Full CLI reference: [`docs/cli.md`](docs/cli.md). Environment chapter from the paper: [`chi-bench-arxiv-submission/sections/approach.tex`](chi-bench-arxiv-submission/sections/approach.tex).
+System diagram and module boundaries: [`docs/architecture.md`](docs/architecture.md) (web: **[actava.ai/benchmarks/docs/architecture](https://actava.ai/benchmarks/docs/architecture)**). Verifier details: [`docs/judge.md`](docs/judge.md). Full CLI reference: [`docs/cli.md`](docs/cli.md). Environment chapter from the paper: [`chi-bench-arxiv-submission/sections/approach.tex`](chi-bench-arxiv-submission/sections/approach.tex).
 
 ## Citation
 
