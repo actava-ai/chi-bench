@@ -17,8 +17,10 @@
 
 Χ-Bench evaluates AI agents on end-to-end U.S. healthcare workflows across three long-horizon domains: provider prior authorization, payer utilization management, and population care management. Each task hands the agent a clinical case in a high-fidelity simulator of 20 healthcare apps exposed over MCP, with a 1,279-document Managed-Care Operations Handbook skills, and asks it to drive the case through tool calls and artifact authoring.
 
+> [!TIP]
 > Reading on the web: **[Overview & authors](https://actava.ai/benchmarks/chi-bench)** · **[Live leaderboard](https://actava.ai/benchmarks/leaderboards)** · **[All 75 tasks](https://actava.ai/benchmarks/tasks)** · **[Docs](https://actava.ai/benchmarks/docs)**.
 
+> [!NOTE]
 > **Headline numbers from the paper:**
 > - Best agent (Claude Code + Claude Opus 4.6): **28.0%** overall pass@1
 > - No agent clears **20%** on strict pass^3
@@ -85,6 +87,7 @@ tar -xzf managed-care-operations-handbook.tar.gz -C data/skills/
 uv run cb docker build
 ```
 
+> [!NOTE]
 > `cb` is the short alias for `chi-bench`; both commands resolve to the same CLI. Pick whichever you prefer (the rest of this README uses `cb`). If your shell already aliases `cb` to something else (e.g. a clipboard tool), use `chi-bench`. For the full command surface and flag reference, read [`docs/cli.md`](docs/cli.md).
 
 The image bundles the FastAPI server, the workspace judge, the agent harness, and per-task fixtures.
@@ -97,6 +100,7 @@ uv run cb data verify
 
 A clean run means you're ready for the quickstart.
 
+> [!TIP]
 > **Modal (optional, recommended).** Modal parallelizes trials across remote sandboxes. Set it up now and you won't have to later:
 >
 > ```bash
@@ -124,6 +128,7 @@ If you see a scorecard, you're ready to [submit your agent](#submit-your-agent) 
 
 ## Submit your agent
 
+> [!TIP]
 > **Bringing your own agent harness or model endpoint?** The end-to-end recipe lives in [`docs/extending.md`](docs/extending.md) and on the web at **[actava.ai/benchmarks/docs/extending](https://actava.ai/benchmarks/docs/extending)**. The rest of this section is identical regardless of whether you submit a built-in agent or a custom one — the packet shape is unchanged.
 
 Submitting to the [leaderboard](https://github.com/actava-ai/leaderboard) is a 5-command flow: 4 against chi-bench (validate, run, status, prepare) and the final step against the leaderboard repo (commit + open PR). Prefer reading on the web? See the **[in-app submission walkthrough](https://actava.ai/benchmarks/submit)** for the same flow with collapsible step UI.
@@ -193,6 +198,7 @@ uv run python scripts/aggregate.py \
 
 CSV columns: `agent, model, n_trials, n_tasks, pass_at_1, pass_at_1_lo, pass_at_1_hi, pass_at_3, ..., pass_pow_3, pass_pow_3_hi, mean_cost_usd, mean_walltime_s` with Wilson 95% CIs. v1 emits the numeric tables; paper figures are out of scope — plot from the CSV. See [`docs/reproduce.md`](docs/reproduce.md) for the figure scripts we used.
 
+> [!TIP]
 > Add `--modal` to `run_table.sh` for parallel execution on Modal — matrix reproduction on a single host takes days.
 
 Web walkthrough of the same flow (single trial, submission lifecycle, paper-table reproduction, Modal vs Docker): **[actava.ai/benchmarks/docs/run](https://actava.ai/benchmarks/docs/run)**.
