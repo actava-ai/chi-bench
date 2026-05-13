@@ -81,9 +81,7 @@ def _seed_trial_tree(
             }
         )
     )
-    (output_root / "sub.yaml").write_text(
-        f"schema: {SUBMISSION_SCHEMA_V1}\nsubmission:\n  id: x\n"
-    )
+    (output_root / "sub.yaml").write_text(f"schema: {SUBMISSION_SCHEMA_V1}\nsubmission:\n  id: x\n")
     # Internal chi-bench provenance format (translated by prepare_packet to the
     # schema-compliant shape).
     (output_root / "provenance.json").write_text(
