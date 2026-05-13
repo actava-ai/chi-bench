@@ -356,9 +356,11 @@ def preflight_agent(cfg: SubmissionConfig) -> list[PreflightIssue]:
             severity="warning",
             code="agent.unknown",
             message=(
-                f"agent '{cfg.submission.agent}' is not a built-in harness "
-                f"(known: {sorted(KNOWN_AGENTS)}). If you registered a custom "
-                "harness this is fine; otherwise check spelling."
+                f"agent '{cfg.submission.agent}' is not registered in chi-bench. "
+                "If you're bringing a custom harness, see docs/extending.md § 3 "
+                "for the recipe, or run `cb agent list` to inspect what's "
+                "registered today. Continuing — Harbor will fail at dispatch "
+                "time if the name doesn't resolve."
             ),
         )
     ]

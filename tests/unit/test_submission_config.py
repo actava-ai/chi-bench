@@ -214,6 +214,12 @@ def test_preflight_agent_unknown_warns(tmp_path: Path) -> None:
     assert len(issues) == 1
     assert issues[0].severity == "warning"
     assert issues[0].code == "agent.unknown"
+    # The message must direct the user to the extension recipe and the
+    # introspection command. Drift here is a UX regression — the soft
+    # warning is most users' first hint that they need to register.
+    assert "docs/extending.md" in issues[0].message
+    assert "cb agent list" in issues[0].message
+    assert "my-custom-harness" in issues[0].message
 
 
 # ─── preflight: environment ──────────────────────────────────────────────────
@@ -698,5 +704,3 @@ def test_status_ignores_run_level_aggregate_result_json(tmp_path: Path) -> None:
     assert by_domain["pa_um"]["n_trials"] == 2
     assert by_domain["pa_um"]["n_passed"] == 1
     assert by_domain["pa_um"]["n_failed"] == 1
-
-
