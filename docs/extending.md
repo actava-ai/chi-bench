@@ -70,7 +70,7 @@ ANTHROPIC_API_KEY=sk-ant-proxy-...
 
 `submission.model: anthropic/<your-id>`.
 
-**Judge isolation.** `ANTHROPIC_BASE_URL` only affects the agent — chi-bench strips it from the judge's subprocess env so `claude-opus-4-7` always hits `api.anthropic.com` (see `src/chi_bench/verifier/judge/claude_runner.py:_subprocess_env`). If you need to route the judge through a custom endpoint too (e.g. a proxy that round-trips the official model), set `CHI_BENCH_JUDGE_BASE_URL` — it overrides the strip for the judge subprocess only.
+**Judge isolation.** `ANTHROPIC_BASE_URL` only affects the agent — chi-bench strips it from the judge's subprocess env so `claude-opus-4-7` always hits `api.anthropic.com` (see `src/chi_bench/verifier/judge/claude_runner.py:_subprocess_env`). The pin is unconditional; routing the judge through a custom endpoint would make leaderboard scores non-comparable, so there is no opt-out. Your `ANTHROPIC_API_KEY` is left untouched — real Anthropic will use it for the judge.
 
 ### § 2.3 Just a new model id on an existing provider
 

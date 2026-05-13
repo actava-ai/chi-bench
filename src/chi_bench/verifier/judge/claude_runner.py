@@ -688,20 +688,16 @@ class ClaudeAgentRunner:
                 env.pop(key, None)
 
         # Isolate the judge from the agent's ANTHROPIC_BASE_URL. The judge is
-        # pinned to claude-opus-4-7 and is expected to talk to api.anthropic.com.
-        # Without this strip, an agent-side ANTHROPIC_BASE_URL in .env (e.g.
-        # for the claude-code harness routed through a proxy) silently
-        # redirects every judge call through the user's proxy too — which
-        # either 404s or, worse, grades trials with a different model.
-        # Opt-out: CHI_BENCH_JUDGE_BASE_URL is the explicit knob for the rare
-        # case where the judge itself should route through a custom endpoint.
-        judge_base_url = os.environ.get("CHI_BENCH_JUDGE_BASE_URL")
-        if "ANTHROPIC_BASE_URL" in os.environ or judge_base_url:
+        # pinned to claude-opus-4-7 and must always talk to api.anthropic.com
+        # so leaderboard scores stay comparable across submissions. Without
+        # this strip, an agent-side ANTHROPIC_BASE_URL in .env (e.g. for the
+        # claude-code harness routed through a proxy) silently redirects every
+        # judge call through the user's proxy too. No opt-out: routing the
+        # judge would undermine the leaderboard pin.
+        if "ANTHROPIC_BASE_URL" in os.environ:
             if env is None:
                 env = os.environ.copy()
             env.pop("ANTHROPIC_BASE_URL", None)
-            if judge_base_url:
-                env["ANTHROPIC_BASE_URL"] = judge_base_url
         return env
 
     def _run_subprocess(
