@@ -121,6 +121,8 @@ If you see a scorecard, you're ready to [submit your agent](#submit-your-agent) 
 
 ## Submit your agent
 
+> **Bringing your own agent harness or model endpoint?** The end-to-end recipe lives in [`docs/extending.md`](docs/extending.md). The rest of this section is identical regardless of whether you submit a built-in agent or a custom one — the packet shape is unchanged.
+
 Submitting to the [leaderboard](https://github.com/actava-ai/leaderboard) is a 5-command flow: 4 against chi-bench (validate, run, status, prepare) and the final step against the leaderboard repo (commit + open PR).
 
 **1. Configure.** Copy `configs/submission_example.yaml` to `configs/submissions/<your-id>.yaml` and edit `id`, `team`, `contact`, `agent`, `model`; optionally `notes` and `run.*`.
@@ -203,6 +205,8 @@ CSV columns: `agent, model, n_trials, n_tasks, pass_at_1, pass_at_1_lo, pass_at_
 | `deepagents`    | `openrouter/x-ai/grok-4.3`    | DeepAgents |
 
 The full 30-row matrix (every model × harness reported in Table 1) lives in [`configs/experiments/table1_main_matrix.yaml`](configs/experiments/table1_main_matrix.yaml).
+
+See [`docs/extending.md`](docs/extending.md) to plug in your own.
 
 ## Architecture
 

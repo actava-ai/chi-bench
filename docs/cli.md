@@ -171,6 +171,26 @@ uv run cb experiment status --trials-dir logs/experiments/pa_um_2025-12-15
 
 ---
 
+## `cb agent`
+
+Inspect the agent registry that backs `submission.agent:` and the `--agent` flag.
+
+### `cb agent list`
+
+```bash
+uv run cb agent list           # human-readable table
+uv run cb agent list --json    # array of {name, kind, import_path, env_vars}
+```
+
+Two kinds of agent appear:
+
+- `in-tree` — harness classes shipped under `src/chi_bench/experiment/agents/`. Dispatched by Harbor via `--agent-import-path`. To add one, see [`docs/extending.md` § 3](extending.md).
+- `harbor-builtin` — names Harbor knows about natively (`claude-code`, `codex`). Dispatched via `-a <name>`. Not added by chi-bench.
+
+The `env_vars` column is a best-effort list of provider keys each harness's model routing reads — it is *not* the authoritative env allowlist (that's `AGENT_ENV_ALLOWLIST` in `src/chi_bench/experiment/runner.py`).
+
+---
+
 ## `cb data`
 
 ### `cb data verify`
