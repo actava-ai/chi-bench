@@ -2,19 +2,19 @@
   <img src="assets/figures/logo.svg" alt="Χ-Bench" width="300"/>
   <h1><ins>C</ins>linical <ins>H</ins>ealthcare <ins>I</ins>n-Situ Environment</h1>
   <p><b>Benchmark for long-horizon, policy-rich healthcare workflow agents</b></p>
-  <p>
-    <a href="https://arxiv.org/abs/XXXX.XXXXX"><img src="https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b.svg" alt="arXiv"/></a>
-    <a href="https://huggingface.co/datasets/actava/chi-bench"><img src="https://img.shields.io/badge/HF_Dataset-chi--bench-yellow" alt="Dataset"/></a>
-    <a href="https://actava.ai/benchmarks"><img src="https://img.shields.io/badge/Leaderboard-chi--bench-blue" alt="Leaderboard"/></a>
-    <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-purple.svg" alt="License"/></a>
-  </p>
+
+[![Leaderboard](https://img.shields.io/badge/Leaderboard-chi--bench-blue?style=for-the-badge)](https://actava.ai/benchmarks)
+[![arXiv](https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b?style=for-the-badge&logo=arxiv&logoColor=white)](https://arxiv.org/abs/XXXX.XXXXX)
+[![Dataset](https://img.shields.io/badge/HF_Dataset-chi--bench-yellow?style=for-the-badge&logo=huggingface&logoColor=white)](https://huggingface.co/datasets/actava/chi-bench)
+[![License](https://img.shields.io/badge/License-Apache_2.0-purple?style=for-the-badge)](LICENSE)
+
+[![Discord](https://img.shields.io/badge/Join_Our_Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)]([https://discord.gg/Da3AaW4rVs](https://discord.gg/eQfMpUQtda))
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-actava-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/company/actava/)
 </div>
 
 ## What this benchmark measures
 
-Χ-Bench evaluates AI agents on end-to-end U.S. healthcare workflows across three long-horizon domains: provider prior authorization, payer utilization management, and population care management. Each task hands the agent a clinical case in a high-fidelity simulator of 20 healthcare apps exposed over MCP, with a 1,279-document Managed-Care Operations Handbook skill, and asks it to drive the case to a terminal state through tool calls and artifact authoring.
-
-The benchmark stresses three capabilities under-represented in coding-style agent benchmarks: **policy density** (decisions grounded in a large library of medical, insurance, and operational rules), **multi-role composition** (a single workflow spans clinician, UM nurse, medical director, and care manager handoffs that cannot be re-run), and **multilateral interaction** (some steps are multi-turn dialogs — peer-to-peer review, patient outreach — not tool calls).
+Χ-Bench evaluates AI agents on end-to-end U.S. healthcare workflows across three long-horizon domains: provider prior authorization, payer utilization management, and population care management. Each task hands the agent a clinical case in a high-fidelity simulator of 20 healthcare apps exposed over MCP, with a 1,279-document Managed-Care Operations Handbook skills, and asks it to drive the case through tool calls and artifact authoring.
 
 > **Headline numbers from the paper:**
 > - Best agent (Claude Code + Claude Opus 4.6): **28.0%** overall pass@1
