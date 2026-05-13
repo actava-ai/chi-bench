@@ -50,6 +50,12 @@ submission_app = typer.Typer(
 )
 app.add_typer(submission_app, name="submission")
 
+agent_app = typer.Typer(
+    help="Inspect agent harness registry (which names cb submission accepts).",
+    no_args_is_help=True,
+)
+app.add_typer(agent_app, name="agent")
+
 
 @data_app.command("verify")
 def data_verify(
@@ -877,3 +883,64 @@ def data_download(
         typer.echo(f"Download failed: {e}", err=True)
         raise typer.Exit(1) from None
     typer.echo(f"Dataset downloaded into {data_dir} (revision={revision}).")
+
+
+@agent_app.command("list")
+def agent_list(
+    as_json: bool = typer.Option(
+        False, "--json", help="Emit JSON instead of a human-readable table."
+    ),
+) -> None:
+    """List agent names chi-bench accepts in submission YAML / --agent.
+
+    Two kinds appear:
+
+    * ``in-tree`` — harness classes shipped in this repo. Dispatched via
+      Harbor's ``--agent-import-path``. To register a new one, see
+      ``docs/extending.md`` § 3.
+    * ``harbor-builtin`` — names Harbor knows about natively. Dispatched
+      via ``-a <name>``. Not added by chi-bench.
+    """
+    import json as _json
+
+    from chi_bench.experiment.agents.registry import (
+        AGENT_ENV_VARS,
+        HARBOR_BUILTIN_AGENTS,
+        IN_TREE_AGENT_IMPORT_PATHS,
+    )
+
+    rows: list[dict[str, object]] = []
+    for name in sorted(IN_TREE_AGENT_IMPORT_PATHS):
+        rows.append(
+            {
+                "name": name,
+                "kind": "in-tree",
+                "import_path": IN_TREE_AGENT_IMPORT_PATHS[name],
+                "env_vars": list(AGENT_ENV_VARS.get(name, ())),
+            }
+        )
+    for name in sorted(HARBOR_BUILTIN_AGENTS):
+        rows.append(
+            {
+                "name": name,
+                "kind": "harbor-builtin",
+                "import_path": None,
+                "env_vars": list(AGENT_ENV_VARS.get(name, ())),
+            }
+        )
+
+    if as_json:
+        typer.echo(_json.dumps(rows, indent=2))
+        return
+
+    name_w = max((len(str(r["name"])) for r in rows), default=4)
+    kind_w = max(len("harbor-builtin"), len("in-tree"))
+    typer.echo(f"{'NAME':<{name_w}}  {'KIND':<{kind_w}}  IMPORT PATH / ENV VARS")
+    typer.echo(f"{'-' * name_w}  {'-' * kind_w}  ---------------------------------")
+    for row in rows:
+        import_path = row["import_path"] or "(dispatched by Harbor via -a)"
+        env_vars = ", ".join(str(v) for v in row["env_vars"]) or "—"
+        name = str(row["name"])
+        kind = str(row["kind"])
+        typer.echo(f"{name:<{name_w}}  {kind:<{kind_w}}  {import_path}")
+        typer.echo(f"{' ' * name_w}  {' ' * kind_w}    env: {env_vars}")
