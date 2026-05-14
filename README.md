@@ -4,9 +4,10 @@
   <p><b>Benchmark for long-horizon, policy-rich healthcare workflow agents</b></p>
 
 [![Leaderboard](https://img.shields.io/badge/Leaderboard-chi--bench-blue?style=for-the-badge)](https://actava.ai/benchmarks/leaderboards)
-[![Docs](https://img.shields.io/badge/Read_the_Docs-chi--bench-ff5baf?style=for-the-badge&logo=readthedocs&logoColor=white)](https://actava.ai/benchmarks/docs)
+[![Docs](https://img.shields.io/badge/Docs-chi--bench-ff5baf?style=for-the-badge&logo=readthedocs&logoColor=white)](https://actava.ai/benchmarks/docs)
 [![arXiv](https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b?style=for-the-badge&logo=arxiv&logoColor=white)](https://arxiv.org/abs/XXXX.XXXXX)
-[![Dataset](https://img.shields.io/badge/HF_Dataset-chi--bench-yellow?style=for-the-badge&logo=huggingface&logoColor=white)](https://huggingface.co/datasets/actava/chi-bench)
+[![Dataset](https://img.shields.io/badge/Dataset-chi--bench-yellow?style=for-the-badge&logo=huggingface&logoColor=white)](https://huggingface.co/datasets/actava/chi-bench)
+
 [![Discord](https://img.shields.io/badge/Join_Our_Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/eQfMpUQtda)
 [![Slack](https://img.shields.io/badge/Join_Our_Slack-4A154B?style=for-the-badge&logo=slack&logoColor=white)](https://join.slack.com/share/enQtMTExMTE4MDYyNTMzOTktMzZiMGE2MjYxYjRmNzYyMTFiMDVkZmJiNzZiYWUwNWMwNzJkMGRiZDIwYmU5ZWM5NDQyY2E2ZDEyNTcxZWQ1ZA)
 [![WeChat](https://img.shields.io/badge/Join_Our_WeChat-07C160?style=for-the-badge&logo=wechat&logoColor=white)](https://drive.google.com/file/d/1FD93bxx4E9C9FZDCQW0o_KoQGi-i8WOa/view?usp=sharing)
