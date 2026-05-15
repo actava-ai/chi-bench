@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/figures/logo.svg" alt="Χ-Bench" width="300"/>
+  <img src="assets/figures/X-bench-color@600x.png" alt="χ-Bench" width="300"/>
   <h1><ins>C</ins>linical <ins>H</ins>ealthcare <ins>I</ins>n-Situ Environment</h1>
   <p><b>Benchmark for long-horizon, policy-rich healthcare workflow agents</b></p>
 
