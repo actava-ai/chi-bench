@@ -192,19 +192,13 @@ Packet contract (for benchmark authors building their own producers): [`docs/sub
 
 ## Reproduce paper tables
 
-| Paper | Config | Command |
+| Result | Config | Command |
 | --- | --- | --- |
-| Table 2 (Main matrix)    | `table1_main_matrix.yaml`    | `./scripts/run_table.sh table1` |
-| Table 3 (E2E arena)      | `table2_e2e_arena.yaml`      | `./scripts/run_table.sh table2` |
-| Table 4 (Marathon)       | `table3_marathon.yaml`       | `./scripts/run_table.sh table3` |
-| Figure 12 (Skill ablation) | `table4_skill_ablation.yaml` | `./scripts/run_table.sh table4` |
-| Table 5 (MCP vs CLI)     | `table5_mcp_vs_cli.yaml`     | `./scripts/run_table.sh table5` |
-
-> Config filenames and the `run_table.sh tableN` argument use the original
-> historical slot numbers (1–5). The paper's published numbering shifted by
-> one for the first four (the related-work coverage matrix is now Table 1),
-> but the slot names are preserved so existing reproduction commands keep
-> working. Use the **Paper** column above when cross-referencing the PDF.
+| Main matrix (paper Table 2)    | `table1_main_matrix.yaml`    | `./scripts/run_table.sh table1` |
+| E2E arena (paper Table 3)      | `table2_e2e_arena.yaml`      | `./scripts/run_table.sh table2` |
+| Marathon (paper Table 4)       | `table3_marathon.yaml`       | `./scripts/run_table.sh table3` |
+| Skill ablation (paper Figure 12) | `table4_skill_ablation.yaml` | `./scripts/run_table.sh table4` |
+| MCP vs CLI (paper Table 5)     | `table5_mcp_vs_cli.yaml`     | `./scripts/run_table.sh table5` |
 
 After all slices finish, aggregate:
 
