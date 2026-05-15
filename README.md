@@ -28,7 +28,7 @@
 > **Headline numbers from the paper:**
 > - Best agent (Claude Code + Claude Opus 4.6): **28.0%** overall pass@1
 > - No agent clears **20%** on strict pass^3
-> - Marathon (all 25 tasks in one session): best is **3.8%**
+> - Marathon (all 25 tasks in one session): **3.8%** overall
 > - End-to-end provider–payer arena: **0%** on the best PA agents
 
 <p align="center">
