@@ -611,7 +611,7 @@ _MANIFEST_NAME = "submission.json"
 _DEFAULT_PRICES_PATH = Path("configs/prices.yaml")
 
 # Submission outputs publish pass@1 only — leaderboard policy is one attempt
-# per task. pass@3 / pass^3 / Wilson CIs are paper-table statistics; they
+# per task. pass@3 / pass^3 / bootstrap CIs are paper-table statistics; they
 # require ``n_attempts >= 3`` per task to mean anything and don't belong in a
 # v1 submission manifest. Users who want them can run ``scripts/aggregate.py``
 # directly over the raw trial tree (full row shape is preserved on disk).
@@ -646,7 +646,7 @@ def aggregate_submission(
 
     Rows are projected down to the submission schema
     (``_SUBMISSION_RESULT_KEYS``): only pass@1 and cost/walltime appear, no
-    pass@3 / pass^3 / Wilson intervals.
+    pass@3 / pass^3 / bootstrap intervals.
     """
     from chi_bench.aggregator import aggregate_to_rows
 
@@ -1117,10 +1117,11 @@ def write_manifest(
 ) -> tuple[Path, Path | None]:
     """Write ``submission.json`` and (when there's data) ``results.csv``.
 
-    The CSV uses the submission projection (pass@1 + cost only); paper-Table-1
-    columns with Wilson CIs and pass^3 are deliberately omitted — see
-    ``_SUBMISSION_RESULT_KEYS``. Users who want the full row shape can run
-    ``scripts/aggregate.py`` directly over the trial tree (which stays intact).
+    The CSV uses the submission projection (pass@1 + cost only); the paper's
+    full-matrix columns with bootstrap CIs and pass^3 are deliberately omitted
+    — see ``_SUBMISSION_RESULT_KEYS``. Users who want the full row shape can
+    run ``scripts/aggregate.py`` directly over the trial tree (which stays
+    intact).
 
     Returns the manifest path and the CSV path (None when no trials exist).
     """
