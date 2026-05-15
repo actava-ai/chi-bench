@@ -192,13 +192,13 @@ Packet contract (for benchmark authors building their own producers): [`docs/sub
 
 ## Reproduce paper tables
 
-| Paper | Config | Command |
+| Result | Config | Command |
 | --- | --- | --- |
-| Table 1 (Main matrix)    | `table1_main_matrix.yaml`    | `./scripts/run_table.sh table1` |
-| Table 2 (E2E arena)      | `table2_e2e_arena.yaml`      | `./scripts/run_table.sh table2` |
-| Table 3 (Marathon)       | `table3_marathon.yaml`       | `./scripts/run_table.sh table3` |
-| Fig. 4 (Skill ablation)  | `table4_skill_ablation.yaml` | `./scripts/run_table.sh table4` |
-| Table 5 (MCP vs CLI)     | `table5_mcp_vs_cli.yaml`     | `./scripts/run_table.sh table5` |
+| Main matrix (paper Table 2)    | `table1_main_matrix.yaml`    | `./scripts/run_table.sh table1` |
+| E2E arena (paper Table 3)      | `table2_e2e_arena.yaml`      | `./scripts/run_table.sh table2` |
+| Marathon (paper Table 4)       | `table3_marathon.yaml`       | `./scripts/run_table.sh table3` |
+| Skill ablation (paper Figure 12) | `table4_skill_ablation.yaml` | `./scripts/run_table.sh table4` |
+| MCP vs CLI (paper Table 5)     | `table5_mcp_vs_cli.yaml`     | `./scripts/run_table.sh table5` |
 
 After all slices finish, aggregate:
 
@@ -209,7 +209,7 @@ uv run python scripts/aggregate.py \
   --out-csv logs/table1.csv
 ```
 
-CSV columns: `agent, model, n_trials, n_tasks, pass_at_1, pass_at_1_lo, pass_at_1_hi, pass_at_3, ..., pass_pow_3, pass_pow_3_hi, mean_cost_usd, mean_walltime_s` with Wilson 95% CIs. v1 emits the numeric tables; paper figures are out of scope — plot from the CSV. See [`docs/reproduce.md`](docs/reproduce.md) for the figure scripts we used.
+CSV columns: `agent, model, n_trials, n_tasks, pass_at_1, pass_at_1_lo, pass_at_1_hi, pass_at_3, ..., pass_pow_3, pass_pow_3_hi, mean_cost_usd, mean_walltime_s` with task-level percentile bootstrap 95% CIs (1,000 iterations, seed `0` — matches paper Table 2 / Figure 3 captions; override with `--bootstrap-iters` / `--bootstrap-seed`). v1 emits the numeric tables; paper figures are out of scope — plot from the CSV. See [`docs/reproduce.md`](docs/reproduce.md) for the figure scripts we used.
 
 > [!TIP]
 > Add `--modal` to `run_table.sh` for parallel execution on Modal — matrix reproduction on a single host takes days.
@@ -228,7 +228,7 @@ Web walkthrough of the same flow (single trial, submission lifecycle, paper-tabl
 | `openai-agents` | `deepseek/deepseek-v4-pro`    | OAI Agents |
 | `deepagents`    | `openrouter/x-ai/grok-4.3`    | DeepAgents |
 
-The full 30-row matrix (every model × harness reported in Table 1) lives in [`configs/experiments/table1_main_matrix.yaml`](configs/experiments/table1_main_matrix.yaml). Browse all 75 tasks at **[actava.ai/benchmarks/tasks](https://actava.ai/benchmarks/tasks)**.
+The full 30-row matrix (every model × harness reported in the main results table) lives in [`configs/experiments/table1_main_matrix.yaml`](configs/experiments/table1_main_matrix.yaml). Browse all 75 tasks at **[actava.ai/benchmarks/tasks](https://actava.ai/benchmarks/tasks)**.
 
 See [`docs/extending.md`](docs/extending.md) (or **[the web version](https://actava.ai/benchmarks/docs/extending)**) to plug in your own.
 

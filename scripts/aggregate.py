@@ -15,10 +15,12 @@ from pathlib import Path
 # ``from scripts.aggregate import aggregate`` (tests, the run_table.sh
 # helper).
 from chi_bench.aggregator import (  # noqa: F401  (re-export)
+    DEFAULT_BOOTSTRAP_ITERS,
+    DEFAULT_BOOTSTRAP_SEED,
     Trial,
+    _bootstrap_ci,
     aggregate,
     aggregate_to_rows,
-    wilson_score_interval,
     write_rows_csv,
 )
 
@@ -29,12 +31,26 @@ def main() -> int:
     ap.add_argument("--prices", type=Path, default=Path("configs/prices.yaml"))
     ap.add_argument("--out-csv", type=Path, required=True)
     ap.add_argument("--out-json", type=Path, default=None)
+    ap.add_argument(
+        "--bootstrap-iters",
+        type=int,
+        default=DEFAULT_BOOTSTRAP_ITERS,
+        help=f"Bootstrap resample count (default: {DEFAULT_BOOTSTRAP_ITERS}).",
+    )
+    ap.add_argument(
+        "--bootstrap-seed",
+        type=int,
+        default=DEFAULT_BOOTSTRAP_SEED,
+        help=f"Bootstrap RNG seed (default: {DEFAULT_BOOTSTRAP_SEED}).",
+    )
     args = ap.parse_args()
     aggregate(
         trials_dir=args.trials_dir,
         prices_path=args.prices,
         out_csv=args.out_csv,
         out_json=args.out_json,
+        bootstrap_iters=args.bootstrap_iters,
+        bootstrap_seed=args.bootstrap_seed,
     )
     return 0
 

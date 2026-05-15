@@ -483,7 +483,14 @@ def test_aggregate_submission_overall_and_per_domain(tmp_path: Path) -> None:
     overall = results["overall"]
     assert overall is not None
     assert overall["n_trials"] == 8
-    assert overall["pass_at_1"] == 5 / 8
+    # Overall pass@1 is the per-task mean of HumanEval pass@1 estimators.
+    # The fixture reuses task slugs (t0/t1/t2) across domains, so when the
+    # overall walker groups by task name it collapses 8 trials into 3 tasks:
+    #   t0: 3 attempts (1+1+0), p1=2/3
+    #   t1: 3 attempts (0+1+0), p1=1/3
+    #   t2: 2 attempts (1+1),   p1=1.0
+    # Mean over 3 tasks = (2/3 + 1/3 + 1.0) / 3 = 2/3.
+    assert overall["pass_at_1"] == 2 / 3
 
     per_domain = results["per_domain"]
     assert set(per_domain.keys()) == {"pa_provider", "pa_um", "cm"}
@@ -491,8 +498,8 @@ def test_aggregate_submission_overall_and_per_domain(tmp_path: Path) -> None:
     assert per_domain["cm"]["pass_at_1"] == 0.0
 
 
-def test_aggregate_submission_strips_wilson_and_pass3_columns(tmp_path: Path) -> None:
-    """Submission rows must NOT carry pass@3, pass^3, or Wilson CI columns —
+def test_aggregate_submission_strips_bootstrap_and_pass3_columns(tmp_path: Path) -> None:
+    """Submission rows must NOT carry pass@3, pass^3, or bootstrap CI columns —
     leaderboard policy is one run per task, so those statistics don't apply."""
     cfg = _populated_submission(tmp_path, {"pa_um": [1.0, 0.0, 1.0]})
     results = aggregate_submission(cfg)
@@ -509,11 +516,11 @@ def test_aggregate_submission_strips_wilson_and_pass3_columns(tmp_path: Path) ->
     }
     assert overall is not None
     assert forbidden.isdisjoint(overall.keys()), (
-        f"submission overall row leaked paper-Table-1 columns: {forbidden & overall.keys()}"
+        f"submission overall row leaked paper-table columns: {forbidden & overall.keys()}"
     )
     for dom, row in results["per_domain"].items():
         assert forbidden.isdisjoint(row.keys()), (
-            f"submission per_domain['{dom}'] row leaked paper-Table-1 columns: "
+            f"submission per_domain['{dom}'] row leaked paper-table columns: "
             f"{forbidden & row.keys()}"
         )
 
@@ -551,7 +558,7 @@ def test_write_manifest_creates_files(tmp_path: Path) -> None:
     rows = list(_csv.DictReader(csv_path.open()))
     assert len(rows) == 1
     assert rows[0]["agent"] == "codex"
-    # CSV header reflects the submission projection — no Wilson, no pass@3.
+    # CSV header reflects the submission projection — no bootstrap CIs, no pass@3.
     forbidden = {
         "pass_at_1_lo",
         "pass_at_1_hi",

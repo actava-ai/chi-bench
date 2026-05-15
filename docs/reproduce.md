@@ -1,16 +1,18 @@
 # Paper Table Reproduction
 
-Each table has one config and one driver command. After trials complete,
-`scripts/aggregate.py` rolls them up into a CSV with Wilson 95% CIs.
+Each result has one config and one driver command. After trials complete,
+`scripts/aggregate.py` rolls them up into a CSV with task-level percentile
+bootstrap 95% CIs (1,000 iterations, seed `0` — matches the paper). Override
+the resample count or seed with `--bootstrap-iters` / `--bootstrap-seed`.
 
 ## Cost expectations
 
-The headline run (all of Table 1) is **30 cells × 75 tasks × 3 trials = 6,750 trials**.
+The headline run (all 30 main-matrix cells) is **30 cells × 75 tasks × 3 trials = 6,750 trials**.
 At an average per-trial cost from `configs/prices.yaml`, expect **$3,000-6,000 USD** of API spend
 plus 24-72 hours of wall time at concurrency=5 per harness. The Quickstart single-task run is
 under $1 and a few minutes.
 
-## Table 1 — Main matrix
+## Main matrix — paper Table 2
 
 ```bash
 ./scripts/run_table.sh table1
@@ -23,28 +25,28 @@ python scripts/aggregate.py \
   --out-csv logs/table1.csv
 ```
 
-## Table 2 — E2E arena
+## E2E arena — paper Table 3
 
 ```bash
 ./scripts/run_table.sh table2
 python scripts/aggregate.py --trials-dir logs/experiments/table2_e2e_arena --out-csv logs/table2.csv
 ```
 
-## Table 3 — Marathon
+## Marathon — paper Table 4
 
 ```bash
 ./scripts/run_table.sh table3
 python scripts/aggregate.py --trials-dir logs/experiments/table3_marathon --out-csv logs/table3.csv
 ```
 
-## Skill-ablation (Fig. 4 numbers)
+## Skill ablation — paper Figure 12
 
 ```bash
 ./scripts/run_table.sh table4
 python scripts/aggregate.py --trials-dir logs/experiments/table4_skill_ablation --out-csv logs/table4.csv
 ```
 
-## Table 5 — MCP vs CLI
+## MCP vs CLI — paper Table 5
 
 ```bash
 ./scripts/run_table.sh table5
