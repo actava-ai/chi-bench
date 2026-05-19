@@ -12,34 +12,33 @@
 [![Slack](https://img.shields.io/badge/Join_Our_Slack-4A154B?style=for-the-badge&logo=slack&logoColor=white)](https://join.slack.com/share/enQtMTExMTE4MDYyNTMzOTktMzZiMGE2MjYxYjRmNzYyMTFiMDVkZmJiNzZiYWUwNWMwNzJkMGRiZDIwYmU5ZWM5NDQyY2E2ZDEyNTcxZWQ1ZA)
 [![WeChat](https://img.shields.io/badge/Join_Our_WeChat-07C160?style=for-the-badge&logo=wechat&logoColor=white)](https://drive.google.com/file/d/1FD93bxx4E9C9FZDCQW0o_KoQGi-i8WOa/view?usp=sharing)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-actava-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/company/actava/)
+
 </div>
-
-
-
 
 ## What this benchmark measures
 
-Χ-Bench evaluates AI agents on end-to-end U.S. healthcare workflows across three long-horizon domains: provider prior authorization, payer utilization management, and population care management. Each task hands the agent a clinical case in a high-fidelity simulator of 20 healthcare apps exposed over MCP, with a 1,279-document Managed-Care Operations Handbook skills, and asks it to drive the case through tool calls and artifact authoring.
+$\chi$-Bench evaluates AI agents on end-to-end U.S. healthcare workflows across three long-horizon domains: provider prior authorization, payer utilization management, and population care management. Each task hands the agent a clinical case in a high-fidelity simulator of 20 healthcare apps exposed over MCP, with a 1,279-document Managed-Care Operations Handbook skills, and asks it to drive the case through tool calls and artifact authoring.
 
 > [!TIP]
 > Reading on the web: **[Overview & authors](https://actava.ai/benchmarks/chi-bench)** · **[Live leaderboard](https://actava.ai/benchmarks/leaderboards)** · **[All 75 tasks](https://actava.ai/benchmarks/tasks)** · **[Docs](https://actava.ai/benchmarks/docs)**.
 
 > [!NOTE]
 > **Headline numbers from the paper:**
+>
 > - Best agent (Claude Code + Claude Opus 4.6): **28.0%** overall pass@1
 > - No agent clears **20%** on strict pass^3
 > - Marathon (all 25 tasks in one session): **3.8%** overall
 > - End-to-end provider–payer arena: **0%** on the best PA agents
 
 <p align="center">
-  <img src="assets/figures/main_pass_at_1.png" alt="pass@1 across the three Χ-Bench environments" width="780"/>
+  <img src="assets/figures/main_pass_at_1.png" alt="pass@1 across the three χ-Bench environments" width="780"/>
 </p>
 
-| Domain | Tasks | What the agent does |
-| --- | --- | --- |
-| **Prior Authorization — Provider** | 25 | Verify coverage, gather evidence, submit the PA packet, work the response (RFIs, peer-to-peer, appeals) |
-| **Prior Authorization — UM (Payer)** | 25 | Intake the request, check plan policy, escalate through nurse and physician reviewers, issue determination |
-| **Care Management** | 25 | Review the chart, contact the patient, administer assessments, author a care plan |
+| Domain                               | Tasks | What the agent does                                                                                        |
+| ------------------------------------ | ----- | ---------------------------------------------------------------------------------------------------------- |
+| **Prior Authorization — Provider**   | 25    | Verify coverage, gather evidence, submit the PA packet, work the response (RFIs, peer-to-peer, appeals)    |
+| **Prior Authorization — UM (Payer)** | 25    | Intake the request, check plan policy, escalate through nurse and physician reviewers, issue determination |
+| **Care Management**                  | 25    | Review the chart, contact the patient, administer assessments, author a care plan                          |
 
 ## Setup (one-time)
 
@@ -58,7 +57,7 @@ uv sync --extra dev
 - `OPENAI_API_KEY` — required for Codex and OAI Agents rows.
 - `GEMINI_API_KEY` — required for Gemini CLI rows.
 - `OPENROUTER_API_KEY` — required for the open-stack rows (Hermes / OpenClaw / OAI Agents / DeepAgents on open-weight models).
-- `CLAUDE_CODE_OAUTH_TOKEN` — *optional*, cheaper alternative for smoke-testing the Claude Code harness. When set, Claude Code authenticates via OAuth instead of `ANTHROPIC_API_KEY`.
+- `CLAUDE_CODE_OAUTH_TOKEN` — _optional_, cheaper alternative for smoke-testing the Claude Code harness. When set, Claude Code authenticates via OAuth instead of `ANTHROPIC_API_KEY`.
 
 Provide whichever provider keys you need for the rows you intend to run. Hugging Face and Modal credentials are handled by their respective CLIs (see steps 3 and the Modal note below) — no tokens go in `.env`.
 
@@ -130,7 +129,7 @@ Full flag-by-flag CLI reference: [`docs/cli.md`](docs/cli.md). Web walkthrough o
 
 ### Reading the verifier output
 
-Each trial's `verifier/` directory has three files: `reward.json` (the single binary `{"reward": 0.0 | 1.0}` used for pass@1), `scorecard.json` (per-check breakdown — read this to see *why* a trial passed or failed), and `exported_state.json` (the world snapshot the verifier scored against).
+Each trial's `verifier/` directory has three files: `reward.json` (the single binary `{"reward": 0.0 | 1.0}` used for pass@1), `scorecard.json` (per-check breakdown — read this to see _why_ a trial passed or failed), and `exported_state.json` (the world snapshot the verifier scored against).
 
 `scorecard.json` carries two reward axes: **`binary_reward`** (strict — `1.0` only when every non-N/A check passes; this is what the leaderboard publishes) and **`fractional_reward = passed_checks / total_checks`** (partial credit for diagnostics; never published). A `0.0 / 0.91` split means a near-miss. Checks are grouped under `stages` (`md_review`, `outcome`, `cross_stage`, `intake`, `nurse_review`, `p2p`, `appeal`, `provider_*`, `cm_*`, `e2e_consistency`); `failed_checks` lists what broke.
 
@@ -192,13 +191,13 @@ Packet contract (for benchmark authors building their own producers): [`docs/sub
 
 ## Reproduce paper tables
 
-| Result | Config | Command |
-| --- | --- | --- |
-| Main matrix (paper Table 2)    | `table1_main_matrix.yaml`    | `./scripts/run_table.sh table1` |
-| E2E arena (paper Table 3)      | `table2_e2e_arena.yaml`      | `./scripts/run_table.sh table2` |
-| Marathon (paper Table 4)       | `table3_marathon.yaml`       | `./scripts/run_table.sh table3` |
+| Result                           | Config                       | Command                         |
+| -------------------------------- | ---------------------------- | ------------------------------- |
+| Main matrix (paper Table 2)      | `table1_main_matrix.yaml`    | `./scripts/run_table.sh table1` |
+| E2E arena (paper Table 3)        | `table2_e2e_arena.yaml`      | `./scripts/run_table.sh table2` |
+| Marathon (paper Table 4)         | `table3_marathon.yaml`       | `./scripts/run_table.sh table3` |
 | Skill ablation (paper Figure 12) | `table4_skill_ablation.yaml` | `./scripts/run_table.sh table4` |
-| MCP vs CLI (paper Table 5)     | `table5_mcp_vs_cli.yaml`     | `./scripts/run_table.sh table5` |
+| MCP vs CLI (paper Table 5)       | `table5_mcp_vs_cli.yaml`     | `./scripts/run_table.sh table5` |
 
 After all slices finish, aggregate:
 
@@ -218,15 +217,15 @@ Web walkthrough of the same flow (single trial, submission lifecycle, paper-tabl
 
 ## Supported agents
 
-| `--agent` | Example `--model` | Paper rows |
-| --- | --- | --- |
+| `--agent`       | Example `--model`             | Paper rows  |
+| --------------- | ----------------------------- | ----------- |
 | `claude-code`   | `anthropic/claude-opus-4-7`   | Claude Code |
-| `codex`         | `openai/gpt-5.5`              | Codex |
-| `gemini-cli`    | `gemini/gemini-3-pro-preview` | Gemini CLI |
-| `openclaw`      | `anthropic/claude-opus-4-7`   | OpenClaw |
-| `hermes`        | `openrouter/z-ai/glm-5.1`     | Hermes |
-| `openai-agents` | `deepseek/deepseek-v4-pro`    | OAI Agents |
-| `deepagents`    | `openrouter/x-ai/grok-4.3`    | DeepAgents |
+| `codex`         | `openai/gpt-5.5`              | Codex       |
+| `gemini-cli`    | `gemini/gemini-3-pro-preview` | Gemini CLI  |
+| `openclaw`      | `anthropic/claude-opus-4-7`   | OpenClaw    |
+| `hermes`        | `openrouter/z-ai/glm-5.1`     | Hermes      |
+| `openai-agents` | `deepseek/deepseek-v4-pro`    | OAI Agents  |
+| `deepagents`    | `openrouter/x-ai/grok-4.3`    | DeepAgents  |
 
 The full 30-row matrix (every model × harness reported in the main results table) lives in [`configs/experiments/table1_main_matrix.yaml`](configs/experiments/table1_main_matrix.yaml). Browse all 75 tasks at **[actava.ai/benchmarks/tasks](https://actava.ai/benchmarks/tasks)**.
 
@@ -240,7 +239,7 @@ System diagram and module boundaries: [`docs/architecture.md`](docs/architecture
 
 ## Citation
 
-If you use CHI-Bench, please cite:
+If you use $\chi$-Bench, please cite:
 
 ```bibtex
 @misc{chen2026chibenchaiagentsautomate,
