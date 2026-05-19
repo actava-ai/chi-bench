@@ -240,7 +240,7 @@ System diagram and module boundaries: [`docs/architecture.md`](docs/architecture
 
 ## Citation
 
-If you use chi-Bench, please cite:
+If you use CHI-Bench, please cite:
 
 ```bibtex
 @misc{chen2026chibenchaiagentsautomate,
