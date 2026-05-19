@@ -5,7 +5,7 @@
 
 [![Leaderboard](https://img.shields.io/badge/Leaderboard-chi--bench-blue?style=for-the-badge)](https://actava.ai/benchmarks/leaderboards)
 [![Docs](https://img.shields.io/badge/Docs-chi--bench-ff5baf?style=for-the-badge&logo=readthedocs&logoColor=white)](https://actava.ai/benchmarks/docs)
-[![arXiv](https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b?style=for-the-badge&logo=arxiv&logoColor=white)](https://arxiv.org/abs/XXXX.XXXXX)
+[![arXiv](https://img.shields.io/badge/arXiv-2605.16679-b31b1b?style=for-the-badge&logo=arxiv&logoColor=white)](https://arxiv.org/pdf/2605.16679)
 [![Dataset](https://img.shields.io/badge/Dataset-chi--bench-yellow?style=for-the-badge&logo=huggingface&logoColor=white)](https://huggingface.co/datasets/actava/chi-bench)
 
 [![Discord](https://img.shields.io/badge/Join_Our_Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/eQfMpUQtda)
@@ -243,11 +243,14 @@ System diagram and module boundaries: [`docs/architecture.md`](docs/architecture
 If you use chi-Bench, please cite:
 
 ```bibtex
-@article{chen2026chibench,
-  title   = {chi-Bench: Can AI Agents Automate End-to-End, Long-Horizon, Policy-Rich Healthcare Workflows?},
-  author  = {Chen, Haolin and Metelski, Deon and Qi, Leon and others},
-  journal = {arXiv preprint arXiv:XXXX.XXXXX},
-  year    = {2026}
+@misc{chen2026chibenchaiagentsautomate,
+      title={CHI-Bench: Can AI Agents Automate End-to-End, Long-Horizon, Policy-Rich Healthcare Workflows?},
+      author={Haolin Chen and Deon Metelski and Leon Qi and Tao Xia and Joonyul Lee and Steve Brown and Kevin Riley and Frank Wang and T. Y. Alvin Liu and Hank Capps MD and Zeyu Tang and Xiangchen Song and Lingjing Kong and Fan Feng and Tianyi Zeng and Zhiwei Liu and Zixian Ma and Hang Jiang and Fangli Geng and Yuan Yuan and Chenyu You and Qingsong Wen and Hua Wei and Yanjie Fu and Yue Zhao and Carl Yang and Biwei Huang and Kun Zhang and Caiming Xiong and Sanmi Koyejo and Eric P. Xing and Philip S. Yu and Weiran Yao},
+      year={2026},
+      eprint={2605.16679},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2605.16679},
 }
 ```
 
