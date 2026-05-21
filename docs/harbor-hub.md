@@ -33,13 +33,22 @@ tasks**.
 > entrypoint lets Harbor forward an approved `HF_TOKEN` as a normal runtime env
 > var instead.
 >
-> **Running therefore requires handbook access:**
+> **Running therefore requires handbook access.** Harbor resolves `${HF_TOKEN}`
+> (declared in each task's `task.toml [environment.env]`) from your shell or
+> `--env-file` and injects it into the container via the task's
+> `environment/docker-compose.yaml`. `-y` auto-confirms the "load from env"
+> prompt; `-i` selects one task (omit to run all 101):
 > ```bash
-> harbor run -d actava-ai/chi-bench@<tag> -a <agent> -m <model> \
->     -e HF_TOKEN=<your-approved-hf-token>
+> HF_TOKEN=<your-approved-hf-token> harbor run \
+>     -d actava-ai/chi-bench@<tag> \
+>     -i actava-ai/pa_t016_t016_o001_p01_p2p_payer \
+>     -a <agent> -m <model> -y
 > ```
-> Without an approved token the container exits early with a clear message.
-> The public dataset (`actava/chi-bench`) needs no token.
+> Note: the run flag is **not** `-e` (that is the environment *type*) and
+> `--ae`/`--ek` do **not** reach the entrypoint — the `${HF_TOKEN}` template +
+> compose `environment:` block is the only path that delivers it to PID1.
+> Without an approved token the container exits early (code 78). The public
+> dataset (`actava/chi-bench`) needs no token.
 
 ## What ships in a hub task (and what does not)
 

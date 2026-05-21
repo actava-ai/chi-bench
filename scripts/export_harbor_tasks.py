@@ -109,7 +109,7 @@ Hugging Face at build time. No registry image, no repo checkout required.
 The managed-care handbook is gated; the wrapper entrypoint downloads it at
 container start, so you must pass an approved HF token at run time:
 
-    harbor run -d {org}/chi-bench@<tag> -a <agent> -m <model> -e HF_TOKEN=<token>
+    HF_TOKEN=<token> harbor run -d {org}/chi-bench@<tag> -i {org}/<task> -a <agent> -m <model> -y
 
 This builds the image, downloads the handbook, boots the chi-Bench MCP servers,
 runs your agent, then scores with the baked-in verifier.
