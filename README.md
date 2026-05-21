@@ -7,7 +7,7 @@
 [![Docs](https://img.shields.io/badge/Docs-chi--bench-ff5baf?style=for-the-badge&logo=readthedocs&logoColor=white)](https://actava.ai/benchmarks/docs)
 [![arXiv](https://img.shields.io/badge/arXiv-2605.16679-b31b1b?style=for-the-badge&logo=arxiv&logoColor=white)](https://arxiv.org/pdf/2605.16679)
 [![Dataset](https://img.shields.io/badge/Dataset-chi--bench-yellow?style=for-the-badge&logo=huggingface&logoColor=white)](https://huggingface.co/datasets/actava/chi-bench)
-[![Handbook](https://img.shields.io/badge/managed--care--operations--handbook-Skill-yellow?style=for-the-badge&logo=huggingface&logoColor=white)](https://huggingface.co/datasets/actava/managed-care-operations-handbook)
+[![Handbook](https://img.shields.io/badge/Skill-managed--care--operations--handbook-yellow?style=for-the-badge&logo=huggingface&logoColor=white)](https://huggingface.co/datasets/actava/managed-care-operations-handbook)
 [![Harbor hub](https://img.shields.io/badge/Harbor_hub-actava--ai/chi--bench-00b8d4?style=for-the-badge)](https://hub.harborframework.com/datasets/actava-ai/chi-bench)
 
 [![Discord](https://img.shields.io/badge/Join_Our_Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/eQfMpUQtda)
