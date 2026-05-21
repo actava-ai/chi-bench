@@ -130,7 +130,9 @@ Full flag-by-flag CLI reference: [`docs/cli.md`](docs/cli.md). Web walkthrough o
 
 ## Run from the Harbor hub (no source checkout)
 
-chi-Bench is also published to the [Harbor hub](https://hub.harborframework.com/datasets/actava-ai/chi-bench) as `actava-ai/chi-bench` (101 tasks). Each task ships a self-contained Dockerfile that Harbor builds on demand — cloning this repo and downloading the [fixtures dataset](https://huggingface.co/datasets/actava/chi-bench) at build — so you can run a trial without cloning anything yourself.
+chi-Bench is also published to the [Harbor hub](https://hub.harborframework.com/datasets/actava-ai/chi-bench) as `actava-ai/chi-bench` — **78 single-agent tasks** (75 single-domain + 3 marathon). Each task ships a self-contained Dockerfile that Harbor builds on demand — cloning this repo and downloading the [fixtures dataset](https://huggingface.co/datasets/actava/chi-bench) at build — so you can run a trial without cloning anything yourself.
+
+> **The 23 provider↔payer E2E tasks are *not* on the Harbor hub.** The E2E arena needs the two-agent `dual-pa-e2e` harness (provider phase → relay → payer phase), which a stock single-agent `harbor run` can't drive. Run E2E from this repo / the [HF dataset](https://huggingface.co/datasets/actava/chi-bench) with the `cb` CLI: `cb experiment run --dataset data/prior_auth_e2e/tasks/<id> --agent dual-pa-e2e --provider-model … --payer-model …` (see [`configs/experiments/table2_e2e_arena.yaml`](configs/experiments/table2_e2e_arena.yaml)).
 
 **Prerequisites:** Docker + the [Harbor CLI](https://github.com/harbor-framework/harbor), and an **approved HF token** for the gated [handbook](https://huggingface.co/datasets/actava/managed-care-operations-handbook) (the container downloads it at start; the fixtures dataset itself is public).
 
@@ -141,7 +143,7 @@ HF_TOKEN=<your-approved-hf-token> harbor run \
     -a claude-code -m anthropic/claude-opus-4-7 -y
 ```
 
-`HF_TOKEN` is read from your shell (or `--env-file`) and forwarded into the container — `-y` auto-confirms that prompt. Drop `-i …` to run all 101 tasks. Without an approved token the container exits early with a clear message. See [`docs/harbor-hub.md`](docs/harbor-hub.md) for how the fetch-at-build environment works and how the listing is regenerated/published. This path is for ad-hoc runs and discovery; the **paper-reproduction and leaderboard-submission flows use the `cb` CLI** described above.
+`HF_TOKEN` is read from your shell (or `--env-file`) and forwarded into the container — `-y` auto-confirms that prompt. Drop `-i …` to run all 78 tasks. Without an approved token the container exits early with a clear message. See [`docs/harbor-hub.md`](docs/harbor-hub.md) for how the fetch-at-build environment works and how the listing is regenerated/published. This path is for ad-hoc runs and discovery; the **paper-reproduction and leaderboard-submission flows use the `cb` CLI** described above.
 
 ### Reading the verifier output
 

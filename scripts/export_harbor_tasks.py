@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import tomllib
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -37,7 +38,10 @@ FAMILIES = {
     "prior_auth_um": ("prior_auth_um/tasks/*", "prior_auth_um"),
     "prior_auth_provider": ("prior_auth_provider/tasks/*", "prior_auth_provider"),
     "care_management": ("care_management/tasks/*", "care_management"),
-    "prior_auth_e2e": ("prior_auth_e2e/tasks/*", "prior_auth_e2e"),
+    # NOTE: prior_auth_e2e is intentionally NOT exported to the Harbor hub. The
+    # provider<->payer arena needs the two-agent `dual-pa-e2e` harness (provider
+    # phase -> relay -> payer phase), which a stock single-agent `harbor run`
+    # cannot drive. E2E runs via the source repo / cb CLI instead.
 }
 MARATHON = {
     "marathon/prior_auth_um": "marathon_prior_auth_um",
@@ -133,7 +137,15 @@ def load_meta(data_root: Path) -> dict[str, dict]:
     return out
 
 
-def render_task_toml(name: str, cb_task_id: str, domain: str, meta: dict) -> str:
+def render_task_toml(
+    name: str,
+    cb_task_id: str,
+    domain: str,
+    meta: dict,
+    *,
+    verifier_timeout: float,
+    agent_timeout: float,
+) -> str:
     title = meta.get("title", cb_task_id)
     excerpt = (meta.get("instruction_excerpt") or "").replace("\n", " ").strip()[:180]
     desc = f"chi-Bench {domain} task: {title}. {excerpt}".strip()
@@ -142,7 +154,6 @@ def render_task_toml(name: str, cb_task_id: str, domain: str, meta: dict) -> str
     if meta.get("task_kind"):
         kws.append(meta["task_kind"])
     kw_toml = ", ".join(f'"{k}"' for k in kws)
-    agent_timeout = float(meta.get("agent_timeout_sec", 900.0))
     return f"""\
 schema_version = "1.2"
 artifacts = []
@@ -161,7 +172,7 @@ dataset = "{HF_DATASET}"
 leaderboard = "{LEADERBOARD}"
 
 [verifier]
-timeout_sec = 1200.0
+timeout_sec = {verifier_timeout}
 
 [verifier.env]
 
@@ -201,6 +212,22 @@ url = "http://localhost:8200/mcp"
 """
 
 
+def read_source_timeouts(src: Path) -> tuple[float, float]:
+    """(verifier_timeout, agent_timeout) from the source task.toml.
+
+    Preserves the source's intent per task — single tasks are 1200/900, the
+    long-horizon marathon sessions are 18000/36000. Falls back to the single-
+    task defaults if the source omits them.
+    """
+    toml = src / "task.toml"
+    verifier, agent = 1200.0, 900.0
+    if toml.exists():
+        data = tomllib.loads(toml.read_text())
+        verifier = float(data.get("verifier", {}).get("timeout_sec", verifier))
+        agent = float(data.get("agent", {}).get("timeout_sec", agent))
+    return verifier, agent
+
+
 def emit_task(
     src: Path,
     out_dir: Path,
@@ -215,7 +242,13 @@ def emit_task(
     t = out_dir / task_id
     (t / "environment").mkdir(parents=True, exist_ok=True)
     (t / "tests").mkdir(parents=True, exist_ok=True)
-    (t / "task.toml").write_text(render_task_toml(name, cb_task_id, domain, meta))
+    verifier_timeout, agent_timeout = read_source_timeouts(src)
+    (t / "task.toml").write_text(
+        render_task_toml(
+            name, cb_task_id, domain, meta,
+            verifier_timeout=verifier_timeout, agent_timeout=agent_timeout,
+        )
+    )
     instr = src / "instruction.md"
     (t / "instruction.md").write_text(instr.read_text() if instr.exists() else f"# {task_id}\n")
     shutil.copyfile(DOCKERFILE, t / "environment" / "Dockerfile")
