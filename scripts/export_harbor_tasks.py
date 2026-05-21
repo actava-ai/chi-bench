@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import tomllib
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -37,13 +38,40 @@ FAMILIES = {
     "prior_auth_um": ("prior_auth_um/tasks/*", "prior_auth_um"),
     "prior_auth_provider": ("prior_auth_provider/tasks/*", "prior_auth_provider"),
     "care_management": ("care_management/tasks/*", "care_management"),
-    "prior_auth_e2e": ("prior_auth_e2e/tasks/*", "prior_auth_e2e"),
+    # NOTE: prior_auth_e2e is intentionally NOT exported to the Harbor hub. The
+    # provider<->payer arena needs the two-agent `dual-pa-e2e` harness (provider
+    # phase -> relay -> payer phase), which a stock single-agent `harbor run`
+    # cannot drive. E2E runs via the source repo / cb CLI instead.
 }
 MARATHON = {
     "marathon/prior_auth_um": "marathon_prior_auth_um",
     "marathon/prior_auth_provider": "marathon_prior_auth_provider",
     "marathon/care_management": "marathon_care_management",
 }
+
+# Harbor injects task env into the container ONLY through a task-shipped
+# docker-compose.yaml (base + build compose carry no `environment:` block).
+# CHI_BENCH_TASK_ID + HF_TOKEN are resolved from task.toml [environment.env]
+# into the compose subprocess env, then substituted here into the container.
+COMPOSE_YAML = """\
+services:
+  main:
+    environment:
+      CHI_BENCH_TASK_ID: "${CHI_BENCH_TASK_ID}"
+      HF_TOKEN: "${HF_TOKEN:-}"
+    # Gate `compose up --wait` on server readiness. The entrypoint fetches the
+    # gated handbook, boots `cb serve`, and waits for all 3 MCP servers before
+    # backgrounding; without a healthcheck Harbor proceeds while it is still
+    # booting and the verifier hits a connection-refused on :8100. Probe the
+    # payer MCP port (last to come up) so the agent/verifier only start once
+    # the world server is actually serving.
+    healthcheck:
+      test: ["CMD", "/workspace/.venv/bin/python", "-c", "import socket; socket.create_connection(('localhost', 8100), 2)"]
+      interval: 5s
+      timeout: 5s
+      retries: 48
+      start_period: 240s
+"""
 
 # Standard single-task verifier. CHI_BENCH_TASK_ID is in the persistent env
 # (task.toml [environment.env]); the scoring contract is baked at the
@@ -58,6 +86,7 @@ set -euo pipefail
 . /workspace/.venv/bin/activate
 mkdir -p /logs/verifier
 python -m chi_bench.verifier.task_runtime verify \\
+    --verifier-host localhost \\
     --expectations-path "/opt/chi-bench/tasks/${CHI_BENCH_TASK_ID}/fixtures/expectations.json"
 """
 
@@ -69,6 +98,7 @@ set -euo pipefail
 . /workspace/.venv/bin/activate
 mkdir -p /logs/verifier
 python -m chi_bench.verifier.session_verifier \\
+    --verifier-host localhost \\
     --fixtures-dir "/opt/chi-bench/tasks/${CHI_BENCH_TASK_ID}/fixtures" \\
     --output-dir /logs/verifier
 """
@@ -83,7 +113,7 @@ Hugging Face at build time. No registry image, no repo checkout required.
 The managed-care handbook is gated; the wrapper entrypoint downloads it at
 container start, so you must pass an approved HF token at run time:
 
-    harbor run -d {org}/chi-bench@<tag> -a <agent> -m <model> -e HF_TOKEN=<token>
+    HF_TOKEN=<token> harbor run -d {org}/chi-bench@<tag> -i {org}/<task> -a <agent> -m <model> -y
 
 This builds the image, downloads the handbook, boots the chi-Bench MCP servers,
 runs your agent, then scores with the baked-in verifier.
@@ -107,7 +137,15 @@ def load_meta(data_root: Path) -> dict[str, dict]:
     return out
 
 
-def render_task_toml(name: str, cb_task_id: str, domain: str, meta: dict) -> str:
+def render_task_toml(
+    name: str,
+    cb_task_id: str,
+    domain: str,
+    meta: dict,
+    *,
+    verifier_timeout: float,
+    agent_timeout: float,
+) -> str:
     title = meta.get("title", cb_task_id)
     excerpt = (meta.get("instruction_excerpt") or "").replace("\n", " ").strip()[:180]
     desc = f"chi-Bench {domain} task: {title}. {excerpt}".strip()
@@ -116,7 +154,6 @@ def render_task_toml(name: str, cb_task_id: str, domain: str, meta: dict) -> str
     if meta.get("task_kind"):
         kws.append(meta["task_kind"])
     kw_toml = ", ".join(f'"{k}"' for k in kws)
-    agent_timeout = float(meta.get("agent_timeout_sec", 900.0))
     return f"""\
 schema_version = "1.2"
 artifacts = []
@@ -135,7 +172,7 @@ dataset = "{HF_DATASET}"
 leaderboard = "{LEADERBOARD}"
 
 [verifier]
-timeout_sec = 1200.0
+timeout_sec = {verifier_timeout}
 
 [verifier.env]
 
@@ -153,6 +190,10 @@ allow_internet = true
 
 [environment.env]
 CHI_BENCH_TASK_ID = "{cb_task_id}"
+# Gated handbook token. Harbor resolves ${{VAR}} from the host env (or --env-file)
+# into the container env at start, where the wrapper entrypoint reads it. Supply
+# it via: HF_TOKEN=... harbor run ...  (or --env-file). --ae/--ek do NOT reach PID1.
+HF_TOKEN = "${{HF_TOKEN:-}}"
 
 [[environment.mcp_servers]]
 name = "chi-bench-provider"
@@ -171,6 +212,22 @@ url = "http://localhost:8200/mcp"
 """
 
 
+def read_source_timeouts(src: Path) -> tuple[float, float]:
+    """(verifier_timeout, agent_timeout) from the source task.toml.
+
+    Preserves the source's intent per task — single tasks are 1200/900, the
+    long-horizon marathon sessions are 18000/36000. Falls back to the single-
+    task defaults if the source omits them.
+    """
+    toml = src / "task.toml"
+    verifier, agent = 1200.0, 900.0
+    if toml.exists():
+        data = tomllib.loads(toml.read_text())
+        verifier = float(data.get("verifier", {}).get("timeout_sec", verifier))
+        agent = float(data.get("agent", {}).get("timeout_sec", agent))
+    return verifier, agent
+
+
 def emit_task(
     src: Path,
     out_dir: Path,
@@ -185,10 +242,17 @@ def emit_task(
     t = out_dir / task_id
     (t / "environment").mkdir(parents=True, exist_ok=True)
     (t / "tests").mkdir(parents=True, exist_ok=True)
-    (t / "task.toml").write_text(render_task_toml(name, cb_task_id, domain, meta))
+    verifier_timeout, agent_timeout = read_source_timeouts(src)
+    (t / "task.toml").write_text(
+        render_task_toml(
+            name, cb_task_id, domain, meta,
+            verifier_timeout=verifier_timeout, agent_timeout=agent_timeout,
+        )
+    )
     instr = src / "instruction.md"
     (t / "instruction.md").write_text(instr.read_text() if instr.exists() else f"# {task_id}\n")
     shutil.copyfile(DOCKERFILE, t / "environment" / "Dockerfile")
+    (t / "environment" / "docker-compose.yaml").write_text(COMPOSE_YAML)
     ts = t / "tests" / "test.sh"
     ts.write_text(SESSION_TEST_SH if session else TEST_SH)
     ts.chmod(0o755)

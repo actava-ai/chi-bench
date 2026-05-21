@@ -33,13 +33,22 @@ tasks**.
 > entrypoint lets Harbor forward an approved `HF_TOKEN` as a normal runtime env
 > var instead.
 >
-> **Running therefore requires handbook access:**
+> **Running therefore requires handbook access.** Harbor resolves `${HF_TOKEN}`
+> (declared in each task's `task.toml [environment.env]`) from your shell or
+> `--env-file` and injects it into the container via the task's
+> `environment/docker-compose.yaml`. `-y` auto-confirms the "load from env"
+> prompt; `-i` selects one task (omit to run all 78):
 > ```bash
-> harbor run -d actava-ai/chi-bench@<tag> -a <agent> -m <model> \
->     -e HF_TOKEN=<your-approved-hf-token>
+> HF_TOKEN=<your-approved-hf-token> harbor run \
+>     -d actava-ai/chi-bench@<tag> \
+>     -i actava-ai/pa_t016_t016_o001_p01_p2p_payer \
+>     -a <agent> -m <model> -y
 > ```
-> Without an approved token the container exits early with a clear message.
-> The public dataset (`actava/chi-bench`) needs no token.
+> Note: the run flag is **not** `-e` (that is the environment *type*) and
+> `--ae`/`--ek` do **not** reach the entrypoint — the `${HF_TOKEN}` template +
+> compose `environment:` block is the only path that delivers it to PID1.
+> Without an approved token the container exits early (code 78). The public
+> dataset (`actava/chi-bench`) needs no token.
 
 ## What ships in a hub task (and what does not)
 
@@ -59,7 +68,8 @@ Both write the binary reward to `/logs/verifier/reward.json`.
 ## Regenerating + publishing
 
 ```bash
-# 1. Export 101 self-contained Harbor task dirs from the dataset tree
+# 1. Export the 78 self-contained Harbor task dirs from the dataset tree
+#    (75 single-domain + 3 marathon; prior_auth_e2e is intentionally excluded)
 uv run python scripts/export_harbor_tasks.py \
     --data-root data --out logs/harbor_export --org actava-ai
 
@@ -68,13 +78,29 @@ cd logs/harbor_export
 uvx harbor auth login                       # one-time, GitHub flow
 uvx harbor init "actava-ai/chi-bench" --dataset --description "…" --author "actava-ai"
 uvx harbor add tasks --scan
-uvx harbor publish tasks --private          # publish the 101 task packages
+uvx harbor publish tasks --private          # publish the 78 task packages
 uvx harbor publish . -t v1.0.0 --private --no-tasks   # publish the dataset
 # verify the listing, then flip to public:
 #   uvx harbor dataset visibility actava-ai/chi-bench --public
 ```
 
-`--data-root` can point at a local HF clone of `actava/chi-bench`; it expects
-the `prior_auth_um/`, `prior_auth_provider/`, `care_management/`,
-`prior_auth_e2e/`, and `marathon/` families plus the optional `tasks.jsonl`
-metadata sidecar.
+`--data-root` can point at a local HF clone of `actava/chi-bench`; it reads the
+`prior_auth_um/`, `prior_auth_provider/`, `care_management/`, and `marathon/`
+families (plus the optional `tasks.jsonl` metadata sidecar). Per-task timeouts
+are copied from each source `task.toml`, so marathon sessions keep their long
+`agent=36000s` / `verifier=18000s` budgets.
+
+## E2E is not exported to the hub
+
+`prior_auth_e2e` (23 provider↔payer arena tasks) is deliberately **excluded**
+from the hub export. The arena needs the two-agent `dual-pa-e2e` harness
+(`chi_bench.experiment.agents.dual_pa_e2e_harness:DualPaE2EHarness`) which
+sequences a provider phase → relay → payer phase in one trial — a stock
+single-agent `harbor run` cannot drive it. Run E2E from this repo / the HF
+dataset instead:
+
+```bash
+cb experiment run --dataset data/prior_auth_e2e/tasks/<id> \
+    --agent dual-pa-e2e --provider-model <m> --payer-model <m>
+# or the full arena: ./scripts/run_table.sh table2   (configs/experiments/table2_e2e_arena.yaml)
+```
