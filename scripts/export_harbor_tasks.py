@@ -45,6 +45,30 @@ MARATHON = {
     "marathon/care_management": "marathon_care_management",
 }
 
+# Harbor injects task env into the container ONLY through a task-shipped
+# docker-compose.yaml (base + build compose carry no `environment:` block).
+# CHI_BENCH_TASK_ID + HF_TOKEN are resolved from task.toml [environment.env]
+# into the compose subprocess env, then substituted here into the container.
+COMPOSE_YAML = """\
+services:
+  main:
+    environment:
+      CHI_BENCH_TASK_ID: "${CHI_BENCH_TASK_ID}"
+      HF_TOKEN: "${HF_TOKEN:-}"
+    # Gate `compose up --wait` on server readiness. The entrypoint fetches the
+    # gated handbook, boots `cb serve`, and waits for all 3 MCP servers before
+    # backgrounding; without a healthcheck Harbor proceeds while it is still
+    # booting and the verifier hits a connection-refused on :8100. Probe the
+    # payer MCP port (last to come up) so the agent/verifier only start once
+    # the world server is actually serving.
+    healthcheck:
+      test: ["CMD", "/workspace/.venv/bin/python", "-c", "import socket; socket.create_connection(('localhost', 8100), 2)"]
+      interval: 5s
+      timeout: 5s
+      retries: 48
+      start_period: 240s
+"""
+
 # Standard single-task verifier. CHI_BENCH_TASK_ID is in the persistent env
 # (task.toml [environment.env]); the scoring contract is baked at the
 # deterministic per-task path (the entrypoint deliberately does NOT expose
@@ -58,6 +82,7 @@ set -euo pipefail
 . /workspace/.venv/bin/activate
 mkdir -p /logs/verifier
 python -m chi_bench.verifier.task_runtime verify \\
+    --verifier-host localhost \\
     --expectations-path "/opt/chi-bench/tasks/${CHI_BENCH_TASK_ID}/fixtures/expectations.json"
 """
 
@@ -69,6 +94,7 @@ set -euo pipefail
 . /workspace/.venv/bin/activate
 mkdir -p /logs/verifier
 python -m chi_bench.verifier.session_verifier \\
+    --verifier-host localhost \\
     --fixtures-dir "/opt/chi-bench/tasks/${CHI_BENCH_TASK_ID}/fixtures" \\
     --output-dir /logs/verifier
 """
@@ -153,6 +179,10 @@ allow_internet = true
 
 [environment.env]
 CHI_BENCH_TASK_ID = "{cb_task_id}"
+# Gated handbook token. Harbor resolves ${{VAR}} from the host env (or --env-file)
+# into the container env at start, where the wrapper entrypoint reads it. Supply
+# it via: HF_TOKEN=... harbor run ...  (or --env-file). --ae/--ek do NOT reach PID1.
+HF_TOKEN = "${{HF_TOKEN:-}}"
 
 [[environment.mcp_servers]]
 name = "chi-bench-provider"
@@ -189,6 +219,7 @@ def emit_task(
     instr = src / "instruction.md"
     (t / "instruction.md").write_text(instr.read_text() if instr.exists() else f"# {task_id}\n")
     shutil.copyfile(DOCKERFILE, t / "environment" / "Dockerfile")
+    (t / "environment" / "docker-compose.yaml").write_text(COMPOSE_YAML)
     ts = t / "tests" / "test.sh"
     ts.write_text(SESSION_TEST_SH if session else TEST_SH)
     ts.chmod(0o755)
