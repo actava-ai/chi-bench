@@ -8,24 +8,38 @@ as `actava-ai/chi-bench` so Harbor users can discover and run it with
 
 The hub does **not** host a chi-Bench image and chi-Bench does **not** push one
 to any registry. Instead, each exported task ships a self-contained
-`environment/Dockerfile` (`docker/Dockerfile.harbor`) that, at build time:
+`environment/Dockerfile` (`docker/Dockerfile.harbor`):
 
+**At build time** (Harbor builds the image on `harbor run`, secret-free):
 1. `git clone`s the `chi_bench` package from this public GitHub repo;
-2. `hf download`s the task fixtures/worlds (`actava/chi-bench`) and the
-   managed-care handbook (`actava/managed-care-operations-handbook`) from
-   Hugging Face;
-3. arranges them into the `/opt/chi-bench` layout the server + entrypoint
-   expect.
+2. `hf download`s the task fixtures/worlds from the public dataset
+   (`actava/chi-bench`);
+3. arranges them into the `/opt/chi-bench` layout the server expects.
 
-Harbor builds this image on `harbor run` from the task archive alone. The
-trial is selected by `CHI_BENCH_TASK_ID` (set in `task.toml [environment.env]`),
-so the Dockerfile is **identical across all tasks**.
+**At container start** (wrapper entrypoint, `harbor-entrypoint.sh`):
+4. downloads the **gated** managed-care handbook
+   (`actava/managed-care-operations-handbook`) into
+   `/workspace/skills/` using `HF_TOKEN` from the container env, then hands off
+   to the real chi-Bench entrypoint.
 
-> **Prerequisite:** both `actava/chi-bench` and
-> `actava/managed-care-operations-handbook` must be **public** on Hugging Face —
-> Harbor task builds do not pass build secrets, so the `hf download` calls must
-> need no token. If the handbook is gated, builders must supply `HF_TOKEN` as a
-> BuildKit secret.
+The trial is selected by `CHI_BENCH_TASK_ID` (set in
+`task.toml [environment.env]`), so the Dockerfile is **identical across all
+tasks**.
+
+> **Why the handbook is fetched at runtime, not build time.** Harbor's docker
+> environment builds from a compose file with only `build: context` — it passes
+> **no build secrets**. The handbook is `gated: manual` on HF, so a build-time
+> `hf download` would 401 with no way to inject a token. Fetching it in the
+> entrypoint lets Harbor forward an approved `HF_TOKEN` as a normal runtime env
+> var instead.
+>
+> **Running therefore requires handbook access:**
+> ```bash
+> harbor run -d actava-ai/chi-bench@<tag> -a <agent> -m <model> \
+>     -e HF_TOKEN=<your-approved-hf-token>
+> ```
+> Without an approved token the container exits early with a clear message.
+> The public dataset (`actava/chi-bench`) needs no token.
 
 ## What ships in a hub task (and what does not)
 

@@ -1,18 +1,23 @@
-# Self-contained chi-Bench Harbor task environment (route X: fetch-at-build).
+# Self-contained chi-Bench Harbor task environment (fetch-at-build).
 #
 # Unlike chi-bench/docker/Dockerfile (which COPYs code+data from the repo
-# root build context), this Dockerfile builds with NO repo checkout: it
-# fetches the chi_bench package from GitHub and the fixtures/worlds +
-# handbook from Hugging Face at build time. Harbor builds it on `harbor run`
-# from the task archive alone — no hosted/registry image required.
+# root build context), this builds with NO repo checkout and needs no hosted
+# image. Harbor builds it on `harbor run` from the task archive alone:
+#   - BUILD time (secret-free): clone chi_bench from GitHub + download the
+#     public fixtures/worlds dataset (actava/chi-bench) from Hugging Face.
+#   - RUNTIME (wrapper entrypoint): download the GATED managed-care handbook
+#     (actava/managed-care-operations-handbook) using HF_TOKEN from the
+#     container env, then hand off to the real chi-bench entrypoint.
 #
 # Per-task selection is via CHI_BENCH_TASK_ID, injected from task.toml
-# [environment.env]; this file is IDENTICAL across all 101 tasks.
+# [environment.env]; this file is IDENTICAL across all tasks.
 #
-# PREREQUISITE: actava/chi-bench AND actava/managed-care-operations-handbook
-# must be PUBLIC on HF, so the `hf download` calls need no token (Harbor
-# task builds do not pass build secrets). If either stays gated, builders
-# must supply HF_TOKEN as a buildkit secret.
+# Why runtime (not build) for the handbook: Harbor's docker environment build
+# passes NO build secrets, and the handbook is gated:manual on HF — a
+# build-time `hf download` would 401. Fetching it in the entrypoint lets
+# Harbor forward an approved HF_TOKEN as a normal runtime env var. Running
+# therefore requires handbook access:
+#   harbor run -d actava-ai/chi-bench@<tag> -a <agent> -e HF_TOKEN=<token>
 
 # syntax=docker/dockerfile:1.7
 FROM python:3.12-slim AS base
@@ -52,12 +57,14 @@ RUN git clone --depth 1 --branch "${CHI_BENCH_REF}" \
     && /workspace/.venv/bin/playwright install --with-deps chromium 2>/dev/null \
        || python -m playwright install --with-deps chromium
 
-# --- 2. fixtures/worlds + handbook from Hugging Face (must be PUBLIC) ---
+# --- 2. fixtures/worlds from Hugging Face (public dataset) ---
+# The managed-care handbook (actava/managed-care-operations-handbook) is GATED.
+# Harbor's docker environment build passes no build secrets, so the handbook
+# canNOT be fetched at build time — it is downloaded at RUNTIME by the wrapper
+# entrypoint using HF_TOKEN from the container env (see harbor-entrypoint).
 ARG CHI_BENCH_DATASET_REV=chi-bench-v1.0.0
 RUN hf download actava/chi-bench --repo-type dataset --revision "${CHI_BENCH_DATASET_REV}" \
-        --local-dir /tmp/chi-bench-data \
-    && hf download actava/managed-care-operations-handbook --repo-type dataset \
-        --local-dir /workspace/skills/managed-care-operations-handbook
+        --local-dir /tmp/chi-bench-data
 
 # --- 3. arrange data into the layout the server + entrypoint expect ---
 #     (mirrors chi-bench/docker/Dockerfile runtime stage, lines 82-92)
@@ -78,6 +85,27 @@ RUN mkdir -p /opt/chi-bench/worlds /opt/chi-bench/tasks /opt/chi-bench-task-asse
 RUN echo 'export PATH="/workspace/.venv/bin:$PATH"' > /etc/profile.d/chi-bench.sh \
     && mkdir -p /logs/artifacts
 
+# Wrapper entrypoint: the handbook is gated and not baked at build, so fetch it
+# at container start using HF_TOKEN from the runtime env (Harbor forwards env
+# vars but not build secrets), then hand off to the real chi-bench entrypoint.
+RUN printf '%s\n' \
+    '#!/bin/sh' \
+    'set -e' \
+    'HB=/workspace/skills/managed-care-operations-handbook' \
+    'if [ ! -d "$HB" ] || [ -z "$(ls -A "$HB" 2>/dev/null)" ]; then' \
+    '  TOKEN="${HF_TOKEN:-${HUGGING_FACE_HUB_TOKEN:-}}"' \
+    '  if [ -z "$TOKEN" ]; then' \
+    '    echo "harbor-entrypoint: gated handbook missing and no HF_TOKEN in env." >&2' \
+    '    echo "chi-bench is gated; run with: harbor run -d actava-ai/chi-bench ... -e HF_TOKEN=<approved-token>" >&2' \
+    '    exit 78' \
+    '  fi' \
+    '  echo "harbor-entrypoint: fetching gated handbook at runtime..." >&2' \
+    '  HF_TOKEN="$TOKEN" hf download actava/managed-care-operations-handbook --repo-type dataset --local-dir /workspace/skills >&2' \
+    'fi' \
+    'exec /usr/local/bin/entrypoint.sh "$@"' \
+    > /usr/local/bin/harbor-entrypoint.sh \
+    && chmod +x /usr/local/bin/harbor-entrypoint.sh
+
 ENV CHI_BENCH_RUNTIME_DIR=/tmp/chi-bench-runtime \
     CHI_BENCH_WORLDS_DIR=/opt/chi-bench/worlds \
     CHI_BENCH_PAYER_MODE=agent \
@@ -86,5 +114,5 @@ ENV CHI_BENCH_RUNTIME_DIR=/tmp/chi-bench-runtime \
     IS_SANDBOX=1
 
 EXPOSE 8020 8023 8100 8200
-ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/harbor-entrypoint.sh"]
 CMD ["sleep", "infinity"]

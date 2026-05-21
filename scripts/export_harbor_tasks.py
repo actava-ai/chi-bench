@@ -80,8 +80,13 @@ This Harbor-hub task is self-contained: `environment/Dockerfile` clones
 chi_bench from {repo} and downloads fixtures + the managed-care handbook from
 Hugging Face at build time. No registry image, no repo checkout required.
 
-`harbor run -d {org}/chi-bench@<tag> ...` builds the image, boots the
-chi-Bench MCP servers, runs your agent, then scores with the baked-in verifier.
+The managed-care handbook is gated; the wrapper entrypoint downloads it at
+container start, so you must pass an approved HF token at run time:
+
+    harbor run -d {org}/chi-bench@<tag> -a <agent> -m <model> -e HF_TOKEN=<token>
+
+This builds the image, downloads the handbook, boots the chi-Bench MCP servers,
+runs your agent, then scores with the baked-in verifier.
 
 - Source: {repo}
 - Dataset: {dataset}
