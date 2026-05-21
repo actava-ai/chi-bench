@@ -1,0 +1,90 @@
+# Self-contained chi-Bench Harbor task environment (route X: fetch-at-build).
+#
+# Unlike chi-bench/docker/Dockerfile (which COPYs code+data from the repo
+# root build context), this Dockerfile builds with NO repo checkout: it
+# fetches the chi_bench package from GitHub and the fixtures/worlds +
+# handbook from Hugging Face at build time. Harbor builds it on `harbor run`
+# from the task archive alone — no hosted/registry image required.
+#
+# Per-task selection is via CHI_BENCH_TASK_ID, injected from task.toml
+# [environment.env]; this file is IDENTICAL across all 101 tasks.
+#
+# PREREQUISITE: actava/chi-bench AND actava/managed-care-operations-handbook
+# must be PUBLIC on HF, so the `hf download` calls need no token (Harbor
+# task builds do not pass build secrets). If either stays gated, builders
+# must supply HF_TOKEN as a buildkit secret.
+
+# syntax=docker/dockerfile:1.7
+FROM python:3.12-slim AS base
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/workspace/.venv \
+    PATH="/workspace/.venv/bin:${PATH}"
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl git tini \
+    && rm -rf /var/lib/apt/lists/*
+
+# judge-harness:claude-code  — Node 20 + Claude Code CLI (verifier phase)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && npm install -g @anthropic-ai/claude-code@latest \
+    && command -v claude \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+RUN pip install --no-cache-dir uv "huggingface_hub[cli]"
+
+# --- 1. chi_bench code from the public GitHub repo (pin to a tag/sha) ---
+ARG CHI_BENCH_REF=main
+RUN git clone --depth 1 --branch "${CHI_BENCH_REF}" \
+        https://github.com/actava-ai/chi-bench /workspace/chi-bench-src \
+    && cp /workspace/chi-bench-src/pyproject.toml /workspace/chi-bench-src/uv.lock /workspace/ \
+    && cp -r /workspace/chi-bench-src/src /workspace/src \
+    && cp /workspace/chi-bench-src/docker/entrypoint.sh /usr/local/bin/entrypoint.sh \
+    && chmod +x /usr/local/bin/entrypoint.sh \
+    && (uv sync --no-dev || pip install --no-cache-dir /workspace/chi-bench-src) \
+    && /workspace/.venv/bin/playwright install --with-deps chromium 2>/dev/null \
+       || python -m playwright install --with-deps chromium
+
+# --- 2. fixtures/worlds + handbook from Hugging Face (must be PUBLIC) ---
+ARG CHI_BENCH_DATASET_REV=chi-bench-v1.0.0
+RUN hf download actava/chi-bench --repo-type dataset --revision "${CHI_BENCH_DATASET_REV}" \
+        --local-dir /tmp/chi-bench-data \
+    && hf download actava/managed-care-operations-handbook --repo-type dataset \
+        --local-dir /workspace/skills/managed-care-operations-handbook
+
+# --- 3. arrange data into the layout the server + entrypoint expect ---
+#     (mirrors chi-bench/docker/Dockerfile runtime stage, lines 82-92)
+RUN mkdir -p /opt/chi-bench/worlds /opt/chi-bench/tasks /opt/chi-bench-task-assets \
+    && D=/tmp/chi-bench-data \
+    && cp -r "$D"/prior_auth_provider/shared/worlds/. /opt/chi-bench/worlds/ 2>/dev/null || true \
+    && cp -r "$D"/prior_auth_um/shared/worlds/.       /opt/chi-bench/worlds/ 2>/dev/null || true \
+    && cp -r "$D"/care_management/shared/worlds/.     /opt/chi-bench/worlds/ 2>/dev/null || true \
+    && cp -r "$D"/prior_auth_e2e/worlds/.             /opt/chi-bench/worlds/ 2>/dev/null || true \
+    && cp -r "$D"/prior_auth_provider/tasks/.         /opt/chi-bench/tasks/  2>/dev/null || true \
+    && cp -r "$D"/prior_auth_um/tasks/.               /opt/chi-bench/tasks/  2>/dev/null || true \
+    && cp -r "$D"/care_management/tasks/.             /opt/chi-bench/tasks/  2>/dev/null || true \
+    && cp -r "$D"/prior_auth_e2e/tasks/.              /opt/chi-bench/tasks/  2>/dev/null || true \
+    && cp -r "$D"/marathon                            /opt/chi-bench/tasks/marathon 2>/dev/null || true \
+    && cp "$D"/care_management/shared/tool_reference.md /opt/chi-bench-task-assets/tool_reference.md 2>/dev/null || true \
+    && rm -rf /tmp/chi-bench-data
+
+RUN echo 'export PATH="/workspace/.venv/bin:$PATH"' > /etc/profile.d/chi-bench.sh \
+    && mkdir -p /logs/artifacts
+
+ENV CHI_BENCH_RUNTIME_DIR=/tmp/chi-bench-runtime \
+    CHI_BENCH_WORLDS_DIR=/opt/chi-bench/worlds \
+    CHI_BENCH_PAYER_MODE=agent \
+    CHI_BENCH_WORKSPACE_ROOT=/logs/artifacts/workspaces \
+    CHI_BENCH_RAW_ROOT=/srv/chi-bench/raw \
+    IS_SANDBOX=1
+
+EXPOSE 8020 8023 8100 8200
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]
+CMD ["sleep", "infinity"]
