@@ -7,6 +7,8 @@
 [![Docs](https://img.shields.io/badge/Docs-chi--bench-ff5baf?style=for-the-badge&logo=readthedocs&logoColor=white)](https://actava.ai/benchmarks/docs)
 [![arXiv](https://img.shields.io/badge/arXiv-2605.16679-b31b1b?style=for-the-badge&logo=arxiv&logoColor=white)](https://arxiv.org/pdf/2605.16679)
 [![Dataset](https://img.shields.io/badge/Dataset-chi--bench-yellow?style=for-the-badge&logo=huggingface&logoColor=white)](https://huggingface.co/datasets/actava/chi-bench)
+[![Handbook](https://img.shields.io/badge/Handbook-gated-yellow?style=for-the-badge&logo=huggingface&logoColor=white)](https://huggingface.co/datasets/actava/managed-care-operations-handbook)
+[![Harbor hub](https://img.shields.io/badge/Harbor_hub-actava--ai/chi--bench-00b8d4?style=for-the-badge)](https://hub.harborframework.com/datasets/actava-ai/chi-bench)
 
 [![Discord](https://img.shields.io/badge/Join_Our_Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/eQfMpUQtda)
 [![Slack](https://img.shields.io/badge/Join_Our_Slack-4A154B?style=for-the-badge&logo=slack&logoColor=white)](https://join.slack.com/share/enQtMTExMTE4MDYyNTMzOTktMzZiMGE2MjYxYjRmNzYyMTFiMDVkZmJiNzZiYWUwNWMwNzJkMGRiZDIwYmU5ZWM5NDQyY2E2ZDEyNTcxZWQ1ZA)
@@ -73,15 +75,14 @@ echo "$REV" > data/.chi-bench-version
 
 The `data/.chi-bench-version` pin is what submission preflight verifies against your config's `dataset.version`; write it whenever you change revisions.
 
-**4. Managed-Care Operations Handbook (request access).**
+**4. Managed-Care Operations Handbook (gated, request access).**
 
-The handbook (1,279 markdown documents) lives off Hugging Face because of size and the curation provenance with clinical collaborators. To request access, fill out the form at **[actava.ai/benchmarks/contact](https://actava.ai/benchmarks/contact)** (check **"Request access to handbook"**); we'll send a download link within one business day upon approval.
-
-Once you have the tarball, extract it into `data/skills/`:
+The handbook (1,279 markdown documents) is distributed separately as the **gated** Hugging Face dataset **[actava/managed-care-operations-handbook](https://huggingface.co/datasets/actava/managed-care-operations-handbook)** (size + curation provenance with clinical collaborators). Request access on that repo's page; once approved, download it into `data/skills/` with your HF token:
 
 ```bash
-mkdir -p data/skills
-tar -xzf managed-care-operations-handbook.tar.gz -C data/skills/
+uv run huggingface-cli download actava/managed-care-operations-handbook \
+    --repo-type dataset --local-dir data/skills/
+# -> data/skills/managed-care-operations-handbook/{SKILL.md,references/}
 ```
 
 **5. Build the Docker image** (~5 min, one-time).
@@ -126,6 +127,19 @@ uv run cb experiment run \
 Trial output lands under `logs/experiments/.../trial_*/`. Read `result.json` for the verifier reward and `verifier/scorecard.json` for per-check verdicts.
 
 Full flag-by-flag CLI reference: [`docs/cli.md`](docs/cli.md). Web walkthrough of the same flow: **[actava.ai/benchmarks/docs/quickstart](https://actava.ai/benchmarks/docs/quickstart)**.
+
+## Run from the Harbor hub (no source checkout)
+
+chi-Bench is also published to the [Harbor hub](https://hub.harborframework.com/datasets/actava-ai/chi-bench) as `actava-ai/chi-bench` (101 tasks). Each task ships a self-contained Dockerfile that Harbor builds on demand — cloning this repo and downloading the [fixtures dataset](https://huggingface.co/datasets/actava/chi-bench) at build — so you can run a trial without cloning anything yourself.
+
+**Prerequisites:** Docker + the [Harbor CLI](https://github.com/harbor-framework/harbor), and an **approved HF token** for the gated [handbook](https://huggingface.co/datasets/actava/managed-care-operations-handbook) (the container downloads it at start; the fixtures dataset itself is public).
+
+```bash
+harbor run -d actava-ai/chi-bench@v1.0.1 -a claude-code -m anthropic/claude-opus-4-7 \
+    -e HF_TOKEN=<your-approved-hf-token>
+```
+
+Without an approved token the container exits early with a clear message. See [`docs/harbor-hub.md`](docs/harbor-hub.md) for how the fetch-at-build environment works and how the listing is regenerated/published. This path is for ad-hoc runs and discovery; the **paper-reproduction and leaderboard-submission flows use the `cb` CLI** described above.
 
 ### Reading the verifier output
 
