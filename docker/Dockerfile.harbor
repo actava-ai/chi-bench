@@ -62,7 +62,7 @@ RUN git clone --depth 1 --branch "${CHI_BENCH_REF}" \
 # Harbor's docker environment build passes no build secrets, so the handbook
 # canNOT be fetched at build time — it is downloaded at RUNTIME by the wrapper
 # entrypoint using HF_TOKEN from the container env (see harbor-entrypoint).
-ARG CHI_BENCH_DATASET_REV=main
+ARG CHI_BENCH_DATASET_REV=chi-bench-v1.0.0
 RUN hf download actava/chi-bench --repo-type dataset --revision "${CHI_BENCH_DATASET_REV}" \
         --local-dir /tmp/chi-bench-data
 
