@@ -140,7 +140,7 @@ chi-Bench is also published to the [Harbor hub](https://hub.harborframework.com/
 HF_TOKEN=<your-approved-hf-token> harbor run \
     -d actava-ai/chi-bench@v1.0.1 \
     -i actava-ai/pa_t016_t016_o001_p01_p2p_payer \
-    -a claude-code -m anthropic/claude-opus-4-7 -y
+    -a claude-code -m claude-opus-4-7 -y
 ```
 
 `HF_TOKEN` is read from your shell (or `--env-file`) and forwarded into the container — `-y` auto-confirms that prompt. Drop `-i …` to run all 78 tasks. Without an approved token the container exits early with a clear message. See [`docs/harbor-hub.md`](docs/harbor-hub.md) for how the fetch-at-build environment works and how the listing is regenerated/published. This path is for ad-hoc runs and discovery; the **paper-reproduction and leaderboard-submission flows use the `cb` CLI** described above.

@@ -47,6 +47,11 @@ tasks**.
 > Note: the run flag is **not** `-e` (that is the environment *type*) and
 > `--ae`/`--ek` do **not** reach the entrypoint — the `${HF_TOKEN}` template +
 > compose `environment:` block is the only path that delivers it to PID1.
+>
+> For `-a claude-code`, pass the **bare** Anthropic model id (e.g.
+> `claude-opus-4-7`, `claude-sonnet-4-6`) — the `anthropic/` prefix 404s because
+> `harbor run` forwards the model verbatim to the native CLI. The `vendor/`
+> prefix form is only for OpenRouter-routed agents (codex / openai-agents).
 > Without an approved token the container exits early (code 78). The public
 > dataset (`actava/chi-bench`) needs no token.
 

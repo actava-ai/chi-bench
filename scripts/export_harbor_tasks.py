@@ -59,6 +59,26 @@ services:
     environment:
       CHI_BENCH_TASK_ID: "${CHI_BENCH_TASK_ID}"
       HF_TOKEN: "${HF_TOKEN:-}"
+      # Model credentials + toggles forwarded into the container so the
+      # in-container server (p2p / patient simulators) and the WorkspaceJudge
+      # verifier can call their models. Resolved from the runner's env (or
+      # --env-file). Empty defaults => only set when the runner provides them.
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      OPENAI_BASE_URL: "${OPENAI_BASE_URL:-}"
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      XAI_API_KEY: "${XAI_API_KEY:-}"
+      CLAUDE_CODE_OAUTH_TOKEN: "${CLAUDE_CODE_OAUTH_TOKEN:-}"
+      CHI_BENCH_JUDGE_MODEL: "${CHI_BENCH_JUDGE_MODEL:-}"
+      CHI_BENCH_JUDGE_TIMEOUT_S: "${CHI_BENCH_JUDGE_TIMEOUT_S:-}"
+      CHI_BENCH_JUDGE_NUM_VOTES: "${CHI_BENCH_JUDGE_NUM_VOTES:-}"
+      CHI_BENCH_PATIENT_SIM_MODEL: "${CHI_BENCH_PATIENT_SIM_MODEL:-}"
+      CHI_BENCH_P2P_SIMULATOR_MODEL: "${CHI_BENCH_P2P_SIMULATOR_MODEL:-}"
+      CHI_BENCH_TOOL_MODE: "${CHI_BENCH_TOOL_MODE:-}"
+      CHI_BENCH_MCP_TOOL_SEP: "${CHI_BENCH_MCP_TOOL_SEP:-}"
+      CHI_BENCH_PAYER_MCP_PROFILE: "${CHI_BENCH_PAYER_MCP_PROFILE:-}"
+      CHI_BENCH_SKILLS_ABLATE: "${CHI_BENCH_SKILLS_ABLATE:-}"
     # Gate `compose up --wait` on server readiness. The entrypoint fetches the
     # gated handbook, boots `cb serve`, and waits for all 3 MCP servers before
     # backgrounding; without a healthcheck Harbor proceeds while it is still
@@ -194,6 +214,26 @@ CHI_BENCH_TASK_ID = "{cb_task_id}"
 # into the container env at start, where the wrapper entrypoint reads it. Supply
 # it via: HF_TOKEN=... harbor run ...  (or --env-file). --ae/--ek do NOT reach PID1.
 HF_TOKEN = "${{HF_TOKEN:-}}"
+# Model credentials + toggles for the in-container server simulators and the
+# WorkspaceJudge verifier. resolve_env_vars() reads ${{VAR}} from the runner's
+# env into the compose subprocess env; the compose `environment:` block then
+# substitutes them into the container. Empty default => optional.
+ANTHROPIC_API_KEY = "${{ANTHROPIC_API_KEY:-}}"
+OPENAI_API_KEY = "${{OPENAI_API_KEY:-}}"
+OPENAI_BASE_URL = "${{OPENAI_BASE_URL:-}}"
+OPENROUTER_API_KEY = "${{OPENROUTER_API_KEY:-}}"
+GEMINI_API_KEY = "${{GEMINI_API_KEY:-}}"
+XAI_API_KEY = "${{XAI_API_KEY:-}}"
+CLAUDE_CODE_OAUTH_TOKEN = "${{CLAUDE_CODE_OAUTH_TOKEN:-}}"
+CHI_BENCH_JUDGE_MODEL = "${{CHI_BENCH_JUDGE_MODEL:-}}"
+CHI_BENCH_JUDGE_TIMEOUT_S = "${{CHI_BENCH_JUDGE_TIMEOUT_S:-}}"
+CHI_BENCH_JUDGE_NUM_VOTES = "${{CHI_BENCH_JUDGE_NUM_VOTES:-}}"
+CHI_BENCH_PATIENT_SIM_MODEL = "${{CHI_BENCH_PATIENT_SIM_MODEL:-}}"
+CHI_BENCH_P2P_SIMULATOR_MODEL = "${{CHI_BENCH_P2P_SIMULATOR_MODEL:-}}"
+CHI_BENCH_TOOL_MODE = "${{CHI_BENCH_TOOL_MODE:-}}"
+CHI_BENCH_MCP_TOOL_SEP = "${{CHI_BENCH_MCP_TOOL_SEP:-}}"
+CHI_BENCH_PAYER_MCP_PROFILE = "${{CHI_BENCH_PAYER_MCP_PROFILE:-}}"
+CHI_BENCH_SKILLS_ABLATE = "${{CHI_BENCH_SKILLS_ABLATE:-}}"
 
 [[environment.mcp_servers]]
 name = "chi-bench-provider"
