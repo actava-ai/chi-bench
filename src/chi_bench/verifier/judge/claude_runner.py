@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import subprocess
 import tempfile
@@ -493,6 +494,18 @@ class ClaudeAgentRunner:
     def _ensure_authenticated(self) -> None:
         if self._auth_checked:
             return
+        # Default auth path: ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN). The
+        # judge is documented to run on the Anthropic API key (docs/judge.md),
+        # and inside a sandbox there is normally no logged-in Claude Code
+        # session — `claude auth status` reports loggedIn:false for a bare env
+        # key and would raise below. Recognise the key as the auth method and
+        # skip the probe; _subprocess_env then keeps it in the CLI env (the
+        # api_key branch is not stripped).
+        if os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"):
+            self._auth_checked = True
+            self._auth_logged_in = True
+            self._auth_method = "api_key"
+            return
         try:
             result = subprocess.run(
                 ["claude", "auth", "status"],
@@ -511,7 +524,8 @@ class ClaudeAgentRunner:
         if payload.get("loggedIn") is False:
             auth_method = payload.get("authMethod") or "unknown"
             raise ClaudeAuthError(
-                "Claude CLI is not authenticated. Run `claude auth login` and retry. "
+                "Claude CLI is not authenticated and no ANTHROPIC_API_KEY is set. "
+                "Set ANTHROPIC_API_KEY, or run `claude auth login`, then retry. "
                 f"(authMethod={auth_method})"
             )
         self._auth_checked = True
@@ -659,8 +673,6 @@ class ClaudeAgentRunner:
 
     def _subprocess_env(self) -> dict[str, str] | None:
         """Build env dict that ensures CLAUDE_CODE_MAX_OUTPUT_TOKENS is set."""
-        import os
-
         existing = os.environ.get("CLAUDE_CODE_MAX_OUTPUT_TOKENS")
         target = self.max_output_tokens or (None if existing else self.DEFAULT_MAX_OUTPUT_TOKENS)
         env: dict[str, str] | None
@@ -670,9 +682,10 @@ class ClaudeAgentRunner:
             env = os.environ.copy()
             env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(target)
 
-        # Prefer the local Claude Code session/OAuth auth path when the CLI is
-        # already logged in. This avoids repo-level API keys silently taking
-        # precedence and routing synthesis through the wrong quota pool.
+        # Fall back to a logged-in Claude Code session/OAuth path only when no
+        # API key is present — _ensure_authenticated sets _auth_method="api_key"
+        # whenever ANTHROPIC_API_KEY/ANTHROPIC_AUTH_TOKEN is set, so with a key
+        # the judge keeps it in the CLI env and scores on api.anthropic.com.
         if self._auth_logged_in and self._auth_method not in {
             "api_key",
             "api-key",

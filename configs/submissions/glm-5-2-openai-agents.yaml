@@ -1,0 +1,31 @@
+# GLM-5.2 + openai-agents (OpenAI Agents SDK, routed to OpenRouter) on Modal.
+# See configs/submission_example.yaml for field docs.
+schema: chi-bench/submission/v1
+
+submission:
+  # Slug-safe id (no '.'); the model id below keeps the real "5.2".
+  id: glm-5-2-openai-agents
+  # Adjust team/contact before a real leaderboard submission.
+  team: Actava
+  contact: dark.savi@gmail.com
+  agent: openai-agents
+  # Non-OpenAI vendor prefix => the openai-agents harness auto-routes to OpenRouter:
+  # it forwards OPENROUTER_API_KEY as the SDK key, sets base-url to openrouter.ai, and
+  # passes the model id verbatim. Requires OPENROUTER_API_KEY in .env (plus ANTHROPIC_API_KEY
+  # for the judge). NOTE: no "openrouter/" prefix here — that prefix is only for the
+  # openclaw/hermes/deepagents harnesses; openai-agents takes the bare "<vendor>/<id>" slug.
+  model: z-ai/glm-5.2
+  notes: |
+    GLM-5.2 via the OpenAI Agents SDK harness, routed through OpenRouter.
+
+run:
+  environment: modal
+  n_attempts: 1
+  concurrency: 5
+  max_retries: 2
+  timeout_multiplier: 2.0
+  env_file: .env
+
+dataset:
+  version: chi-bench-v1.0.0
+  domains: [pa_provider, pa_um, cm]

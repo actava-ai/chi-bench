@@ -34,6 +34,13 @@ prices:
   # ~35% more tokens for the same fixed text vs earlier Opus versions; the
   # per-token rate is identical to Opus 4.6, but ROI denominator on 4.7 runs
   # skews higher accordingly.
+  anthropic/claude-sonnet-5:
+    # Standard rate $3/$15 per 1M, same sticker as sonnet-4-6. Introductory
+    # pricing is $2/$10 (cache 0.20) through 2026-08-31 — swap in input:2.00/
+    # output:10.00/cache:0.20 if you want the intro rate for runs before then.
+    input: 3.00
+    output: 15.00
+    cache: 0.30          # 0.1x input (Anthropic standard)
   anthropic/claude-opus-4-7:
     input: 5.00
     output: 25.00
@@ -85,6 +92,14 @@ prices:
   # third-party slugs; we assume 10% of input as an industry-typical
   # cached-discount heuristic. Revisit once a real provider number shows up
   # in `result.json.agent_result` for these runs.
+  # z-ai/glm-5.2 rates verified on openrouter.ai (2026-06-30): $0.93 in / $3.00 out
+  # per 1M, 1M context. OpenRouter publishes no explicit cache-read rate, so cache
+  # is the usual 10%-of-input heuristic (revisit if a real provider number appears
+  # in result.json.agent_result).
+  z-ai/glm-5.2:
+    input: 0.93
+    output: 3.00
+    cache: 0.093         # assumed 10% of input (OpenRouter cache rate TBD)
   qwen/qwen3-max:
     input: 0.78
     output: 3.90
