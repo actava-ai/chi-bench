@@ -64,6 +64,15 @@ COPY src/ /workspace/src/
 RUN uv sync --no-dev \
     && /workspace/.venv/bin/playwright install --with-deps chromium
 
+# healthverse -> chi_bench compatibility shim (docker/shims/healthverse).
+# The published chi-bench dataset's verifier entrypoints invoke
+# `python -m healthverse.verifier.task_runtime` (and marathon's
+# `...session_verifier`), expecting a `healthverse` package in the image. src/
+# was renamed healthverse -> chi_bench, so install a `healthverse` alias package
+# whose __path__ is chi_bench's. The build fails fast if the alias can't resolve.
+COPY docker/shims/healthverse /workspace/.venv/lib/python3.12/site-packages/healthverse
+RUN /workspace/.venv/bin/python -c "import importlib.util as u; assert u.find_spec('healthverse.verifier.task_runtime') and u.find_spec('healthverse.verifier.session_verifier'); print('healthverse alias OK')"
+
 # CI build target: stops here, before any task data is copied. This stage
 # is what CI uses to verify the Dockerfile parses and the dependency
 # install succeeds without needing the data/ tree in the build context.
@@ -78,7 +87,7 @@ FROM base AS runtime
 # per-trial upload step.
 # Cache-buster: bump on each cohort backfill so force_build=True
 # actually invalidates the cached image.
-ARG DATASET_CACHE_BUST=2026-05-11-oss-v1
+ARG DATASET_CACHE_BUST=2026-06-30-healthverse-alias
 COPY data/prior_auth_provider/shared/worlds /opt/chi-bench/worlds
 COPY data/prior_auth_provider/tasks /opt/chi-bench/tasks
 COPY data/prior_auth_um/tasks /opt/chi-bench/tasks
