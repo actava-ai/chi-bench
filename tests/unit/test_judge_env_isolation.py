@@ -50,3 +50,50 @@ def test_subprocess_env_no_anthropic_base_url_unset_path(
     # ANTHROPIC_BASE_URL must not appear.
     if env is not None:
         assert "ANTHROPIC_BASE_URL" not in env
+
+
+# ─── ANTHROPIC_API_KEY as the default judge auth path ────────────────────────
+
+
+@pytest.mark.parametrize("key_var", ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"])
+def test_ensure_authenticated_prefers_api_key_without_probe(
+    runner: ClaudeAgentRunner, monkeypatch: pytest.MonkeyPatch, key_var: str
+) -> None:
+    """A present ANTHROPIC_API_KEY/AUTH_TOKEN short-circuits auth: no CLI probe,
+    no ClaudeAuthError, and the auth method is recorded as ``api_key`` so
+    _subprocess_env keeps the key for the judge subprocess."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+    monkeypatch.setenv(key_var, "sk-test-key")
+
+    # The `claude auth status` probe must NOT run when a key is present.
+    def _fail_if_called(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("claude auth status probe should be skipped when a key is set")
+
+    monkeypatch.setattr(
+        "chi_bench.verifier.judge.claude_runner.subprocess.run", _fail_if_called
+    )
+
+    runner._ensure_authenticated()
+
+    assert runner._auth_logged_in is True
+    assert runner._auth_method == "api_key"
+
+
+def test_api_key_survives_into_judge_env_after_auth(
+    runner: ClaudeAgentRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """End-to-end of the real flow: once auth marks api_key, the key is kept in
+    the judge subprocess env (the OAuth-preference strip is skipped)."""
+    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-judge-key")
+    monkeypatch.setattr(
+        "chi_bench.verifier.judge.claude_runner.subprocess.run",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("probe must be skipped")),
+    )
+
+    runner._ensure_authenticated()
+    env = runner._subprocess_env()
+
+    assert env is not None
+    assert env.get("ANTHROPIC_API_KEY") == "sk-judge-key"

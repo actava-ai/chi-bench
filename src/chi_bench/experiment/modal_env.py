@@ -108,11 +108,16 @@ def _terminate_tracked_sandboxes() -> None:
 # forwarded — empty strings would defeat the `os.environ.get(KEY) or DEFAULT`
 # patterns inside chi_bench (e.g. judge.timeout_s).
 SERVER_ENV_FORWARD_KEYS: tuple[str, ...] = (
-    # Workspace judge — Claude CLI spawned by WorkspaceJudge inside the
-    # sandbox authenticates via this OAuth token (mirrors the
-    # `# judge-harness:compose` block in each task's docker-compose.yaml).
-    # Without this, the CLI prompts interactively and the judge session
-    # fails immediately; `IS_SANDBOX=1` alone isn't sufficient.
+    # Workspace judge — the Claude CLI spawned by WorkspaceJudge inside the
+    # sandbox authenticates via ANTHROPIC_API_KEY by default (forwarded below;
+    # see verifier/judge/claude_runner._ensure_authenticated, which treats a
+    # present key as the auth method and skips the `claude auth status` probe).
+    # This OAuth token stays forwarded as a fallback for hosts that judge via a
+    # logged-in Claude Code session instead of a key (mirrors the
+    # `# judge-harness:compose` block in each task's docker-compose.yaml); when
+    # both are present the API key wins. With neither, the CLI prompts
+    # interactively and the judge fails immediately (`IS_SANDBOX=1` alone isn't
+    # sufficient).
     "CLAUDE_CODE_OAUTH_TOKEN",
     # Semantic judge (required for contract_v3 verifier)
     "OPENAI_API_KEY",
@@ -120,7 +125,7 @@ SERVER_ENV_FORWARD_KEYS: tuple[str, ...] = (
     "CHI_BENCH_JUDGE_MODEL",
     "CHI_BENCH_JUDGE_TIMEOUT_S",
     "CHI_BENCH_JUDGE_NUM_VOTES",
-    # Patient/P2P simulators (various providers)
+    # Patient/P2P simulators (various providers) + workspace judge default auth
     "ANTHROPIC_API_KEY",
     "GEMINI_API_KEY",
     "GROK_API_KEY",
