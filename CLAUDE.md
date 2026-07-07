@@ -157,6 +157,12 @@ Configs:
 - **Dataset version pin** lives at `data/.chi-bench-version` and must match the submission YAML's
   `dataset.version`. `cb submission validate` (preflight) rejects mismatches. `cb data download`
   writes the pin in one step; the raw `huggingface-cli download` path needs `echo "$REV" > data/.chi-bench-version`.
+- **Model-id convention for `claude-code`:** `cb` configs/submissions pass `anthropic/<bare-id>`
+  (e.g. `anthropic/claude-fable-5`); Harbor's harness strips the vendor prefix and exports
+  `ANTHROPIC_MODEL=<bare-id>` to the claude CLI. Bare ids are only needed for raw `harbor run`
+  against hub-exported tasks, where `anthropic/<id>` 404s (commit 769744a). New models also need
+  a `configs/prices.yaml` entry (input/output/cache $ per 1M; cache = 0.1× input) or
+  `scripts/aggregate.py` cost columns come out empty.
 - **`/fixtures` is NOT exposed to the agent** as a readable mount — expectations, scoring contracts,
   and manifests are reserved for the verifier. The entrypoint exposes raw artifacts via
   `/workspace/raw/artifacts/` except for `*_new_referral_provider` tasks, where the chart is
@@ -170,6 +176,12 @@ Configs:
   so live-judge and docker-build smokes are opt-in via `-m`.
 - **Modal profile.** `cb experiment run -e modal` defaults to profile `actava`; pass
   `--modal-profile ''` to skip Modal preflight, or `MODAL_PROFILE=<name>` for a named profile.
+- **Agent-phase failures: read `trials/<name>/agent/claude-code.txt` tail first.** The stream-json
+  log carries the raw API error + request_id; `NonZeroAgentExitCodeError` alone says nothing.
+  Known case: Fable 5 (`claude-fable-5`) 400s with `model_not_available` ("organization or
+  workspace must have data retention enabled") unless the org has data retention on — an
+  Anthropic Console setting, not a harness/config bug. Reproduce with a bare curl before
+  blaming the pipeline.
 
 ## Subdirectory note
 
