@@ -110,10 +110,13 @@ def _parse_trial(result_path: Path) -> Trial | None:
         agent=agent,
         model=model,
         reward=reward,
-        input_tokens=int(ar.get("input_tokens", 0)),
-        output_tokens=int(ar.get("output_tokens", 0)),
-        cache_tokens=int(ar.get("n_cache_tokens", 0)),
-        wall_clock_seconds=float(ar.get("wall_clock_seconds", 0.0)),
+        # `or 0` (not a get-default) so an explicit null value — emitted by the
+        # openai-agents/OpenRouter path, which leaves cost/token fields None —
+        # coerces to 0 instead of crashing int(None)/float(None).
+        input_tokens=int(ar.get("input_tokens") or 0),
+        output_tokens=int(ar.get("output_tokens") or 0),
+        cache_tokens=int(ar.get("n_cache_tokens") or 0),
+        wall_clock_seconds=float(ar.get("wall_clock_seconds") or 0.0),
     )
 
 
