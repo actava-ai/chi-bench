@@ -70,9 +70,7 @@ def test_ensure_authenticated_prefers_api_key_without_probe(
     def _fail_if_called(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("claude auth status probe should be skipped when a key is set")
 
-    monkeypatch.setattr(
-        "chi_bench.verifier.judge.claude_runner.subprocess.run", _fail_if_called
-    )
+    monkeypatch.setattr("chi_bench.verifier.judge.claude_runner.subprocess.run", _fail_if_called)
 
     runner._ensure_authenticated()
 
