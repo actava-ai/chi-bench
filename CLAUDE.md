@@ -151,6 +151,13 @@ Configs:
 
 ## Things to remember
 
+- **For simple, explicitly scoped maintenance PRs, work directly on a `codex/` branch in the
+  current clean checkout unless the user asks for a worktree or design spec.** **Why:** The user
+  prefers direct execution over extra process for low-risk changes such as a model-default update.
+- **Patient simulation on `claude-sonnet-5` must explicitly disable adaptive thinking unless its
+  response parser and token budget are redesigned for thinking blocks.** **Why:** Sonnet 5 enables
+  thinking by default, while this simulator expects a text-first response within 1,024 output
+  tokens; `thinking={"type": "disabled"}` also requires `anthropic>=0.101.0`.
 - **`ANTHROPIC_API_KEY` is always required**, even for non-Anthropic agents — the judge is pinned
   to `claude-opus-4-7`. `CHI_BENCH_JUDGE_MODEL` overrides it but deviates from the paper protocol.
   Use `CHI_BENCH_JUDGE_NUM_VOTES > 1` for majority-voted judging.

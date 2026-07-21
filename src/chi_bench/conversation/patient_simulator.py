@@ -11,7 +11,7 @@ from chi_bench.conversation.message import STOP_SIGNAL
 from chi_bench.conversation.persona import PatientPersonaConfig, build_system_prompt
 from chi_bench.conversation.session import ConversationSession
 
-DEFAULT_MODEL = "claude-sonnet-4-20250514"
+DEFAULT_MODEL = "claude-sonnet-5"
 
 
 @dataclass(frozen=True)
@@ -90,11 +90,17 @@ class PatientSimulator:
         api_messages = llm_messages[1:]
 
         start = time.monotonic()
+        request_options: dict[str, Any] = {}
+        if self._model == "claude-sonnet-5":
+            # Sonnet 5 enables adaptive thinking by default. Preserve the
+            # simulator's existing text-only response shape and token budget.
+            request_options["thinking"] = {"type": "disabled"}
         response = await self._client.messages.create(
             model=self._model,
             max_tokens=1024,
             system=system_msg,
             messages=api_messages,
+            **request_options,
         )
         elapsed = time.monotonic() - start
 
