@@ -409,13 +409,19 @@ def test_anthropic_two_turn_probe_preserves_all_assistant_blocks(preflight: Modu
 
 
 @pytest.mark.parametrize(
-    ("configured_model", "expected_url", "expected_model"),
+    ("configured_model", "expected_url", "expected_model", "expected_tool_choice"),
     [
-        ("openai/gpt-5.6-sol", "https://api.openai.com/v1/responses", "gpt-5.6-sol"),
+        (
+            "openai/gpt-5.6-sol",
+            "https://api.openai.com/v1/responses",
+            "gpt-5.6-sol",
+            {"type": "function", "name": "preflight_echo"},
+        ),
         (
             "moonshotai/kimi-k3",
             "https://openrouter.ai/api/v1/responses",
             "moonshotai/kimi-k3",
+            "auto",
         ),
     ],
 )
@@ -424,6 +430,7 @@ def test_responses_probe_replays_full_output_with_function_result(
     configured_model: str,
     expected_url: str,
     expected_model: str,
+    expected_tool_choice: str | dict[str, str],
 ) -> None:
     spec = _spec(preflight, configured_model)
     first = _responses_tool_response(expected_model)
@@ -441,10 +448,8 @@ def test_responses_probe_replays_full_output_with_function_result(
     ]
     assert requester.calls[0]["url"] == expected_url
     assert requester.calls[0]["json"]["model"] == expected_model
-    assert requester.calls[0]["json"]["tool_choice"] == {
-        "type": "function",
-        "name": "preflight_echo",
-    }
+    assert requester.calls[0]["json"]["tool_choice"] == expected_tool_choice
+    assert requester.calls[1]["json"]["tool_choice"] == "none"
     second_input = requester.calls[1]["json"]["input"]
     assert second_input[1:3] == first["output"]
     assert second_input[1]["encrypted_content"] == "opaque-responses-reasoning-state"
@@ -660,6 +665,67 @@ def test_http_failures_keep_safe_structured_provider_diagnostics(
     assert "x-private-debug" not in serialized
     assert "raw-header" not in serialized
     assert "tail-provider-fragment" not in serialized
+    assert len(result["error"]["message"]) <= 300
+
+
+def test_openrouter_error_extracts_safe_nested_upstream_diagnostics(
+    preflight: ModuleType,
+) -> None:
+    model = "moonshotai/kimi-k3"
+    secret = TEST_CREDENTIALS["OPENROUTER_API_KEY"]
+    prompt_fragment = "You must call the preflight_echo tool exactly once"
+    upstream_message = (
+        "tool_choice 'specified' is incompatible with thinking enabled; "
+        f"{secret}; {prompt_fragment}; " + "x" * 800 + " tail-upstream-fragment"
+    )
+    payload = {
+        "error": {
+            "code": 400,
+            "message": "Provider returned error",
+            "metadata": {
+                "provider_name": "Moonshot AI",
+                "raw": json.dumps(
+                    {
+                        "type": "error",
+                        "error": {
+                            "type": "invalid_request_error",
+                            "message": upstream_message,
+                        },
+                        "private": "private-raw-body-field",
+                    }
+                ),
+                "private": "private-outer-metadata-field",
+            },
+        }
+    }
+    spec = _spec(preflight, model)
+    requester = StaticResponseRequester(
+        _http_response(
+            spec.endpoint,
+            payload,
+            request_id="req_openrouter_upstream",
+            status_code=400,
+        )
+    )
+
+    result = preflight.probe_model(spec, TEST_CREDENTIALS, requester)
+
+    assert result["success"] is False
+    assert result["error"]["kind"] == "http"
+    assert result["error"]["status_code"] == 400
+    assert result["error"]["provider_type"] == "invalid_request_error"
+    assert result["error"]["provider_code"] == "400"
+    assert (
+        "tool_choice 'specified' is incompatible with thinking enabled"
+        in result["error"]["message"]
+    )
+    assert result["request_ids"] == ["req_openrouter_upstream"]
+    serialized = json.dumps(result)
+    assert secret not in serialized
+    assert prompt_fragment not in serialized
+    assert "tail-upstream-fragment" not in serialized
+    assert "private-raw-body-field" not in serialized
+    assert "private-outer-metadata-field" not in serialized
     assert len(result["error"]["message"]) <= 300
 
 

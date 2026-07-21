@@ -41,6 +41,7 @@ MAX_OUTPUT_TOKENS = 4096
 SUPPORT_MAX_TOKENS = 64
 MAX_ERROR_MESSAGE_CHARS = 300
 MAX_ERROR_FIELD_CHARS = 100
+MAX_NESTED_ERROR_JSON_CHARS = 16_384
 MAX_IDENTIFIER_CHARS = 200
 REQUEST_TIMEOUT = httpx.Timeout(130.0, connect=10.0, write=10.0, pool=10.0)
 
@@ -370,10 +371,9 @@ def _request_ids(
     return list(dict.fromkeys(request_ids))
 
 
-def _provider_error_fields(
+def _raw_provider_error_fields(
     data: Mapping[str, Any],
-    known_secrets: Sequence[str],
-) -> tuple[str | None, str | None, str | None]:
+) -> tuple[object, object, object, Mapping[str, Any]]:
     detail = data.get("detail")
     error = data.get("error")
     if isinstance(detail, dict):
@@ -388,6 +388,30 @@ def _provider_error_fields(
         raw_message = error
     if raw_message is None and isinstance(detail, str):
         raw_message = detail
+    return raw_type, raw_code, raw_message, error_mapping
+
+
+def _provider_error_fields(
+    data: Mapping[str, Any],
+    known_secrets: Sequence[str],
+) -> tuple[str | None, str | None, str | None]:
+    raw_type, raw_code, raw_message, error_mapping = _raw_provider_error_fields(data)
+
+    metadata = error_mapping.get("metadata")
+    nested_raw = metadata.get("raw") if isinstance(metadata, dict) else None
+    if isinstance(nested_raw, str) and len(nested_raw) <= MAX_NESTED_ERROR_JSON_CHARS:
+        try:
+            nested_data = json.loads(nested_raw)
+        except (ValueError, RecursionError):
+            nested_data = None
+        if isinstance(nested_data, dict):
+            nested_type, nested_code, nested_message, _ = _raw_provider_error_fields(nested_data)
+            if isinstance(nested_type, (str, int)):
+                raw_type = nested_type
+            if isinstance(nested_code, (str, int)):
+                raw_code = nested_code
+            if isinstance(nested_message, (str, int)):
+                raw_message = nested_message
 
     provider_type = (
         _safe_error_value(raw_type, known_secrets, limit=MAX_ERROR_FIELD_CHARS)
@@ -703,7 +727,9 @@ def _probe_responses(
     first_payload = {
         **common,
         "input": first_input,
-        "tool_choice": {"type": "function", "name": "preflight_echo"},
+        "tool_choice": (
+            {"type": "function", "name": "preflight_echo"} if spec.provider == "openai" else "auto"
+        ),
     }
     first, request_ids, response_ids = _request_json(
         request_fn,
