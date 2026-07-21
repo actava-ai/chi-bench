@@ -7,11 +7,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 from chi_bench.experiment.config import ExperimentConfig
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+DATA_ROOT = REPO_ROOT / "data"
 MATRIX_PATH = REPO_ROOT / "configs/experiments/frontier_models_smoke_2026_07.yaml"
 PRICES_PATH = REPO_ROOT / "configs/prices.yaml"
 
@@ -105,7 +107,10 @@ def test_frontier_smoke_matrix_matches_reviewed_configuration() -> None:
     assert matrix["domains"] == EXPECTED_DOMAINS
     assert matrix["rows"] == EXPECTED_ROWS
 
-    for domain in matrix["domains"].values():
+
+@pytest.mark.skipif(not DATA_ROOT.is_dir(), reason="downloaded chi-Bench data is unavailable")
+def test_frontier_smoke_datasets_exist_when_data_is_available() -> None:
+    for domain in EXPECTED_DOMAINS.values():
         assert (REPO_ROOT / domain["dataset"] / "task.toml").is_file()
 
 
@@ -135,14 +140,18 @@ def test_frontier_smoke_matrix_emits_18_unique_valid_slices() -> None:
     assert len(commands) == 18
     assert len(set(commands)) == 18
 
+    expected_datasets = {domain["dataset"] for domain in EXPECTED_DOMAINS.values()}
+    emitted_datasets: set[str] = set()
     trials_dirs: set[str] = set()
     for command in commands:
         tokens = shlex.split(command)
         assert tokens[:3] == ["cb", "experiment", "run"]
         slice_path = REPO_ROOT / tokens[tokens.index("-f") + 1]
         config = ExperimentConfig.from_yaml(slice_path)
-        assert (REPO_ROOT / config.dataset / "task.toml").is_file()
+        assert config.dataset in expected_datasets
+        emitted_datasets.add(config.dataset)
         assert config.trials_dir is not None
         trials_dirs.add(config.trials_dir)
 
+    assert emitted_datasets == expected_datasets
     assert len(trials_dirs) == 18
