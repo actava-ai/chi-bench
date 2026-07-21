@@ -158,6 +158,20 @@ Configs:
   response parser and token budget are redesigned for thinking blocks.** **Why:** Sonnet 5 enables
   thinking by default, while this simulator expects a text-first response within 1,024 output
   tokens; `thinking={"type": "disabled"}` also requires `anthropic>=0.101.0`.
+- **Do not pass Harbor's `thinking` agent kwarg to the stock `claude-code` harness without first
+  checking the pinned Claude Code CLI.** **Why:** Harbor 0.6.1 renders it as `--thinking`, but
+  Claude Code 2.1.207 and 2.1.216 do not expose that flag; use `reasoning_effort`/`--effort`
+  instead, while models such as Fable keep their inherent adaptive-thinking behavior.
+- **Do not present a proposed provider adapter as an existing harness, and do not add a new
+  harness solely to remap credentials/base URLs when agent-scoped routing can reuse a stock
+  harness.** **Why:** calling a hypothetical Inkling adapter `tinker-claude-code` obscured that
+  it did not exist and made the evaluation configuration look hallucinated; keep the selected
+  existing harness name and make any new routing layer explicit.
+- **Use the in-tree `openai-agents` harness for third-party evaluation models; reserve
+  `claude-code` and `codex` rows for their first-party Anthropic and OpenAI models.** **Why:** this
+  is the validated comparison convention for this repo, even when a third-party vendor also
+  exposes an Anthropic-compatible Claude Code endpoint. Extend `openai-agents` provider routing
+  explicitly when a provider requires Chat Completions instead of Responses.
 - **`ANTHROPIC_API_KEY` is always required**, even for non-Anthropic agents — the judge is pinned
   to `claude-opus-4-7`. `CHI_BENCH_JUDGE_MODEL` overrides it but deviates from the paper protocol.
   Use `CHI_BENCH_JUDGE_NUM_VOTES > 1` for majority-voted judging.
@@ -183,6 +197,16 @@ Configs:
   so live-judge and docker-build smokes are opt-in via `-m`.
 - **Modal profile.** `cb experiment run -e modal` defaults to profile `actava`; pass
   `--modal-profile ''` to skip Modal preflight, or `MODAL_PROFILE=<name>` for a named profile.
+- **Git worktrees do not inherit `.env` or downloaded `data/`.** Link them from the primary
+  checkout (or pass absolute paths) before live checks. `.env` stays ignored, but a `data`
+  symlink appears as untracked because the `data/` ignore rule matches directories, not the
+  symlink; remove it before final staging. Never copy keys or downloaded data into commits.
+- **OpenAI Agents SDK 0.13.6 replays Chat Completions `reasoning_content` only for DeepSeek by
+  default.** Tinker/Inkling tool loops need an explicit `should_replay_reasoning_content` hook;
+  otherwise the second turn drops the signed/reasoning state even though the first call succeeds.
+- **Do not force a named tool choice for models with always-on/adaptive thinking.** Fable 5 and
+  Kimi K3 reject forced tool selection while thinking is enabled; use `auto` plus an imperative
+  prompt, then validate that the expected tool call actually occurred and replay all reasoning.
 - **Agent-phase failures: read `trials/<name>/agent/claude-code.txt` tail first.** The stream-json
   log carries the raw API error + request_id; `NonZeroAgentExitCodeError` alone says nothing.
   Known case: Fable 5 (`claude-fable-5`) 400s with `model_not_available` ("organization or
