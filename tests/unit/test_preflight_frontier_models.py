@@ -41,11 +41,14 @@ def _http_response(
     *,
     request_id: str,
     status_code: int = 200,
+    extra_headers: dict[str, str] | None = None,
 ) -> httpx.Response:
+    headers = {"x-request-id": request_id}
+    headers.update(extra_headers or {})
     return httpx.Response(
         status_code,
         json=payload,
-        headers={"x-request-id": request_id},
+        headers=headers,
         request=httpx.Request("POST", url),
     )
 
@@ -248,6 +251,34 @@ class SequenceRequester:
         return _http_response(url, payload, request_id=f"req_{len(self.calls)}")
 
 
+class StaticResponseRequester:
+    def __init__(self, response: httpx.Response) -> None:
+        self.response = response
+        self.call_count = 0
+
+    def __call__(
+        self,
+        method: str,
+        url: str,
+        *,
+        headers: dict[str, str],
+        json: dict[str, Any],
+        timeout: Any,
+    ) -> httpx.Response:
+        del method, url, headers, json, timeout
+        self.call_count += 1
+        return self.response
+
+
+class FailingTransportRequester:
+    def __init__(self, error: Exception) -> None:
+        self.error = error
+
+    def __call__(self, *args: Any, **kwargs: Any) -> httpx.Response:
+        del args, kwargs
+        raise self.error
+
+
 class ProviderRouter:
     """Realistic provider response double at the HTTP boundary."""
 
@@ -352,10 +383,9 @@ def test_anthropic_two_turn_probe_preserves_all_assistant_blocks(preflight: Modu
     assert result["success"] is True
     assert result["tool_roundtrip"] is True
     assert result["reasoning_metadata"] is True
-    assert result["request_ids"] == [
-        "req_1",
+    assert result["request_ids"] == ["req_1", "req_2"]
+    assert result["response_ids"] == [
         "msg_claude-fable-5_tool",
-        "req_2",
         "msg_claude-fable-5_final",
     ]
     assert result["usage"] == {
@@ -404,6 +434,11 @@ def test_responses_probe_replays_full_output_with_function_result(
     assert result["success"] is True
     assert result["tool_roundtrip"] is True
     assert result["reasoning_metadata"] is True
+    assert result["request_ids"] == ["req_1", "req_2"]
+    assert result["response_ids"] == [
+        f"resp_{expected_model}_tool",
+        f"resp_{expected_model}_final",
+    ]
     assert requester.calls[0]["url"] == expected_url
     assert requester.calls[0]["json"]["model"] == expected_model
     assert requester.calls[0]["json"]["tool_choice"] == {
@@ -463,7 +498,169 @@ def test_probe_requires_final_text_after_tool_result(preflight: ModuleType) -> N
 
     assert result["success"] is False
     assert result["tool_roundtrip"] is True
-    assert "final text" in result["error"]
+    assert result["error"] == {
+        "kind": "validation",
+        "message": "provider did not return final text after the tool result",
+    }
+
+
+def test_transport_failure_keeps_only_exception_class(preflight: ModuleType) -> None:
+    secret = TEST_CREDENTIALS["OPENAI_API_KEY"]
+    error_detail = f"{secret}; {preflight.PREFLIGHT_PROMPT}; private-transport-detail"
+    requester = FailingTransportRequester(httpx.ConnectTimeout(error_detail))
+
+    result = preflight.probe_model(
+        _spec(preflight, "openai/gpt-5.6-sol"), TEST_CREDENTIALS, requester
+    )
+
+    assert result["success"] is False
+    assert result["error"] == {
+        "kind": "transport",
+        "exception_class": "ConnectTimeout",
+    }
+    serialized = json.dumps(result["error"])
+    assert secret not in serialized
+    assert preflight.PREFLIGHT_PROMPT not in serialized
+    assert "private-transport-detail" not in serialized
+
+
+@pytest.mark.parametrize(
+    ("model", "status_code", "payload", "expected_error"),
+    [
+        (
+            "anthropic/claude-fable-5",
+            400,
+            {
+                "type": "error",
+                "error": {
+                    "type": "model_not_available",
+                    "message": "data retention is required: {secret}; {prompt_fragment}",
+                },
+            },
+            {
+                "provider_type": "model_not_available",
+                "message_fragment": "data retention is required",
+            },
+        ),
+        (
+            "openai/gpt-5.6-sol",
+            401,
+            {
+                "error": {
+                    "type": "invalid_request_error",
+                    "code": "invalid_api_key",
+                    "message": "bad credential {secret}; {prompt_fragment}",
+                }
+            },
+            {
+                "provider_type": "invalid_request_error",
+                "provider_code": "invalid_api_key",
+                "message_fragment": "bad credential",
+            },
+        ),
+        (
+            "openai/gpt-5.6-terra",
+            404,
+            {
+                "error": {
+                    "type": "invalid_request_error",
+                    "code": "model_not_found",
+                    "message": "bad model id; {secret}; {prompt_fragment}",
+                }
+            },
+            {
+                "provider_type": "invalid_request_error",
+                "provider_code": "model_not_found",
+                "message_fragment": "bad model id",
+            },
+        ),
+        (
+            "thinkingmachines/Inkling:peft:262144",
+            422,
+            {
+                "detail": {
+                    "error": {
+                        "type": "invalid_request_error",
+                        "code": "unsupported_parameter",
+                        "message": "separate_reasoning unsupported; {secret}; {prompt_fragment}",
+                    }
+                }
+            },
+            {
+                "provider_type": "invalid_request_error",
+                "provider_code": "unsupported_parameter",
+                "message_fragment": "separate_reasoning unsupported",
+            },
+        ),
+        (
+            "moonshotai/kimi-k3",
+            400,
+            {
+                "error_type": "provider_error",
+                "error": {
+                    "code": 400,
+                    "message": "upstream rejected request; {secret}; {prompt_fragment}",
+                },
+            },
+            {
+                "provider_type": "provider_error",
+                "provider_code": "400",
+                "message_fragment": "upstream rejected request",
+            },
+        ),
+    ],
+)
+def test_http_failures_keep_safe_structured_provider_diagnostics(
+    preflight: ModuleType,
+    model: str,
+    status_code: int,
+    payload: dict[str, Any],
+    expected_error: dict[str, str],
+) -> None:
+    secret = TEST_CREDENTIALS[_spec(preflight, model).api_key_env]
+    prompt_fragment = "You must call the preflight_echo tool exactly once"
+    rendered_payload = copy.deepcopy(payload)
+    error_node = rendered_payload.get("error")
+    if isinstance(rendered_payload.get("detail"), dict):
+        error_node = rendered_payload["detail"].get("error")
+    assert isinstance(error_node, dict)
+    message = error_node["message"]
+    assert isinstance(message, str)
+    error_node["message"] = (
+        message.replace("{secret}", secret).replace("{prompt_fragment}", prompt_fragment)
+        + " "
+        + "x" * 800
+        + " tail-provider-fragment"
+    )
+    url = _spec(preflight, model).endpoint
+    requester = StaticResponseRequester(
+        _http_response(
+            url,
+            rendered_payload,
+            request_id="req_safe_error",
+            status_code=status_code,
+            extra_headers={"x-private-debug": f"raw-header-{secret}"},
+        )
+    )
+
+    result = preflight.probe_model(_spec(preflight, model), TEST_CREDENTIALS, requester)
+
+    assert result["success"] is False
+    assert result["error"]["kind"] == "http"
+    assert result["error"]["status_code"] == status_code
+    assert result["error"]["provider_type"] == expected_error["provider_type"]
+    if provider_code := expected_error.get("provider_code"):
+        assert result["error"]["provider_code"] == provider_code
+    assert expected_error["message_fragment"] in result["error"]["message"]
+    assert result["request_ids"] == ["req_safe_error"]
+    assert result["response_ids"] == []
+    serialized = json.dumps(result["error"])
+    assert secret not in serialized
+    assert prompt_fragment not in serialized
+    assert "x-private-debug" not in serialized
+    assert "raw-header" not in serialized
+    assert "tail-provider-fragment" not in serialized
+    assert len(result["error"]["message"]) <= 300
 
 
 def test_sanitize_text_redacts_known_bearer_and_token_like_values(preflight: ModuleType) -> None:
@@ -517,13 +714,69 @@ def test_run_preflight_continues_after_failure_and_checks_support_models(
     assert "private-provider-body-fragment" not in serialized
 
 
-def test_main_writes_structured_json_and_returns_zero_without_mutating_routing(
+def test_env_file_values_override_ambient_without_mutating_it(
+    preflight: ModuleType, tmp_path: Path
+) -> None:
+    env_file = tmp_path / ".env.test"
+    file_key = "file-openai-secret-123456"
+    env_file.write_text(
+        f"OPENAI_API_KEY={file_key}\nOPENAI_BASE_URL=\n",
+        encoding="utf-8",
+    )
+    ambient = {
+        "OPENAI_API_KEY": "ambient-openai-secret-123456",
+        "OPENAI_BASE_URL": "https://ambient-proxy.invalid/v1",
+    }
+    before = dict(ambient)
+
+    credentials = preflight.load_credentials(env_file, ambient)
+
+    assert credentials["OPENAI_API_KEY"] == file_key
+    assert ambient == before
+
+
+@pytest.mark.parametrize("base_var", ["OPENAI_BASE_URL", "ANTHROPIC_BASE_URL"])
+@pytest.mark.parametrize("source", ["ambient", "env_file"])
+def test_main_rejects_effective_endpoint_overrides_without_exposing_values(
+    preflight: ModuleType,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    base_var: str,
+    source: str,
+) -> None:
+    env_file = tmp_path / f".{base_var}.{source}.env"
+    output = tmp_path / f"{base_var}.{source}.json"
+    override = f"https://private-{base_var.lower()}.invalid/{source}/secret-route"
+    lines = [f"{key}={value}" for key, value in TEST_CREDENTIALS.items()]
+    ambient: dict[str, str] = {}
+    if source == "env_file":
+        lines.append(f"{base_var}={override}")
+    else:
+        ambient[base_var] = override
+    env_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    requester = ProviderRouter()
+
+    exit_code = preflight.main(
+        ["--config", str(MATRIX_PATH), "--env-file", str(env_file), "--output", str(output)],
+        environ=ambient,
+        request_fn=requester,
+    )
+
+    assert exit_code == 1
+    assert requester.seen_models == []
+    rendered = output.read_text() + capsys.readouterr().out
+    assert base_var in rendered
+    assert "official provider endpoints" in rendered
+    assert override not in rendered
+
+
+def test_main_writes_structured_json_and_returns_zero_without_mutating_environment(
     preflight: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     env_file = tmp_path / ".env.test"
     output = tmp_path / "preflight.json"
     _write_env_file(env_file)
-    ambient = {"OPENAI_BASE_URL": "https://ambient.invalid/v1"}
+    ambient = {"UNRELATED_PARENT_VALUE": "unchanged"}
     before = dict(ambient)
 
     exit_code = preflight.main(
@@ -549,6 +802,7 @@ def test_main_writes_structured_json_and_returns_zero_without_mutating_routing(
         "tool_roundtrip",
         "reasoning_metadata",
         "request_ids",
+        "response_ids",
         "usage",
         "latency_ms",
         "error",

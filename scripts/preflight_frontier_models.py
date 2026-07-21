@@ -35,9 +35,13 @@ API_KEY_ENV_VARS = (
     "OPENROUTER_API_KEY",
     "TINKER_API_KEY",
 )
+ROUTING_ENV_VARS = ("OPENAI_BASE_URL", "ANTHROPIC_BASE_URL")
 SUPPORT_MODELS = ("claude-opus-4-7", "claude-sonnet-5")
 MAX_OUTPUT_TOKENS = 4096
 SUPPORT_MAX_TOKENS = 64
+MAX_ERROR_MESSAGE_CHARS = 300
+MAX_ERROR_FIELD_CHARS = 100
+MAX_IDENTIFIER_CHARS = 200
 REQUEST_TIMEOUT = httpx.Timeout(130.0, connect=10.0, write=10.0, pool=10.0)
 
 PREFLIGHT_PROMPT = (
@@ -51,7 +55,14 @@ TOOL_PARAMETERS = {
     "additionalProperties": False,
 }
 TOOL_RESULT = '{"echo":"ping","ok":true}'
-_SENSITIVE_PAYLOAD_TEXTS = (PREFLIGHT_PROMPT, "Reply with OK.", TOOL_RESULT)
+_SENSITIVE_PAYLOAD_TEXTS = (
+    PREFLIGHT_PROMPT,
+    "You must call the preflight_echo tool exactly once",
+    "Do not answer before calling it",
+    "After receiving the tool result, reply with final text",
+    "Reply with OK.",
+    TOOL_RESULT,
+)
 
 RequestFn = Callable[..., httpx.Response]
 
@@ -68,6 +79,22 @@ class ProbeSpec(NamedTuple):
 
 class ProbeFailure(RuntimeError):
     """Safe, allowlisted failure text that may be persisted in the report."""
+
+    def __init__(
+        self,
+        message: str | None,
+        *,
+        kind: str = "validation",
+        details: Mapping[str, Any] | None = None,
+        request_ids: Sequence[str] = (),
+        response_ids: Sequence[str] = (),
+    ) -> None:
+        super().__init__(message or "")
+        self.message = message
+        self.kind = kind
+        self.details = dict(details or {})
+        self.request_ids = list(request_ids)
+        self.response_ids = list(response_ids)
 
 
 _BEARER_RE = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
@@ -104,6 +131,72 @@ def _sanitize_value(value: Any, known_secrets: Sequence[str]) -> Any:
 
 def _known_secrets(credentials: Mapping[str, str]) -> list[str]:
     return [credentials[key] for key in API_KEY_ENV_VARS if credentials.get(key)]
+
+
+def _truncate(value: str, limit: int) -> str:
+    if len(value) <= limit:
+        return value
+    return value[: limit - 3] + "..."
+
+
+def _safe_error_value(
+    value: object,
+    known_secrets: Sequence[str],
+    *,
+    limit: int,
+) -> str:
+    return _truncate(sanitize_text(value, known_secrets), limit)
+
+
+def _safe_exception_class(exc: Exception) -> str:
+    name = type(exc).__name__
+    return _truncate(re.sub(r"[^A-Za-z0-9_.-]", "_", name), MAX_ERROR_FIELD_CHARS)
+
+
+def _failure_metadata(
+    failure: ProbeFailure,
+    known_secrets: Sequence[str],
+) -> dict[str, Any]:
+    metadata: dict[str, Any] = {"kind": failure.kind}
+    if failure.message:
+        metadata["message"] = _safe_error_value(
+            failure.message,
+            known_secrets,
+            limit=MAX_ERROR_MESSAGE_CHARS,
+        )
+    for key in (
+        "status_code",
+        "exception_class",
+        "provider_type",
+        "provider_code",
+    ):
+        value = failure.details.get(key)
+        if value is None:
+            continue
+        if key == "status_code" and isinstance(value, int):
+            metadata[key] = value
+        else:
+            metadata[key] = _safe_error_value(
+                value,
+                known_secrets,
+                limit=MAX_ERROR_FIELD_CHARS,
+            )
+    return metadata
+
+
+def _internal_error(exc: Exception) -> dict[str, str]:
+    return {"kind": "internal", "exception_class": _safe_exception_class(exc)}
+
+
+def _record_ids(
+    result: dict[str, Any],
+    request_ids: Sequence[str],
+    response_ids: Sequence[str],
+) -> None:
+    for key, values in (("request_ids", request_ids), ("response_ids", response_ids)):
+        for value in values:
+            if value not in result[key]:
+                result[key].append(value)
 
 
 def _provider_spec(row: Mapping[str, Any]) -> ProbeSpec:
@@ -181,6 +274,7 @@ def _base_result(spec: ProbeSpec) -> dict[str, Any]:
         "tool_roundtrip": False,
         "reasoning_metadata": False,
         "request_ids": [],
+        "response_ids": [],
         "usage": {
             "input_tokens": 0,
             "output_tokens": 0,
@@ -256,13 +350,71 @@ def _chat_usage(data: Mapping[str, Any]) -> dict[str, int]:
     }
 
 
+def _safe_identifier(value: object, known_secrets: Sequence[str]) -> str:
+    sanitized = _safe_error_value(value, known_secrets, limit=MAX_IDENTIFIER_CHARS)
+    return re.sub(r"[^A-Za-z0-9._:/=-]", "_", sanitized)
+
+
+def _request_ids(
+    response: httpx.Response,
+    known_secrets: Sequence[str],
+    data: Mapping[str, Any] | None = None,
+) -> list[str]:
+    request_ids: list[str] = []
+    for header in ("request-id", "x-request-id"):
+        value = response.headers.get(header)
+        if value:
+            request_ids.append(_safe_identifier(value, known_secrets))
+    if data is not None and isinstance(data.get("request_id"), str):
+        request_ids.append(_safe_identifier(data["request_id"], known_secrets))
+    return list(dict.fromkeys(request_ids))
+
+
+def _provider_error_fields(
+    data: Mapping[str, Any],
+    known_secrets: Sequence[str],
+) -> tuple[str | None, str | None, str | None]:
+    detail = data.get("detail")
+    error = data.get("error")
+    if isinstance(detail, dict):
+        nested = detail.get("error")
+        error = nested if isinstance(nested, dict) else detail
+
+    error_mapping = error if isinstance(error, dict) else {}
+    raw_type = data.get("error_type") or error_mapping.get("type")
+    raw_code = error_mapping.get("code")
+    raw_message = error_mapping.get("message")
+    if raw_message is None and isinstance(error, str):
+        raw_message = error
+    if raw_message is None and isinstance(detail, str):
+        raw_message = detail
+
+    provider_type = (
+        _safe_error_value(raw_type, known_secrets, limit=MAX_ERROR_FIELD_CHARS)
+        if isinstance(raw_type, (str, int))
+        else None
+    )
+    provider_code = (
+        _safe_error_value(raw_code, known_secrets, limit=MAX_ERROR_FIELD_CHARS)
+        if isinstance(raw_code, (str, int))
+        else None
+    )
+    message = (
+        _safe_error_value(raw_message, known_secrets, limit=MAX_ERROR_MESSAGE_CHARS)
+        if isinstance(raw_message, (str, int))
+        else None
+    )
+    return provider_type, provider_code, message
+
+
 def _request_json(
     request_fn: RequestFn,
     url: str,
     *,
     headers: dict[str, str],
     payload: dict[str, Any],
-) -> tuple[dict[str, Any], list[str]]:
+    known_secrets: Sequence[str],
+) -> tuple[dict[str, Any], list[str], list[str]]:
     try:
         response = request_fn(
             "POST",
@@ -272,27 +424,54 @@ def _request_json(
             timeout=REQUEST_TIMEOUT,
         )
     except Exception as exc:
-        raise ProbeFailure("provider request failed") from exc
-    if response.status_code >= 400:
-        request_id = response.headers.get("request-id") or response.headers.get("x-request-id")
-        suffix = f" (request_id={request_id})" if request_id else ""
-        raise ProbeFailure(f"HTTP {response.status_code} from provider{suffix}")
+        raise ProbeFailure(
+            None,
+            kind="transport",
+            details={"exception_class": _safe_exception_class(exc)},
+        ) from None
+
+    if not 200 <= response.status_code < 300:
+        try:
+            raw_error = response.json()
+        except Exception:
+            raw_error = None
+        error_data = raw_error if isinstance(raw_error, dict) else {}
+        request_ids = _request_ids(response, known_secrets, error_data)
+        provider_type, provider_code, message = _provider_error_fields(
+            error_data,
+            known_secrets,
+        )
+        details: dict[str, Any] = {"status_code": response.status_code}
+        if provider_type:
+            details["provider_type"] = provider_type
+        if provider_code:
+            details["provider_code"] = provider_code
+        raise ProbeFailure(
+            message or f"provider returned HTTP {response.status_code}",
+            kind="http",
+            details=details,
+            request_ids=request_ids,
+        ) from None
+
     try:
         data = response.json()
     except (json.JSONDecodeError, ValueError) as exc:
-        raise ProbeFailure("provider returned invalid JSON") from exc
+        raise ProbeFailure(
+            "provider returned invalid JSON",
+            request_ids=_request_ids(response, known_secrets),
+        ) from exc
     if not isinstance(data, dict):
-        raise ProbeFailure("provider returned a non-object JSON response")
+        raise ProbeFailure(
+            "provider returned a non-object JSON response",
+            request_ids=_request_ids(response, known_secrets),
+        )
 
-    request_ids: list[str] = []
-    for header in ("request-id", "x-request-id"):
-        value = response.headers.get(header)
-        if value and value not in request_ids:
-            request_ids.append(value)
+    request_ids = _request_ids(response, known_secrets, data)
+    response_ids: list[str] = []
     body_id = data.get("id")
-    if isinstance(body_id, str) and body_id and body_id not in request_ids:
-        request_ids.append(body_id)
-    return data, request_ids
+    if isinstance(body_id, str) and body_id:
+        response_ids.append(_safe_identifier(body_id, known_secrets))
+    return data, request_ids, response_ids
 
 
 def _anthropic_headers(api_key: str) -> dict[str, str]:
@@ -417,13 +596,14 @@ def _probe_anthropic(
         # The prompt requires the call and the response is validated below.
         "tool_choice": {"type": "auto", "disable_parallel_tool_use": True},
     }
-    first, ids = _request_json(
+    first, request_ids, response_ids = _request_json(
         request_fn,
         spec.endpoint,
         headers=_anthropic_headers(api_key),
         payload=first_payload,
+        known_secrets=(api_key,),
     )
-    result["request_ids"].extend(ids)
+    _record_ids(result, request_ids, response_ids)
     _add_usage(result["usage"], _anthropic_usage(first))
     content = first.get("content") or []
     if not isinstance(content, list):
@@ -468,13 +648,14 @@ def _probe_anthropic(
         ],
         "tool_choice": {"type": "none"},
     }
-    second, ids = _request_json(
+    second, request_ids, response_ids = _request_json(
         request_fn,
         spec.endpoint,
         headers=_anthropic_headers(api_key),
         payload=second_payload,
+        known_secrets=(api_key,),
     )
-    result["request_ids"].extend(ids)
+    _record_ids(result, request_ids, response_ids)
     _add_usage(result["usage"], _anthropic_usage(second))
     second_content = second.get("content") or []
     if isinstance(second_content, list):
@@ -524,13 +705,14 @@ def _probe_responses(
         "input": first_input,
         "tool_choice": {"type": "function", "name": "preflight_echo"},
     }
-    first, ids = _request_json(
+    first, request_ids, response_ids = _request_json(
         request_fn,
         spec.endpoint,
         headers=_bearer_headers(api_key),
         payload=first_payload,
+        known_secrets=(api_key,),
     )
-    result["request_ids"].extend(ids)
+    _record_ids(result, request_ids, response_ids)
     _add_usage(result["usage"], _responses_usage(first))
     result["reasoning_metadata"] = _responses_reasoning(first)
     output = first.get("output") or []
@@ -567,13 +749,14 @@ def _probe_responses(
         ],
         "tool_choice": "none",
     }
-    second, ids = _request_json(
+    second, request_ids, response_ids = _request_json(
         request_fn,
         spec.endpoint,
         headers=_bearer_headers(api_key),
         payload=second_payload,
+        known_secrets=(api_key,),
     )
-    result["request_ids"].extend(ids)
+    _record_ids(result, request_ids, response_ids)
     _add_usage(result["usage"], _responses_usage(second))
     result["reasoning_metadata"] = result["reasoning_metadata"] or _responses_reasoning(second)
     _require_responses_text(second)
@@ -605,13 +788,14 @@ def _probe_chat(
         "messages": first_messages,
         "tool_choice": {"type": "function", "function": {"name": "preflight_echo"}},
     }
-    first, ids = _request_json(
+    first, request_ids, response_ids = _request_json(
         request_fn,
         spec.endpoint,
         headers=_bearer_headers(api_key),
         payload=first_payload,
+        known_secrets=(api_key,),
     )
-    result["request_ids"].extend(ids)
+    _record_ids(result, request_ids, response_ids)
     _add_usage(result["usage"], _chat_usage(first))
     assistant, finish_reason = _chat_message(first)
     result["reasoning_metadata"] = _chat_reasoning(assistant)
@@ -649,13 +833,14 @@ def _probe_chat(
         ],
         "tool_choice": "none",
     }
-    second, ids = _request_json(
+    second, request_ids, response_ids = _request_json(
         request_fn,
         spec.endpoint,
         headers=_bearer_headers(api_key),
         payload=second_payload,
+        known_secrets=(api_key,),
     )
-    result["request_ids"].extend(ids)
+    _record_ids(result, request_ids, response_ids)
     _add_usage(result["usage"], _chat_usage(second))
     final_message, _ = _chat_message(second)
     result["reasoning_metadata"] = result["reasoning_metadata"] or _chat_reasoning(final_message)
@@ -686,9 +871,10 @@ def probe_model(
             raise ProbeFailure(f"unsupported endpoint mode: {spec.endpoint_mode}")
         result["success"] = True
     except ProbeFailure as exc:
-        result["error"] = sanitize_text(f"{type(exc).__name__}: {exc}", secrets)
-    except Exception:
-        result["error"] = "provider probe failed"
+        _record_ids(result, exc.request_ids, exc.response_ids)
+        result["error"] = _failure_metadata(exc, secrets)
+    except Exception as exc:
+        result["error"] = _internal_error(exc)
     finally:
         result["latency_ms"] = max(0, round((time.perf_counter() - started) * 1000))
     return _sanitize_value(result, secrets)
@@ -726,13 +912,14 @@ def _probe_support_model(
         }
         if model == "claude-sonnet-5":
             payload["thinking"] = {"type": "disabled"}
-        data, ids = _request_json(
+        data, request_ids, response_ids = _request_json(
             request_fn,
             ANTHROPIC_MESSAGES_URL,
             headers=_anthropic_headers(api_key),
             payload=payload,
+            known_secrets=(api_key,),
         )
-        result["request_ids"].extend(ids)
+        _record_ids(result, request_ids, response_ids)
         _add_usage(result["usage"], _anthropic_usage(data))
         content = data.get("content") or []
         if isinstance(content, list):
@@ -743,9 +930,10 @@ def _probe_support_model(
         _require_anthropic_text(data)
         result["success"] = True
     except ProbeFailure as exc:
-        result["error"] = sanitize_text(f"{type(exc).__name__}: {exc}", secrets)
-    except Exception:
-        result["error"] = "provider support check failed"
+        _record_ids(result, exc.request_ids, exc.response_ids)
+        result["error"] = _failure_metadata(exc, secrets)
+    except Exception as exc:
+        result["error"] = _internal_error(exc)
     finally:
         result["latency_ms"] = max(0, round((time.perf_counter() - started) * 1000))
     return _sanitize_value(result, secrets)
@@ -781,16 +969,31 @@ def load_credentials(
     env_file: str | Path,
     environ: Mapping[str, str] | None = None,
 ) -> dict[str, str]:
-    """Read provider keys without changing ``os.environ`` or routing variables."""
+    """Build the runner-equivalent env overlay without mutating ``os.environ``."""
 
     path = Path(env_file)
     if not path.is_file():
         raise FileNotFoundError(f"environment file not found: {path}")
     file_values = dotenv_values(path)
     ambient = os.environ if environ is None else environ
+    effective = dict(ambient)
+    for key, value in file_values.items():
+        # python-dotenv ignores bare ``KEY`` entries but applies ``KEY=`` as
+        # an explicit blank when load_dotenv(..., override=True) is used.
+        if value is not None:
+            effective[key] = str(value)
+
+    conflicting_routes = [key for key in ROUTING_ENV_VARS if effective.get(key)]
+    if conflicting_routes:
+        names = ", ".join(conflicting_routes)
+        raise ProbeFailure(
+            f"official provider endpoints require these variables to be unset: {names}",
+            kind="configuration",
+        )
+
     credentials: dict[str, str] = {}
     for key in API_KEY_ENV_VARS:
-        value = ambient.get(key) or file_values.get(key)
+        value = effective.get(key)
         if value:
             credentials[key] = str(value)
     return credentials
@@ -826,6 +1029,18 @@ def main(
     try:
         credentials = load_credentials(args.env_file, environ)
         report = run_preflight(args.config, credentials, request_fn)
+    except ProbeFailure as exc:
+        secrets = _known_secrets(credentials)
+        report = {
+            "schema_version": 1,
+            "generated_at": datetime.now(UTC).isoformat(),
+            "config": str(args.config),
+            "success": False,
+            "summary": {"total": 1, "passed": 0, "failed": 1},
+            "evaluated": [],
+            "support_checks": [],
+            "error": _failure_metadata(exc, secrets),
+        }
     except Exception as exc:
         secrets = _known_secrets(credentials)
         report = {
@@ -836,7 +1051,7 @@ def main(
             "summary": {"total": 1, "passed": 0, "failed": 1},
             "evaluated": [],
             "support_checks": [],
-            "error": sanitize_text(f"{type(exc).__name__}: {exc}", secrets),
+            "error": _internal_error(exc),
         }
     secrets = _known_secrets(credentials)
     _write_report(args.output, report, secrets)
