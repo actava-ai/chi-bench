@@ -523,7 +523,7 @@ openai-agents = [
 
 [package.metadata]
 requires-dist = [
-    { name = "anthropic", specifier = ">=0.40.0" },
+    { name = "anthropic", specifier = ">=0.101.0" },
     { name = "audioop-lts", marker = "python_full_version >= '3.13'", specifier = ">=0.2.0" },
     { name = "deepagents", specifier = ">=0.5.2" },
     { name = "deepagents-cli", marker = "extra == 'deepagents-cli'" },
