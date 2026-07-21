@@ -541,7 +541,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 # ---------------------------------------------------------------------------
 # Main run loop
 # ---------------------------------------------------------------------------
-def _build_model_settings():
+def _build_model_settings(reasoning_effort: str | None = None):
     """Configure model_settings with runner-managed retries.
 
     SDK 0.13.6 ships an opt-in retry pipeline (``ModelRetrySettings`` +
@@ -571,7 +571,10 @@ def _build_model_settings():
             retry_policies.provider_suggested(),
         ),
     )
-    return ModelSettings(retry=retry)
+    kwargs: dict[str, Any] = {"retry": retry}
+    if reasoning_effort:
+        kwargs["reasoning"] = {"effort": reasoning_effort}
+    return ModelSettings(**kwargs)
 
 
 async def run_agent(instruction: str, mcp_url: str, logs_dir: Path = DEFAULT_LOGS_DIR) -> None:
@@ -585,6 +588,8 @@ async def run_agent(instruction: str, mcp_url: str, logs_dir: Path = DEFAULT_LOG
 
     model = os.environ.get("OPENAI_AGENTS_MODEL", "gpt-4.1")
     max_turns = int(os.environ.get("OPENAI_AGENTS_MAX_TURNS", "50"))
+    api_mode = os.environ.get("OPENAI_AGENTS_API_MODE", "responses")
+    reasoning_effort = os.environ.get("OPENAI_AGENTS_REASONING_EFFORT")
 
     _install_oversize_output_patch(logs_dir)
     _install_mcp_tool_name_sanitizer()
@@ -597,7 +602,12 @@ async def run_agent(instruction: str, mcp_url: str, logs_dir: Path = DEFAULT_LOG
     # MultiProvider raises ``UserError: Unknown prefix: anthropic`` on the
     # first turn. The OpenAI provider itself uses OPENAI_BASE_URL +
     # OPENAI_API_KEY, so OpenRouter just needs those env vars set.
-    run_config = RunConfig(model_provider=MultiProvider(unknown_prefix_mode="model_id"))
+    run_config = RunConfig(
+        model_provider=MultiProvider(
+            unknown_prefix_mode="model_id",
+            openai_use_responses=api_mode == "responses",
+        )
+    )
 
     async with MCPServerStreamableHttp(
         name="chi_bench",
@@ -610,7 +620,7 @@ async def run_agent(instruction: str, mcp_url: str, logs_dir: Path = DEFAULT_LOG
             mcp_servers=[mcp_server],
             tools=local_tools,
             model=model,
-            model_settings=_build_model_settings(),
+            model_settings=_build_model_settings(reasoning_effort),
         )
 
         print(f"Running agent with model={model}, max_turns={max_turns}")

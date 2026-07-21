@@ -40,6 +40,7 @@ AGENT_ENV_ALLOWLIST: tuple[str, ...] = (
     "GEMINI_API_KEY",
     # OpenAI-compatible / additional providers supported by deepagents-cli
     "OPENROUTER_API_KEY",
+    "TINKER_API_KEY",
     "XAI_API_KEY",
     "GROK_API_KEY",
     "GROQ_API_KEY",

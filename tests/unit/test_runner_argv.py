@@ -8,6 +8,7 @@ def test_forward_agent_keys_emits_present_only():
         "OPENAI_API_KEY": "ak-openai",
         # GEMINI_API_KEY absent
         "OPENROUTER_API_KEY": "ak-openrouter",
+        "TINKER_API_KEY": "ak-tinker",
         "IRRELEVANT": "x",
     }
     flags = _forward_agent_keys(env)
@@ -16,6 +17,7 @@ def test_forward_agent_keys_emits_present_only():
     assert "ANTHROPIC_API_KEY=ak-anthropic" in pairs
     assert "OPENAI_API_KEY=ak-openai" in pairs
     assert "OPENROUTER_API_KEY=ak-openrouter" in pairs
+    assert "TINKER_API_KEY=ak-tinker" in pairs
     assert not any(p.startswith("GEMINI_API_KEY=") for p in pairs)
     assert not any("IRRELEVANT" in p for p in pairs)
 

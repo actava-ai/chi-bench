@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 # the agent container starts. Same pattern as hermes_harness.
 _PROVIDER_PREFLIGHT_KEYS: tuple[str, ...] = (
     "OPENROUTER_API_KEY",
+    "TINKER_API_KEY",
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
     "GEMINI_API_KEY",
@@ -72,6 +73,20 @@ class OpenAIAgentsHarness(BaseInstalledAgent):
             default=100_000,
             env_fallback="OPENAI_AGENTS_MAX_TOOL_RETURN_CHARS",
         ),
+        CliFlag(
+            "api_mode",
+            cli="--api-mode",
+            type="enum",
+            choices=["responses", "chat_completions"],
+            env_fallback="OPENAI_AGENTS_API_MODE",
+        ),
+        CliFlag(
+            "reasoning_effort",
+            cli="--reasoning-effort",
+            type="enum",
+            choices=["none", "minimal", "low", "medium", "high", "xhigh"],
+            env_fallback="OPENAI_AGENTS_REASONING_EFFORT",
+        ),
     ]
 
     @staticmethod
@@ -80,6 +95,7 @@ class OpenAIAgentsHarness(BaseInstalledAgent):
 
     OPENAI_DIRECT_BASE_URL = "https://api.openai.com/v1"
     OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+    TINKER_BASE_URL = "https://tinker.thinkingmachines.dev/services/tinker-prod/oai/api/v1"
 
     @classmethod
     def _resolve_routing(
@@ -94,17 +110,21 @@ class OpenAIAgentsHarness(BaseInstalledAgent):
           ``OPENAI_API_KEY`` from host env, do not set ``OPENAI_BASE_URL``,
           and strip the ``openai/`` prefix from the model id (OpenAI's API
           rejects the prefix).
+        - ``thinkingmachines/<id>`` → Tinker Chat Completions. Forward
+          ``TINKER_API_KEY`` (host env) as ``OPENAI_API_KEY``, set the
+          Tinker base URL, and pass the model id verbatim.
         - ``<vendor>/<id>`` for any other vendor → OpenRouter. Forward
           ``OPENROUTER_API_KEY`` (host env) as ``OPENAI_API_KEY``, set
           ``OPENAI_BASE_URL`` to OpenRouter, pass the model id verbatim
           (OpenRouter requires the full ``vendor/id`` form). Raises if
           ``OPENROUTER_API_KEY`` is not set.
 
-        Escape hatch: if the host env already has ``OPENAI_BASE_URL`` set,
-        no auto-routing is applied — the user's explicit settings win and
-        the model id is forwarded verbatim. This preserves the ability to
-        run e.g. ``openai/gpt-5.4`` against OpenRouter for cross-harness
-        parity with deepagents/codex configs.
+        Escape hatch: except for the dedicated ``thinkingmachines/*`` route,
+        if the host env already has ``OPENAI_BASE_URL`` set, no auto-routing
+        is applied — the user's explicit settings win and the model id is
+        forwarded verbatim. This preserves the ability to run e.g.
+        ``openai/gpt-5.4`` against OpenRouter for cross-harness parity with
+        deepagents/codex configs.
         """
         env: dict[str, str] = {}
         if model_name is None:
@@ -112,6 +132,19 @@ class OpenAIAgentsHarness(BaseInstalledAgent):
                 env["OPENAI_API_KEY"] = val
             if val := host_env.get("OPENAI_BASE_URL"):
                 env["OPENAI_BASE_URL"] = val
+            return env
+
+        if model_name.startswith("thinkingmachines/"):
+            tinker_key = host_env.get("TINKER_API_KEY")
+            if not tinker_key:
+                raise RuntimeError(
+                    f"Model {model_name!r} requires Tinker routing, but "
+                    "TINKER_API_KEY is not set in the host environment."
+                )
+            env["OPENAI_API_KEY"] = tinker_key
+            env["OPENAI_BASE_URL"] = cls.TINKER_BASE_URL
+            env["OPENAI_AGENTS_MODEL"] = model_name
+            env["OPENAI_AGENTS_API_MODE"] = "chat_completions"
             return env
 
         explicit_base = host_env.get("OPENAI_BASE_URL")
@@ -215,6 +248,10 @@ class OpenAIAgentsHarness(BaseInstalledAgent):
         env["OPENAI_AGENTS_MAX_TOOL_RETURN_CHARS"] = str(
             self._resolved_flags.get("max_tool_return_chars", 100_000)
         )
+        if api_mode := self._resolved_flags.get("api_mode"):
+            env["OPENAI_AGENTS_API_MODE"] = api_mode
+        if reasoning_effort := self._resolved_flags.get("reasoning_effort"):
+            env["OPENAI_AGENTS_REASONING_EFFORT"] = reasoning_effort
 
         escaped = shlex.quote(instruction)
         try:

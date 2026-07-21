@@ -71,3 +71,4 @@ def test_agent_list_json_includes_env_vars_for_openai_agents() -> None:
     row = next(r for r in data if r["name"] == "openai-agents")
     assert "OPENAI_API_KEY" in row["env_vars"]
     assert "OPENROUTER_API_KEY" in row["env_vars"]
+    assert "TINKER_API_KEY" in row["env_vars"]
