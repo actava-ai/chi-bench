@@ -29,6 +29,7 @@ import os
 import re
 import sys
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -98,6 +99,7 @@ Answer the user's request using the relevant tool(s), if they are available. Che
 """
 
 DEFAULT_LOGS_DIR = Path("/logs/agent")
+TINKER_BASE_URL = "https://tinker.thinkingmachines.dev/services/tinker-prod/oai/api/v1"
 # Read once at import time. Inside the container subprocess this is fine
 # because the harness sets ``OPENAI_AGENTS_MAX_TOOL_RETURN_CHARS`` in the
 # child env *before* the interpreter starts. Local-tool callsites
@@ -541,7 +543,49 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 # ---------------------------------------------------------------------------
 # Main run loop
 # ---------------------------------------------------------------------------
-def _build_model_settings(reasoning_effort: str | None = None):
+def _is_tinker_chat_route(model: str, api_mode: str) -> bool:
+    base_url = os.environ.get("OPENAI_BASE_URL", "").rstrip("/")
+    return (
+        api_mode == "chat_completions"
+        and model.startswith("thinkingmachines/")
+        and base_url == TINKER_BASE_URL
+    )
+
+
+def _should_replay_same_model_reasoning_content(context: Any) -> bool:
+    """Replay opaque reasoning only to the exact model that produced it."""
+
+    reasoning = getattr(context, "reasoning", None)
+    base_url = (getattr(context, "base_url", None) or "").rstrip("/")
+    return (
+        context.model.startswith("thinkingmachines/")
+        and base_url == TINKER_BASE_URL
+        and getattr(reasoning, "origin_model", None) == context.model
+    )
+
+
+@asynccontextmanager
+async def _agent_model_context(model: str, api_mode: str):
+    if not _is_tinker_chat_route(model, api_mode):
+        yield model
+        return
+
+    from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel  # type: ignore
+    from openai import AsyncOpenAI
+
+    async with AsyncOpenAI() as openai_client:
+        yield OpenAIChatCompletionsModel(
+            model=model,
+            openai_client=openai_client,
+            should_replay_reasoning_content=_should_replay_same_model_reasoning_content,
+        )
+
+
+def _build_model_settings(
+    reasoning_effort: str | None = None,
+    *,
+    separate_reasoning: bool = False,
+):
     """Configure model_settings with runner-managed retries.
 
     SDK 0.13.6 ships an opt-in retry pipeline (``ModelRetrySettings`` +
@@ -574,6 +618,8 @@ def _build_model_settings(reasoning_effort: str | None = None):
     kwargs: dict[str, Any] = {"retry": retry}
     if reasoning_effort:
         kwargs["reasoning"] = {"effort": reasoning_effort}
+    if separate_reasoning:
+        kwargs["extra_body"] = {"separate_reasoning": True}
     return ModelSettings(**kwargs)
 
 
@@ -590,6 +636,7 @@ async def run_agent(instruction: str, mcp_url: str, logs_dir: Path = DEFAULT_LOG
     max_turns = int(os.environ.get("OPENAI_AGENTS_MAX_TURNS", "50"))
     api_mode = os.environ.get("OPENAI_AGENTS_API_MODE", "responses")
     reasoning_effort = os.environ.get("OPENAI_AGENTS_REASONING_EFFORT")
+    is_tinker_chat = _is_tinker_chat_route(model, api_mode)
 
     _install_oversize_output_patch(logs_dir)
     _install_mcp_tool_name_sanitizer()
@@ -609,18 +656,24 @@ async def run_agent(instruction: str, mcp_url: str, logs_dir: Path = DEFAULT_LOG
         )
     )
 
-    async with MCPServerStreamableHttp(
-        name="chi_bench",
-        params={"url": mcp_url},
-        cache_tools_list=True,
-    ) as mcp_server:
+    async with (
+        MCPServerStreamableHttp(
+            name="chi_bench",
+            params={"url": mcp_url},
+            cache_tools_list=True,
+        ) as mcp_server,
+        _agent_model_context(model, api_mode) as agent_model,
+    ):
         agent = Agent(
             name="chi_bench-agent",
             instructions=SYSTEM_PROMPT,
             mcp_servers=[mcp_server],
             tools=local_tools,
-            model=model,
-            model_settings=_build_model_settings(reasoning_effort),
+            model=agent_model,
+            model_settings=_build_model_settings(
+                reasoning_effort,
+                separate_reasoning=is_tinker_chat,
+            ),
         )
 
         print(f"Running agent with model={model}, max_turns={max_turns}")
