@@ -68,6 +68,30 @@ def test_existing_openai_and_openrouter_routes_are_unchanged() -> None:
 
 
 @pytest.mark.asyncio
+async def test_install_pins_compatible_openai_sdk(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    harness = OpenAIAgentsHarness(logs_dir=tmp_path)
+    captured: dict[str, Any] = {}
+
+    async def fake_exec_as_root(environment, *, command: str):
+        captured.update(environment=environment, command=command)
+
+    monkeypatch.setattr(harness, "exec_as_root", fake_exec_as_root)
+    environment = object()
+
+    await harness.install(environment)
+
+    assert captured == {
+        "environment": environment,
+        "command": (
+            "uv pip install --no-cache-dir --python /workspace/.venv "
+            "openai-agents==0.13.6 openai==2.36.0"
+        ),
+    }
+
+
+@pytest.mark.asyncio
 async def test_api_mode_and_reasoning_effort_are_forwarded_to_runner(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

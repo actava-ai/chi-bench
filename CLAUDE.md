@@ -208,6 +208,10 @@ Configs:
 - **OpenAI Agents SDK 0.13.6 replays Chat Completions `reasoning_content` only for DeepSeek by
   default.** Tinker/Inkling tool loops need an explicit `should_replay_reasoning_content` hook;
   otherwise the second turn drops the signed/reasoning state even though the first call succeeds.
+- **Pin the runtime `openai` SDK together with `openai-agents==0.13.6`; the validated pair is
+  `openai==2.36.0`.** **Why:** an unconstrained install resolved OpenAI 2.46.0, whose required
+  `InputTokensDetails.cache_write_tokens` field makes Agents 0.13.6 fail while constructing its
+  default `Usage`, before the first model call.
 - **Do not force a named tool choice for models with always-on/adaptive thinking.** Fable 5 and
   Kimi K3 reject forced tool selection while thinking is enabled; use `auto` plus an imperative
   prompt, then validate that the expected tool call actually occurred and replay all reasoning.

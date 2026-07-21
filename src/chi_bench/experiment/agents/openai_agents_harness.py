@@ -188,7 +188,12 @@ class OpenAIAgentsHarness(BaseInstalledAgent):
     async def install(self, environment: BaseEnvironment) -> None:
         await self.exec_as_root(
             environment,
-            command="uv pip install --no-cache-dir --python /workspace/.venv openai-agents==0.13.6",
+            # Keep this pair aligned with uv.lock. Newer OpenAI SDK releases can
+            # change usage-model fields before the pinned Agents SDK adapts.
+            command=(
+                "uv pip install --no-cache-dir --python /workspace/.venv "
+                "openai-agents==0.13.6 openai==2.36.0"
+            ),
         )
 
     @with_prompt_template
