@@ -191,6 +191,10 @@ Configs:
 - **Two data layouts.** Host source: `data/<domain>/tasks/...`. Inside the baked image
   (`/opt/chi-bench`): flat `tasks/` with `marathon/`/`worlds/` siblings, handbook at
   `/workspace/skills/managed-care-operations-handbook`. `cb data verify` auto-detects.
+- **Local Docker must pass the leaf task ID to `CHI_BENCH_TASK_ID`, not Harbor's qualified
+  `environment_name`.** **Why:** task metadata names are typically `actava-ai/<task-id>`, while
+  the runtime image stores fixtures at `/opt/chi-bench/tasks/<task-id>`; forwarding the qualified
+  name makes the entrypoint exit 65 before Harbor can provision `/logs`.
 - **`cb serve` starts the payer in agent mode** by setting `CHI_BENCH_PAYER_MODE=agent` if unset.
 - **Never use `--no-verify` / `--no-gpg-sign` / hook skips on commits.** Fix the underlying issue.
 - **Test markers gate by default.** `pyproject.toml` sets `addopts = "-m 'not requires_anthropic_key and not slow'"`,

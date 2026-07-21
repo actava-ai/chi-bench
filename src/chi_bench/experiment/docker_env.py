@@ -118,6 +118,10 @@ def build_docker_run_argv(
     argv += ["--name", container_name]
     if not allow_internet:
         argv += ["--network", "none"]
+    # Harbor uses the qualified task name (for example ``actava-ai/task-id``)
+    # as ``environment_name``. The single-image layout stores baked tasks by
+    # their leaf directory name, so the entrypoint must receive that leaf ID.
+    task_id = task_id.rsplit("/", maxsplit=1)[-1]
     argv += ["-e", f"CHI_BENCH_TASK_ID={task_id}"]
     for key in FORWARDED_ENV_KEYS:
         value = host_env.get(key)
