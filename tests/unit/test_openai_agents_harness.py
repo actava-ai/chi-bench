@@ -12,6 +12,7 @@ from chi_bench.experiment.agents.openai_agents_harness import OpenAIAgentsHarnes
 
 
 INKLING_MODEL = "thinkingmachines/Inkling:peft:262144"
+NEMOTRON_MODEL = "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16:peft:262144"
 
 
 def test_thinkingmachines_model_routes_to_tinker_chat_completions() -> None:
@@ -65,6 +66,61 @@ def test_existing_openai_and_openrouter_routes_are_unchanged() -> None:
         "OPENAI_BASE_URL": OpenAIAgentsHarness.OPENROUTER_BASE_URL,
         "OPENAI_AGENTS_MODEL": "moonshotai/kimi-k3",
     }
+
+
+def test_explicit_tinker_route_uses_tinker_for_non_thinkingmachines_model() -> None:
+    env = OpenAIAgentsHarness._resolve_routing(
+        NEMOTRON_MODEL,
+        {
+            "TINKER_API_KEY": "test-tinker-key",
+            "OPENAI_API_KEY": "test-openai-key",
+            "OPENAI_BASE_URL": "https://example.invalid/v1",
+        },
+        provider_route="tinker",
+    )
+
+    assert env == {
+        "OPENAI_API_KEY": "test-tinker-key",
+        "OPENAI_BASE_URL": OpenAIAgentsHarness.TINKER_BASE_URL,
+        "OPENAI_AGENTS_MODEL": NEMOTRON_MODEL,
+        "OPENAI_AGENTS_API_MODE": "chat_completions",
+    }
+
+
+def test_explicit_tinker_route_requires_tinker_api_key() -> None:
+    with pytest.raises(RuntimeError, match="TINKER_API_KEY"):
+        OpenAIAgentsHarness._resolve_routing(
+            NEMOTRON_MODEL,
+            {"OPENROUTER_API_KEY": "test-openrouter-key"},
+            provider_route="tinker",
+        )
+
+
+def test_nemotron_without_explicit_route_still_uses_openrouter() -> None:
+    env = OpenAIAgentsHarness._resolve_routing(
+        NEMOTRON_MODEL,
+        {
+            "OPENROUTER_API_KEY": "test-openrouter-key",
+            "TINKER_API_KEY": "test-tinker-key",
+        },
+    )
+
+    assert env == {
+        "OPENAI_API_KEY": "test-openrouter-key",
+        "OPENAI_BASE_URL": OpenAIAgentsHarness.OPENROUTER_BASE_URL,
+        "OPENAI_AGENTS_MODEL": NEMOTRON_MODEL,
+    }
+
+
+def test_provider_route_flag_is_exposed_to_cli_and_env() -> None:
+    flags = {flag.kwarg: flag for flag in OpenAIAgentsHarness.CLI_FLAGS}
+
+    assert "provider_route" in flags
+    flag = flags["provider_route"]
+    assert flag.cli == "--provider-route"
+    assert flag.type == "enum"
+    assert flag.choices == ["auto", "tinker"]
+    assert flag.env_fallback == "OPENAI_AGENTS_PROVIDER_ROUTE"
 
 
 @pytest.mark.asyncio
@@ -123,3 +179,37 @@ async def test_api_mode_and_reasoning_effort_are_forwarded_to_runner(
     assert captured["environment"] is environment
     assert captured["env"]["OPENAI_AGENTS_API_MODE"] == "chat_completions"
     assert captured["env"]["OPENAI_AGENTS_REASONING_EFFORT"] == "high"
+
+
+@pytest.mark.asyncio
+async def test_provider_route_is_forwarded_to_routing(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TINKER_API_KEY", "test-tinker-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://example.invalid/v1")
+    harness = OpenAIAgentsHarness(
+        logs_dir=tmp_path,
+        model_name=NEMOTRON_MODEL,
+        mcp_servers=[
+            MCPServerConfig(
+                name="chi_bench",
+                transport="streamable-http",
+                url="http://chi-bench-server:8000/mcp",
+            )
+        ],
+        provider_route="tinker",
+        api_mode="chat_completions",
+    )
+    captured: dict[str, Any] = {}
+
+    async def fake_exec_as_agent(environment, *, command: str, env: dict[str, str]):
+        captured.update(environment=environment, command=command, env=env)
+
+    monkeypatch.setattr(harness, "exec_as_agent", fake_exec_as_agent)
+
+    await harness.run("Complete the task", object(), AgentContext())
+
+    assert captured["env"]["OPENAI_API_KEY"] == "test-tinker-key"
+    assert captured["env"]["OPENAI_BASE_URL"] == OpenAIAgentsHarness.TINKER_BASE_URL
+    assert captured["env"]["OPENAI_AGENTS_MODEL"] == NEMOTRON_MODEL
+    assert captured["env"]["OPENAI_AGENTS_API_MODE"] == "chat_completions"

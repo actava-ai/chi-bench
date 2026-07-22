@@ -74,6 +74,13 @@ class OpenAIAgentsHarness(BaseInstalledAgent):
             env_fallback="OPENAI_AGENTS_MAX_TOOL_RETURN_CHARS",
         ),
         CliFlag(
+            "provider_route",
+            cli="--provider-route",
+            type="enum",
+            choices=["auto", "tinker"],
+            env_fallback="OPENAI_AGENTS_PROVIDER_ROUTE",
+        ),
+        CliFlag(
             "api_mode",
             cli="--api-mode",
             type="enum",
@@ -99,32 +106,32 @@ class OpenAIAgentsHarness(BaseInstalledAgent):
 
     @classmethod
     def _resolve_routing(
-        cls, model_name: str | None, host_env: Mapping[str, str]
+        cls,
+        model_name: str | None,
+        host_env: Mapping[str, str],
+        *,
+        provider_route: str | None = None,
     ) -> dict[str, str]:
         """Decide which endpoint + key + model id to forward to the runner.
 
-        Auto-routing rules (only applied when ``OPENAI_BASE_URL`` is *not*
-        set in the host env — that env var acts as the explicit override):
+        An explicit ``provider_route="tinker"`` or a
+        ``thinkingmachines/<id>`` model selects Tinker Chat Completions. This
+        route forwards ``TINKER_API_KEY`` as ``OPENAI_API_KEY``, sets the
+        Tinker base URL, preserves the model id verbatim, and takes precedence
+        over a host ``OPENAI_BASE_URL``.
+
+        Otherwise, a host ``OPENAI_BASE_URL`` is treated as an explicit
+        override. When it is absent, the auto-routing rules are:
 
         - ``openai/<id>`` or bare ``<id>`` → direct OpenAI. Forward
-          ``OPENAI_API_KEY`` from host env, do not set ``OPENAI_BASE_URL``,
+          ``OPENAI_API_KEY`` from host env, set the direct OpenAI base URL,
           and strip the ``openai/`` prefix from the model id (OpenAI's API
           rejects the prefix).
-        - ``thinkingmachines/<id>`` → Tinker Chat Completions. Forward
-          ``TINKER_API_KEY`` (host env) as ``OPENAI_API_KEY``, set the
-          Tinker base URL, and pass the model id verbatim.
         - ``<vendor>/<id>`` for any other vendor → OpenRouter. Forward
           ``OPENROUTER_API_KEY`` (host env) as ``OPENAI_API_KEY``, set
           ``OPENAI_BASE_URL`` to OpenRouter, pass the model id verbatim
           (OpenRouter requires the full ``vendor/id`` form). Raises if
           ``OPENROUTER_API_KEY`` is not set.
-
-        Escape hatch: except for the dedicated ``thinkingmachines/*`` route,
-        if the host env already has ``OPENAI_BASE_URL`` set, no auto-routing
-        is applied — the user's explicit settings win and the model id is
-        forwarded verbatim. This preserves the ability to run e.g.
-        ``openai/gpt-5.4`` against OpenRouter for cross-harness parity with
-        deepagents/codex configs.
         """
         env: dict[str, str] = {}
         if model_name is None:
@@ -134,7 +141,7 @@ class OpenAIAgentsHarness(BaseInstalledAgent):
                 env["OPENAI_BASE_URL"] = val
             return env
 
-        if model_name.startswith("thinkingmachines/"):
+        if provider_route == "tinker" or model_name.startswith("thinkingmachines/"):
             tinker_key = host_env.get("TINKER_API_KEY")
             if not tinker_key:
                 raise RuntimeError(
@@ -246,7 +253,11 @@ class OpenAIAgentsHarness(BaseInstalledAgent):
             if k not in ("OPENAI_API_KEY", "OPENAI_BASE_URL")
         }
 
-        env: dict[str, str] = self._resolve_routing(self.model_name, os.environ)
+        env: dict[str, str] = self._resolve_routing(
+            self.model_name,
+            os.environ,
+            provider_route=self._resolved_flags.get("provider_route"),
+        )
 
         env["OPENAI_AGENTS_MAX_TURNS"] = str(self._resolved_flags.get("max_turns", 50))
         env["OPENAI_AGENTS_MAX_RETRIES"] = str(self._resolved_flags.get("max_retries", 10))
