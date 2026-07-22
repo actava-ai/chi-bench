@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import FrozenInstanceError
 
 import pytest
@@ -212,6 +213,39 @@ def test_replay_normalizer_preserves_mapping_arguments_and_is_idempotent() -> No
     assert normalized_again[0] is not normalized[0]
     assert normalized[0]["arguments"] is not request_input[0]["arguments"]
     assert normalized_again[0]["arguments"] is not normalized[0]["arguments"]
+
+
+def test_replay_normalizer_keeps_empty_argument_objects_truthy_and_json_empty() -> None:
+    request_input: list[dict[str, object]] = [
+        {
+            "type": "function_call",
+            "call_id": "call_from_string",
+            "name": "refresh_status",
+            "arguments": "{}",
+        },
+        {
+            "type": "function_call",
+            "call_id": "call_from_mapping",
+            "name": "refresh_status",
+            "arguments": {},
+        },
+    ]
+
+    normalized = normalize_nemotron_replay_input(request_input)
+    normalized_again = normalize_nemotron_replay_input(normalized)
+
+    for replay in (normalized, normalized_again):
+        assert isinstance(replay, list)
+        for item in replay:
+            arguments = item["arguments"]
+            assert isinstance(arguments, dict)
+            assert arguments == {}
+            assert bool(arguments)
+            assert json.dumps(arguments) == "{}"
+
+    assert request_input[0]["arguments"] == "{}"
+    assert request_input[1]["arguments"] == {}
+    assert not request_input[1]["arguments"]
 
 
 @pytest.mark.parametrize(

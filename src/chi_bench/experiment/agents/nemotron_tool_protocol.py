@@ -30,6 +30,13 @@ _PARAMETER_PATTERN = re.compile(
 _WHITESPACE_PATTERN = re.compile(r"\s*")
 
 
+class _TruthyEmptyArguments(dict[str, object]):
+    """An empty JSON object that survives the Agents SDK's truthiness fallback."""
+
+    def __bool__(self) -> bool:
+        return True
+
+
 @dataclass(frozen=True)
 class NemotronToolCall:
     """A parsed Nemotron function call in provider-independent form."""
@@ -87,6 +94,8 @@ def normalize_nemotron_replay_input(
             continue
         arguments = item.get("arguments")
         if isinstance(arguments, dict):
+            if len(arguments) == 0:
+                item["arguments"] = _TruthyEmptyArguments()
             continue
         if not isinstance(arguments, str):
             raise ValueError("function-call arguments must be a JSON object")
@@ -96,7 +105,7 @@ def normalize_nemotron_replay_input(
             raise ValueError("function-call arguments must be a JSON object") from exc
         if not isinstance(decoded, dict):
             raise ValueError("function-call arguments must be a JSON object")
-        item["arguments"] = decoded
+        item["arguments"] = decoded if decoded else _TruthyEmptyArguments()
     return normalized
 
 

@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import inspect
+import json
 from typing import Any, cast
 
+import httpx
 import pytest
+from agents import Agent, Runner, function_tool
 from agents.items import ModelResponse
 from agents.models.fake_id import FAKE_RESPONSES_ID
 from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
 from agents.usage import Usage
+from openai import AsyncOpenAI
 from openai.types.responses import (
     ResponseFunctionToolCall,
     ResponseOutputMessage,
@@ -329,3 +333,83 @@ async def test_adapter_skips_all_conversion_when_response_has_structured_call(
     assert result.output[0] is reasoning
     assert result.output[1] is xml_message
     assert result.output[2] is existing_call
+
+
+@pytest.mark.asyncio
+async def test_runner_replays_nonempty_and_empty_xml_arguments_as_json_objects() -> None:
+    requests: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        requests.append(body)
+        if len(requests) == 1:
+            content = """\
+<tool_call>
+<function=lookup_case>
+<parameter=case_id>"case-1"</parameter>
+</function>
+</tool_call>
+<tool_call>
+<function=refresh_status>
+</function>
+</tool_call>"""
+        else:
+            tool_calls = body["messages"][-3]["tool_calls"]
+            assert [call["function"]["arguments"] for call in tool_calls] == [
+                {"case_id": "case-1"},
+                {},
+            ]
+            content = "complete"
+        return httpx.Response(
+            200,
+            json={
+                "id": f"chatcmpl-{len(requests)}",
+                "object": "chat.completion",
+                "created": 1,
+                "model": NEMOTRON_ULTRA_256K_MODEL,
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {"role": "assistant", "content": content},
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": 1,
+                    "completion_tokens": 1,
+                    "total_tokens": 2,
+                },
+            },
+        )
+
+    @function_tool
+    async def lookup_case(case_id: str) -> str:
+        """Look up a case."""
+        return f"found {case_id}"
+
+    @function_tool
+    async def refresh_status() -> str:
+        """Refresh status."""
+        return "refreshed"
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as http_client:
+        async with AsyncOpenAI(
+            api_key="test-key",
+            base_url="https://tinker.invalid/v1",
+            http_client=http_client,
+        ) as openai_client:
+            model = NemotronTinkerChatCompletionsModel(
+                model=NEMOTRON_ULTRA_256K_MODEL,
+                openai_client=openai_client,
+            )
+            agent = Agent(
+                name="Nemotron replay test",
+                model=model,
+                tools=[lookup_case, refresh_status],
+            )
+
+            result = await Runner.run(agent, "Complete the workflow")
+
+    assert result.final_output == "complete"
+    assert len(requests) == 2
