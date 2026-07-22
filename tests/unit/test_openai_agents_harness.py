@@ -163,7 +163,7 @@ async def test_api_mode_and_reasoning_effort_are_forwarded_to_runner(
                 url="http://chi-bench-server:8000/mcp",
             )
         ],
-        api_mode="chat_completions",
+        api_mode="responses",
         reasoning_effort="high",
     )
     captured: dict[str, Any] = {}
@@ -177,7 +177,7 @@ async def test_api_mode_and_reasoning_effort_are_forwarded_to_runner(
     await harness.run("Complete the task", environment, AgentContext())
 
     assert captured["environment"] is environment
-    assert captured["env"]["OPENAI_AGENTS_API_MODE"] == "chat_completions"
+    assert captured["env"]["OPENAI_AGENTS_API_MODE"] == "responses"
     assert captured["env"]["OPENAI_AGENTS_REASONING_EFFORT"] == "high"
 
 
@@ -212,4 +212,34 @@ async def test_provider_route_is_forwarded_to_routing(
     assert captured["env"]["OPENAI_API_KEY"] == "test-tinker-key"
     assert captured["env"]["OPENAI_BASE_URL"] == OpenAIAgentsHarness.TINKER_BASE_URL
     assert captured["env"]["OPENAI_AGENTS_MODEL"] == NEMOTRON_MODEL
+    assert captured["env"]["OPENAI_AGENTS_API_MODE"] == "chat_completions"
+
+
+@pytest.mark.asyncio
+async def test_tinker_route_forces_chat_completions_over_api_mode_flag(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TINKER_API_KEY", "test-tinker-key")
+    harness = OpenAIAgentsHarness(
+        logs_dir=tmp_path,
+        model_name=NEMOTRON_MODEL,
+        mcp_servers=[
+            MCPServerConfig(
+                name="chi_bench",
+                transport="streamable-http",
+                url="http://chi-bench-server:8000/mcp",
+            )
+        ],
+        provider_route="tinker",
+        api_mode="responses",
+    )
+    captured: dict[str, Any] = {}
+
+    async def fake_exec_as_agent(environment, *, command: str, env: dict[str, str]):
+        captured.update(environment=environment, command=command, env=env)
+
+    monkeypatch.setattr(harness, "exec_as_agent", fake_exec_as_agent)
+
+    await harness.run("Complete the task", object(), AgentContext())
+
     assert captured["env"]["OPENAI_AGENTS_API_MODE"] == "chat_completions"

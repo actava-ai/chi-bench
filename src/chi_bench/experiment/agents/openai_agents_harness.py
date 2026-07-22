@@ -264,7 +264,9 @@ class OpenAIAgentsHarness(BaseInstalledAgent):
         env["OPENAI_AGENTS_MAX_TOOL_RETURN_CHARS"] = str(
             self._resolved_flags.get("max_tool_return_chars", 100_000)
         )
-        if api_mode := self._resolved_flags.get("api_mode"):
+        if env.get("OPENAI_BASE_URL") == self.TINKER_BASE_URL:
+            env["OPENAI_AGENTS_API_MODE"] = "chat_completions"
+        elif api_mode := self._resolved_flags.get("api_mode"):
             env["OPENAI_AGENTS_API_MODE"] = api_mode
         if reasoning_effort := self._resolved_flags.get("reasoning_effort"):
             env["OPENAI_AGENTS_REASONING_EFFORT"] = reasoning_effort
