@@ -348,37 +348,37 @@
 - Modify: `configs/experiments/nemotron3_ultra_tinker_full_2026_07.yaml`
 - Modify: `tests/unit/test_frontier_models_smoke_config.py`
 
-- [ ] **Step 1: Write failing model-adapter tests.** Require a
+- [x] **Step 1: Write failing model-adapter tests.** Require a
   `NemotronTinkerChatCompletionsModel` subclass to normalize replay input before calling the pinned
   `OpenAIChatCompletionsModel`, preserve reasoning items, replace an XML-only assistant output
   message with standard function-call items, and leave normal final text or malformed XML
   unchanged. Require the runner to select it only for the exact Nemotron model at the Tinker Chat
   Completions route; Inkling and other Tinker models retain the standard wrapper.
 
-- [ ] **Step 2: Run model-adapter RED.**
+- [x] **Step 2: Run model-adapter RED.**
 
   ```bash
   uv run pytest tests/unit/test_nemotron_tinker_model.py tests/unit/test_openai_agents_runner_config.py -v
   ```
 
-- [ ] **Step 3: Implement the model subclass and exact selection.** Override non-streaming
+- [x] **Step 3: Implement the model subclass and exact selection.** Override non-streaming
   `get_response`, call the pinned parent with `normalize_nemotron_replay_input(input)`, then convert
   only `ResponseOutputMessage` values whose entire text parses through
   `parse_nemotron_tool_calls`. Construct `ResponseFunctionToolCall` items with the parser's stable
   IDs and JSON-string arguments so the rest of the Agents SDK remains standard. The next call is
   normalized back to mappings only at the Tinker boundary.
 
-- [ ] **Step 4: Write failing preflight and matrix tests.** Change the exact Nemotron fake first
+- [x] **Step 4: Write failing preflight and matrix tests.** Change the exact Nemotron fake first
   response to raw XML with no `tool_calls`; require the shared parser to construct the historical
   assistant call with mapping arguments, replay the tool result, and obtain final text. First
   change matrix expectations to omit `reasoning_effort`, observe RED, then remove it from both
   committed matrices because the live endpoint returned HTTP 400 for that parameter.
 
-- [ ] **Step 5: Implement preflight conversion and default reasoning.** Apply XML conversion only
+- [x] **Step 5: Implement preflight conversion and default reasoning.** Apply XML conversion only
   when `spec.provider == "tinker"` and the exact model matches. Structured Inkling calls continue
   to replay byte-for-byte. Persist no XML, prompt, reasoning, or response body in the report.
 
-- [ ] **Step 6: Run GREEN and commit.**
+- [x] **Step 6: Run GREEN and commit.**
 
   ```bash
   uv run pytest tests/unit/test_nemotron_tinker_model.py tests/unit/test_openai_agents_runner_config.py tests/unit/test_preflight_frontier_models.py tests/unit/test_frontier_models_smoke_config.py -v
