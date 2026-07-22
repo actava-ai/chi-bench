@@ -47,6 +47,38 @@ round-trip with non-empty `reasoning_content`. Otherwise use the omitted setting
 passes. Do not send NVIDIA's self-hosting-only `chat_template_kwargs` unless the Tinker canary
 demonstrates they are required.
 
+### Live-gate finding and approved compatibility adapter
+
+The 2026-07-22 live gate established two model-specific facts before any Modal task ran:
+
+1. Tinker rejects `reasoning_effort` for this exact model with HTTP 400. Omitting the parameter
+   enables the model's default full reasoning and returns non-empty `reasoning_content`.
+2. Tinker's beta OpenAI endpoint renders the Nemotron tool prompt correctly, but returns the
+   model's valid `<tool_call>...</tool_call>` XML as ordinary assistant `content` instead of an
+   OpenAI `tool_calls` array. Replaying a standard OpenAI tool call also fails because Nemotron's
+   Hugging Face chat template expects `function.arguments` to be a mapping, while the OpenAI
+   protocol and Agents SDK use a JSON string.
+
+The user approved an exact-route compatibility adapter. Keep it inside the existing
+`openai-agents` harness; do not create a new harness or apply XML parsing to other models. The
+adapter has two symmetric responsibilities:
+
+- Inbound: when the exact Nemotron model is using Tinker Chat Completions and the assistant has no
+  structured calls, parse only a complete, strict Nemotron tool-call XML response into standard
+  function-call items. Reject duplicate parameters, malformed XML, trailing prose, and unknown
+  structures by leaving the response unconverted so the agent fails closed rather than executing
+  ambiguous text.
+- Outbound: for the same exact route only, copy replay input and decode each function call's JSON
+  argument string into a mapping before the SDK renders historical assistant messages. Reject
+  non-object JSON instead of changing other route behavior.
+
+Preserve separated reasoning as a same-model reasoning item, preserve tool-call IDs consistently
+through the tool result, and keep normal final text unchanged. Share the strict pure parser with
+the redacted preflight so the live two-turn gate exercises the same wire compatibility as the
+agent. A manual in-memory probe already demonstrated that XML conversion plus mapping arguments
+produces a successful second turn with final text; automated tests and a fresh redacted probe are
+still required before Modal canaries.
+
 ## Evaluation matrices and execution
 
 Create a three-single-task smoke matrix and a separate full matrix. Both use the exact 256K model

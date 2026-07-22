@@ -4,7 +4,7 @@
 
 **Goal:** Route Nemotron 3 Ultra 256K through Tinker with the existing OpenAI Agents reasoning/tool semantics, then run and report one pass@1 attempt over all 75 headline chi-Bench tasks.
 
-**Architecture:** Add an explicit config-scoped Tinker provider route while preserving current automatic routing, and identify Tinker reasoning replay by endpoint plus API mode rather than model-name prefix. Extend the redacted two-turn provider preflight and add isolated three-task canary and 75-task full matrices. Aggregate the completed Nemotron root independently, then append its native row to the prior six-model report without re-bootstrap.
+**Architecture:** Add an explicit config-scoped Tinker provider route while preserving current automatic routing, and identify Tinker reasoning replay by endpoint plus API mode rather than model-name prefix. For the exact Nemotron-on-Tinker route, adapt strict XML-only tool calls into standard Agents SDK function calls and normalize replay arguments back to the mapping required by Nemotron's chat template. Exercise the same pure protocol adapter in the redacted two-turn preflight, then run isolated three-task canary and 75-task full matrices. Aggregate the completed Nemotron root independently, then append its native row to the prior six-model report without re-bootstrap.
 
 **Tech Stack:** Python 3.13, pytest, YAML, Harbor 0.6.1, OpenAI Agents SDK 0.13.6, OpenAI Python 2.36.0, Tinker OpenAI-compatible Chat Completions, Modal sandboxes, Anthropic WorkspaceJudge.
 
@@ -14,6 +14,8 @@
 
 - `src/chi_bench/experiment/agents/openai_agents_harness.py`: expose and resolve the explicit Tinker route using `TINKER_API_KEY`.
 - `src/chi_bench/experiment/agents/openai_agents_runner.py`: apply Tinker Chat Completions and same-model reasoning replay to any model at the Tinker endpoint.
+- `src/chi_bench/experiment/agents/nemotron_tool_protocol.py`: strictly parse Nemotron tool XML and normalize historical call arguments without SDK dependencies.
+- `src/chi_bench/experiment/agents/nemotron_tinker_model.py`: bridge the exact Nemotron-on-Tinker route to standard Agents SDK response items.
 - `scripts/preflight_frontier_models.py`: classify explicit Tinker rows and allow one-row preflight matrices.
 - `tests/unit/test_openai_agents_harness.py`: route selection and missing-key contracts.
 - `tests/unit/test_openai_agents_runner_config.py`: endpoint-scoped reasoning replay contracts.
@@ -273,9 +275,123 @@
   git commit -m "chore: add Nemotron Tinker evaluation matrices"
   ```
 
-## Task 5: Verify locally and run both live Tinker probes
+## Task 5: Add a strict Nemotron XML tool protocol adapter
 
-- [ ] **Step 1: Run repository verification before paid calls.**
+**Files:**
+
+- Create: `src/chi_bench/experiment/agents/nemotron_tool_protocol.py`
+- Create: `tests/unit/test_nemotron_tool_protocol.py`
+
+- [ ] **Step 1: Write failing pure-protocol tests.** Define the exact model constant and a
+  `NemotronToolCall` value object. Require the parser to accept one or multiple complete calls,
+  preserve multiline strings, decode JSON objects/lists/numbers/booleans, and generate stable
+  call IDs. Require it to reject trailing prose, malformed tags, duplicate parameters, invalid
+  names, and text with no calls. Require replay normalization to copy inputs, decode function-call
+  argument strings to mappings, preserve unrelated items, and reject invalid or non-object JSON.
+
+- [ ] **Step 2: Run RED.**
+
+  ```bash
+  uv run pytest tests/unit/test_nemotron_tool_protocol.py -v
+  ```
+
+  Expected: collection fails because `nemotron_tool_protocol` does not exist.
+
+- [ ] **Step 3: Implement the pure fail-closed protocol.** Export this interface without any SDK
+  imports so the runner and redacted preflight share it:
+
+  ```python
+  NEMOTRON_ULTRA_256K_MODEL = (
+      "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16:peft:262144"
+  )
+
+
+  @dataclass(frozen=True)
+  class NemotronToolCall:
+      call_id: str
+      name: str
+      arguments: dict[str, object]
+
+
+  def parse_nemotron_tool_calls(content: str) -> tuple[NemotronToolCall, ...] | None:
+      """Parse only complete XML-only Nemotron tool responses; otherwise return None."""
+
+
+  def normalize_nemotron_replay_input(
+      request_input: str | list[dict[str, object]],
+  ) -> str | list[dict[str, object]]:
+      """Copy replay items and decode function-call argument JSON into mappings."""
+  ```
+
+- [ ] **Step 4: Run GREEN and commit.**
+
+  ```bash
+  uv run pytest tests/unit/test_nemotron_tool_protocol.py -v
+  uv run ruff check src/chi_bench/experiment/agents/nemotron_tool_protocol.py tests/unit/test_nemotron_tool_protocol.py
+  uv run ruff format --check src/chi_bench/experiment/agents/nemotron_tool_protocol.py tests/unit/test_nemotron_tool_protocol.py
+  git diff --check
+  git add src/chi_bench/experiment/agents/nemotron_tool_protocol.py tests/unit/test_nemotron_tool_protocol.py
+  git commit -m "feat: parse Nemotron Tinker tool protocol"
+  ```
+
+## Task 6: Integrate the exact-route adapter and redacted preflight
+
+**Files:**
+
+- Create: `src/chi_bench/experiment/agents/nemotron_tinker_model.py`
+- Create: `tests/unit/test_nemotron_tinker_model.py`
+- Modify: `src/chi_bench/experiment/agents/openai_agents_runner.py`
+- Modify: `tests/unit/test_openai_agents_runner_config.py`
+- Modify: `scripts/preflight_frontier_models.py`
+- Modify: `tests/unit/test_preflight_frontier_models.py`
+- Modify: `configs/experiments/nemotron3_ultra_tinker_smoke_2026_07.yaml`
+- Modify: `configs/experiments/nemotron3_ultra_tinker_full_2026_07.yaml`
+- Modify: `tests/unit/test_frontier_models_smoke_config.py`
+
+- [ ] **Step 1: Write failing model-adapter tests.** Require a
+  `NemotronTinkerChatCompletionsModel` subclass to normalize replay input before calling the pinned
+  `OpenAIChatCompletionsModel`, preserve reasoning items, replace an XML-only assistant output
+  message with standard function-call items, and leave normal final text or malformed XML
+  unchanged. Require the runner to select it only for the exact Nemotron model at the Tinker Chat
+  Completions route; Inkling and other Tinker models retain the standard wrapper.
+
+- [ ] **Step 2: Run model-adapter RED.**
+
+  ```bash
+  uv run pytest tests/unit/test_nemotron_tinker_model.py tests/unit/test_openai_agents_runner_config.py -v
+  ```
+
+- [ ] **Step 3: Implement the model subclass and exact selection.** Override non-streaming
+  `get_response`, call the pinned parent with `normalize_nemotron_replay_input(input)`, then convert
+  only `ResponseOutputMessage` values whose entire text parses through
+  `parse_nemotron_tool_calls`. Construct `ResponseFunctionToolCall` items with the parser's stable
+  IDs and JSON-string arguments so the rest of the Agents SDK remains standard. The next call is
+  normalized back to mappings only at the Tinker boundary.
+
+- [ ] **Step 4: Write failing preflight and matrix tests.** Change the exact Nemotron fake first
+  response to raw XML with no `tool_calls`; require the shared parser to construct the historical
+  assistant call with mapping arguments, replay the tool result, and obtain final text. First
+  change matrix expectations to omit `reasoning_effort`, observe RED, then remove it from both
+  committed matrices because the live endpoint returned HTTP 400 for that parameter.
+
+- [ ] **Step 5: Implement preflight conversion and default reasoning.** Apply XML conversion only
+  when `spec.provider == "tinker"` and the exact model matches. Structured Inkling calls continue
+  to replay byte-for-byte. Persist no XML, prompt, reasoning, or response body in the report.
+
+- [ ] **Step 6: Run GREEN and commit.**
+
+  ```bash
+  uv run pytest tests/unit/test_nemotron_tinker_model.py tests/unit/test_openai_agents_runner_config.py tests/unit/test_preflight_frontier_models.py tests/unit/test_frontier_models_smoke_config.py -v
+  uv run ruff check src/ tests/ scripts/preflight_frontier_models.py
+  uv run ruff format --check src/ tests/ scripts/preflight_frontier_models.py
+  git diff --check
+  git add src/chi_bench/experiment/agents/nemotron_tinker_model.py src/chi_bench/experiment/agents/openai_agents_runner.py scripts/preflight_frontier_models.py tests/unit/test_nemotron_tinker_model.py tests/unit/test_openai_agents_runner_config.py tests/unit/test_preflight_frontier_models.py configs/experiments/nemotron3_ultra_tinker_smoke_2026_07.yaml configs/experiments/nemotron3_ultra_tinker_full_2026_07.yaml tests/unit/test_frontier_models_smoke_config.py
+  git commit -m "feat: adapt Nemotron tools on Tinker"
+  ```
+
+## Task 7: Re-run local verification and the live Tinker gate
+
+- [ ] **Step 1: Re-run repository verification before paid benchmark calls.**
 
   ```bash
   uv run pytest
@@ -285,22 +401,20 @@
   uv run cb data verify
   ```
 
-- [ ] **Step 2: Run the high-effort redacted probe.** Write only sanitized metadata to an ignored log root:
+- [ ] **Step 2: Run the committed default-reasoning redacted probe.**
 
   ```bash
   uv run python scripts/preflight_frontier_models.py \
     --config configs/experiments/nemotron3_ultra_tinker_smoke_2026_07.yaml \
     --env-file .env \
-    --output logs/experiments/nemotron3_ultra_tinker_preflight_2026_07/high.json
+    --output logs/experiments/nemotron3_ultra_tinker_preflight_2026_07/adapter.json
   ```
 
-  Require `success`, `tool_roundtrip`, and `reasoning_metadata` to be true for Nemotron.
+  Require the Nemotron row to report `success`, `tool_roundtrip`, and `reasoning_metadata` true;
+  require both Anthropic support checks to pass. Treat the prior `high.json` HTTP 400 as the
+  evidence for selecting default reasoning, not as an evaluation result.
 
-- [ ] **Step 3: Run the default-effort redacted probe.** Create an ignored copy of the smoke matrix under `logs/.slices/nemotron3_ultra_tinker_preflight_2026_07/default.yaml` with only the `reasoning_effort: high` line removed, then run the same script to `default.json`. Require the same three booleans.
-
-- [ ] **Step 4: Select the evaluated reasoning setting.** If both pass, keep `high`. If only default passes and high returns a sanitized unsupported-parameter failure, first change the matrix-contract expectation to omit `reasoning_effort`, observe RED, remove it from both matrices, run GREEN, and commit `fix: use Nemotron default Tinker reasoning`. Any other failure blocks paid benchmark trials pending diagnosis.
-
-## Task 6: Run three Modal domain canaries
+## Task 8: Run three Modal domain canaries
 
 - [ ] **Step 1: Materialize and audit the smoke slices.**
 
@@ -316,7 +430,7 @@
 
 - [ ] **Step 3: Gate the full run.** Require exactly three verifier-backed `result.json` files, three `verifier/scorecard.json` files, no infrastructure exceptions, exact Nemotron model identity in each result, and agent logs showing a completed Tinker reasoning/tool conversation. Preserve genuine task failures as valid canary outcomes if the infrastructure and harness are healthy.
 
-## Task 7: Execute and monitor the 75-task full evaluation
+## Task 9: Execute and monitor the 75-task full evaluation
 
 - [ ] **Step 1: Materialize the full slices.**
 
@@ -334,7 +448,7 @@
 
 - [ ] **Step 4: Resume narrowly.** Skip completed slices. For a verified provider/infrastructure transient, archive the entire partial slice outside the aggregation root before rerunning. Do not rerun max-turn exhaustion, invalid tool calls, task failures, or other genuine agent outcomes.
 
-## Task 8: Aggregate, verify, and report seven models
+## Task 10: Aggregate, verify, and report seven models
 
 - [ ] **Step 1: Aggregate Nemotron independently.**
 
