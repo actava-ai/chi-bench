@@ -33,7 +33,6 @@ NEMOTRON_MODEL = "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16:peft:262144"
 NEMOTRON_AGENT_KWARGS = {
     "provider_route": "tinker",
     "api_mode": "chat_completions",
-    "reasoning_effort": "high",
     "max_turns": "50",
     "max_retries": "10",
     "max_tool_return_chars": "100000",

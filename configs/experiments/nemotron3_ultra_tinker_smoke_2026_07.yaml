@@ -24,7 +24,6 @@ rows:
     agent_kwargs:
       provider_route: tinker
       api_mode: chat_completions
-      reasoning_effort: high
       max_turns: "50"
       max_retries: "10"
       max_tool_return_chars: "100000"

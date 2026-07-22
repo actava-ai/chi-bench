@@ -13,10 +13,23 @@ from typing import Any
 import httpx
 import pytest
 
+from chi_bench.experiment.agents.nemotron_tool_protocol import (
+    NEMOTRON_ULTRA_256K_MODEL as NEMOTRON_MODEL,
+    parse_nemotron_tool_calls,
+)
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "scripts/preflight_frontier_models.py"
 MATRIX_PATH = REPO_ROOT / "configs/experiments/frontier_models_smoke_2026_07.yaml"
-NEMOTRON_MODEL = "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16:peft:262144"
+NEMOTRON_TOOL_XML = (
+    "<tool_call>\n"
+    "<function=preflight_echo>\n"
+    "<parameter=value>\n"
+    "ping\n"
+    "</parameter>\n"
+    "</function>\n"
+    "</tool_call>"
+)
 
 TEST_CREDENTIALS = {
     "ANTHROPIC_API_KEY": "anthropic-test-secret-123456",
@@ -207,6 +220,39 @@ def _chat_tool_response(model: str) -> dict[str, Any]:
     }
 
 
+def _nemotron_xml_tool_response(
+    content: str = NEMOTRON_TOOL_XML,
+    *,
+    model: str = NEMOTRON_MODEL,
+) -> dict[str, Any]:
+    return {
+        "id": f"chatcmpl_{model}_tool",
+        "object": "chat.completion",
+        "created": 1,
+        "model": model,
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": content,
+                    "reasoning_content": "opaque-nemotron-reasoning-state",
+                    "reasoning_details": [{"type": "opaque", "id": "reasoning_state_1"}],
+                },
+                "finish_reason": "stop",
+                "logprobs": None,
+            }
+        ],
+        "usage": {
+            "prompt_tokens": 11,
+            "completion_tokens": 5,
+            "total_tokens": 16,
+            "prompt_tokens_details": {"cached_tokens": 2},
+            "completion_tokens_details": {"reasoning_tokens": 4},
+        },
+    }
+
+
 def _chat_text_response(model: str) -> dict[str, Any]:
     return {
         "id": f"chatcmpl_{model}_final",
@@ -226,8 +272,16 @@ def _chat_text_response(model: str) -> dict[str, Any]:
 
 
 class SequenceRequester:
-    def __init__(self, payloads: list[dict[str, Any]]) -> None:
+    def __init__(
+        self,
+        payloads: list[dict[str, Any]],
+        *,
+        status_codes: list[int] | None = None,
+    ) -> None:
         self.payloads = list(payloads)
+        self.status_codes = list(status_codes or [200] * len(payloads))
+        if len(self.status_codes) != len(self.payloads):
+            raise ValueError("status_codes must match payloads")
         self.calls: list[dict[str, Any]] = []
 
     def __call__(
@@ -249,7 +303,13 @@ class SequenceRequester:
             }
         )
         payload = self.payloads.pop(0)
-        return _http_response(url, payload, request_id=f"req_{len(self.calls)}")
+        status_code = self.status_codes.pop(0)
+        return _http_response(
+            url,
+            payload,
+            request_id=f"req_{len(self.calls)}",
+            status_code=status_code,
+        )
 
 
 class StaticResponseRequester:
@@ -348,7 +408,6 @@ def _write_nemotron_config(path: Path) -> None:
     agent_kwargs:
       provider_route: tinker
       api_mode: chat_completions
-      reasoning_effort: high
 """,
         encoding="utf-8",
     )
@@ -407,19 +466,19 @@ def test_loads_explicit_tinker_route_for_one_row_nemotron_config(
             agent_kwargs={
                 "provider_route": "tinker",
                 "api_mode": "chat_completions",
-                "reasoning_effort": "high",
             },
         )
     ]
 
 
-def test_explicit_tinker_nemotron_probe_replays_full_assistant_message(
+def test_explicit_tinker_nemotron_probe_converts_xml_tool_call_for_replay(
     preflight: ModuleType, tmp_path: Path
 ) -> None:
     config = tmp_path / "nemotron.yaml"
     _write_nemotron_config(config)
     spec = preflight.load_probe_specs(config)[0]
-    first = _chat_tool_response(NEMOTRON_MODEL)
+    first = _nemotron_xml_tool_response()
+    original_assistant = copy.deepcopy(first["choices"][0]["message"])
     requester = SequenceRequester([first, _chat_text_response(NEMOTRON_MODEL)])
 
     result = preflight.probe_model(spec, TEST_CREDENTIALS, requester)
@@ -427,15 +486,155 @@ def test_explicit_tinker_nemotron_probe_replays_full_assistant_message(
     assert result["success"] is True
     assert result["tool_roundtrip"] is True
     assert result["reasoning_metadata"] is True
-    assert all(call["json"]["reasoning_effort"] == "high" for call in requester.calls)
+    assert all("reasoning_effort" not in call["json"] for call in requester.calls)
     assert all(call["json"]["separate_reasoning"] is True for call in requester.calls)
+    parsed_calls = parse_nemotron_tool_calls(NEMOTRON_TOOL_XML)
+    assert parsed_calls is not None
+    assert len(parsed_calls) == 1
+    expected_call = parsed_calls[0]
     second_messages = requester.calls[1]["json"]["messages"]
-    assert second_messages[1] == first["choices"][0]["message"]
+    assert second_messages[1] == {
+        "role": "assistant",
+        "content": None,
+        "reasoning_content": "opaque-nemotron-reasoning-state",
+        "reasoning_details": [{"type": "opaque", "id": "reasoning_state_1"}],
+        "tool_calls": [
+            {
+                "id": expected_call.call_id,
+                "type": "function",
+                "function": {
+                    "name": "preflight_echo",
+                    "arguments": {"value": "ping"},
+                },
+            }
+        ],
+    }
     assert second_messages[2] == {
         "role": "tool",
-        "tool_call_id": "call_echo",
+        "tool_call_id": expected_call.call_id,
         "content": '{"echo":"ping","ok":true}',
     }
+    assert first["choices"][0]["message"] == original_assistant
+    assert NEMOTRON_TOOL_XML not in json.dumps(requester.calls[1]["json"])
+    serialized_result = json.dumps(result)
+    assert NEMOTRON_TOOL_XML not in serialized_result
+    assert "opaque-nemotron-reasoning-state" not in serialized_result
+
+
+def test_explicit_tinker_nemotron_second_turn_error_redacts_dynamic_reasoning(
+    preflight: ModuleType,
+    tmp_path: Path,
+) -> None:
+    config = tmp_path / "nemotron.yaml"
+    _write_nemotron_config(config)
+    spec = preflight.load_probe_specs(config)[0]
+    direct_reasoning = "unique dynamic reasoning content 5802d9c1"
+    nested_reasoning = "unique nested reasoning detail 919ab736"
+    first = _nemotron_xml_tool_response()
+    assistant = first["choices"][0]["message"]
+    assistant["reasoning_content"] = direct_reasoning
+    assistant["reasoning_details"] = [
+        {
+            "type": "opaque",
+            "detail": {"segments": [{"text": nested_reasoning}]},
+        }
+    ]
+    error_payload = {
+        "error": {
+            "type": "invalid_request_error",
+            "code": "replay_rejected",
+            "message": f"replay rejected: {direct_reasoning}; nested: {nested_reasoning}",
+        }
+    }
+    requester = SequenceRequester([first, error_payload], status_codes=[200, 400])
+
+    result = preflight.probe_model(spec, TEST_CREDENTIALS, requester)
+
+    assert result["success"] is False
+    assert result["tool_roundtrip"] is True
+    assert result["error"] == {
+        "kind": "http",
+        "message": "replay rejected: [REDACTED]; nested: [REDACTED]",
+        "status_code": 400,
+        "provider_type": "invalid_request_error",
+        "provider_code": "replay_rejected",
+    }
+    assert result["request_ids"] == ["req_1", "req_2"]
+    assert len(requester.calls) == 2
+    replayed_assistant = requester.calls[1]["json"]["messages"][1]
+    assert replayed_assistant["reasoning_content"] == direct_reasoning
+    assert replayed_assistant["reasoning_details"] == assistant["reasoning_details"]
+    serialized_result = json.dumps(result)
+    assert direct_reasoning not in serialized_result
+    assert nested_reasoning not in serialized_result
+    assert NEMOTRON_TOOL_XML not in serialized_result
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        NEMOTRON_TOOL_XML.removesuffix("</tool_call>"),
+        f"{NEMOTRON_TOOL_XML}\ntrailing response text",
+        NEMOTRON_TOOL_XML.replace("preflight_echo", "other_tool"),
+        NEMOTRON_TOOL_XML.replace("\nping\n", "\npong\n"),
+        f"{NEMOTRON_TOOL_XML}\n{NEMOTRON_TOOL_XML}",
+    ],
+    ids=["malformed", "trailing-text", "wrong-tool", "wrong-arguments", "multiple-calls"],
+)
+def test_explicit_tinker_nemotron_probe_rejects_invalid_xml_without_replay(
+    preflight: ModuleType,
+    tmp_path: Path,
+    content: str,
+) -> None:
+    config = tmp_path / "nemotron.yaml"
+    _write_nemotron_config(config)
+    spec = preflight.load_probe_specs(config)[0]
+    first = _nemotron_xml_tool_response(content)
+    requester = SequenceRequester([first])
+
+    result = preflight.probe_model(spec, TEST_CREDENTIALS, requester)
+
+    assert result["success"] is False
+    assert result["tool_roundtrip"] is False
+    assert result["error"] == {
+        "kind": "validation",
+        "message": "chat model did not make exactly one preflight_echo function call",
+    }
+    assert len(requester.calls) == 1
+    serialized_result = json.dumps(result)
+    assert content not in serialized_result
+    assert "opaque-nemotron-reasoning-state" not in serialized_result
+
+
+@pytest.mark.parametrize(
+    "tool_calls",
+    [{}, "", 0],
+    ids=["empty-mapping", "empty-string", "zero"],
+)
+def test_explicit_tinker_nemotron_probe_rejects_falsey_malformed_tool_calls(
+    preflight: ModuleType,
+    tmp_path: Path,
+    tool_calls: object,
+) -> None:
+    config = tmp_path / "nemotron.yaml"
+    _write_nemotron_config(config)
+    spec = preflight.load_probe_specs(config)[0]
+    first = _nemotron_xml_tool_response()
+    first["choices"][0]["message"]["tool_calls"] = tool_calls
+    requester = SequenceRequester([first])
+
+    result = preflight.probe_model(spec, TEST_CREDENTIALS, requester)
+
+    assert result["success"] is False
+    assert result["tool_roundtrip"] is False
+    assert result["error"] == {
+        "kind": "validation",
+        "message": "chat model did not make exactly one preflight_echo function call",
+    }
+    assert len(requester.calls) == 1
+    serialized_result = json.dumps(result)
+    assert NEMOTRON_TOOL_XML not in serialized_result
+    assert "opaque-nemotron-reasoning-state" not in serialized_result
 
 
 @pytest.mark.parametrize("rows_yaml", ["[]", "{}"])
@@ -575,6 +774,25 @@ def test_tinker_chat_probe_replays_full_assistant_message(preflight: ModuleType)
         "tool_call_id": "call_echo",
         "content": '{"echo":"ping","ok":true}',
     }
+
+
+def test_tinker_inkling_probe_still_requires_tool_calls_finish_reason(
+    preflight: ModuleType,
+) -> None:
+    model = "thinkingmachines/Inkling:peft:262144"
+    first = _chat_tool_response(model)
+    first["choices"][0]["finish_reason"] = "stop"
+    requester = SequenceRequester([first])
+
+    result = preflight.probe_model(_spec(preflight, model), TEST_CREDENTIALS, requester)
+
+    assert result["success"] is False
+    assert result["tool_roundtrip"] is False
+    assert result["error"] == {
+        "kind": "validation",
+        "message": "chat model did not make exactly one preflight_echo function call",
+    }
+    assert len(requester.calls) == 1
 
 
 def test_probe_requires_final_text_after_tool_result(preflight: ModuleType) -> None:

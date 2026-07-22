@@ -22,6 +22,11 @@ import httpx
 import yaml
 from dotenv import dotenv_values
 
+from chi_bench.experiment.agents.nemotron_tool_protocol import (
+    NEMOTRON_ULTRA_256K_MODEL,
+    parse_nemotron_tool_calls,
+)
+
 ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages"
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 OPENROUTER_RESPONSES_URL = "https://openrouter.ai/api/v1/responses"
@@ -797,8 +802,30 @@ def _probe_responses(
     _require_responses_text(second)
 
 
+_CHAT_REASONING_FIELDS = ("reasoning", "reasoning_content", "reasoning_details")
+
+
 def _chat_reasoning(message: Mapping[str, Any]) -> bool:
-    return any(message.get(key) for key in ("reasoning", "reasoning_content", "reasoning_details"))
+    return any(message.get(key) for key in _CHAT_REASONING_FIELDS)
+
+
+def _chat_reasoning_secrets(message: Mapping[str, Any]) -> tuple[str, ...]:
+    secrets: list[str] = []
+
+    def collect(value: Any) -> None:
+        if isinstance(value, str):
+            if stripped := value.strip():
+                secrets.append(stripped)
+        elif isinstance(value, Mapping):
+            for nested in value.values():
+                collect(nested)
+        elif isinstance(value, Sequence):
+            for nested in value:
+                collect(nested)
+
+    for key in _CHAT_REASONING_FIELDS:
+        collect(message.get(key))
+    return tuple(dict.fromkeys(secrets))
 
 
 def _probe_chat(
@@ -834,36 +861,67 @@ def _probe_chat(
     _add_usage(result["usage"], _chat_usage(first))
     assistant, finish_reason = _chat_message(first)
     result["reasoning_metadata"] = _chat_reasoning(assistant)
-    raw_calls = assistant.get("tool_calls") or []
-    calls = []
-    if isinstance(raw_calls, list):
-        calls = [
-            call
-            for call in raw_calls
-            if isinstance(call, dict)
-            and isinstance(call.get("function"), dict)
-            and call["function"].get("name") == "preflight_echo"
-        ]
-    if finish_reason != "tool_calls" or len(calls) != 1:
+    raw_calls = assistant.get("tool_calls")
+    if raw_calls is None:
+        raw_calls = []
+    elif not isinstance(raw_calls, list):
         raise ProbeFailure("chat model did not make exactly one preflight_echo function call")
-    call = calls[0]
-    function = call["function"]
-    try:
-        parsed_arguments = json.loads(function.get("arguments", ""))
-    except json.JSONDecodeError as exc:
-        raise ProbeFailure("chat preflight_echo arguments were invalid JSON") from exc
-    if not isinstance(parsed_arguments, dict) or parsed_arguments.get("value") != "ping":
-        raise ProbeFailure("chat preflight_echo arguments were invalid")
-    call_id = call.get("id")
-    if not isinstance(call_id, str) or not call_id:
-        raise ProbeFailure("chat preflight_echo call had no id")
+    calls = [
+        call
+        for call in raw_calls
+        if isinstance(call, dict)
+        and isinstance(call.get("function"), dict)
+        and call["function"].get("name") == "preflight_echo"
+    ]
+    assistant_for_replay = assistant
+    if spec.provider == "tinker" and spec.model == NEMOTRON_ULTRA_256K_MODEL and not raw_calls:
+        content = assistant.get("content")
+        parsed_calls = parse_nemotron_tool_calls(content) if isinstance(content, str) else None
+        if (
+            finish_reason != "stop"
+            or parsed_calls is None
+            or len(parsed_calls) != 1
+            or parsed_calls[0].name != "preflight_echo"
+            or parsed_calls[0].arguments != {"value": "ping"}
+        ):
+            raise ProbeFailure("chat model did not make exactly one preflight_echo function call")
+        parsed_call = parsed_calls[0]
+        call_id = parsed_call.call_id
+        assistant_for_replay = {
+            **assistant,
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": call_id,
+                    "type": "function",
+                    "function": {
+                        "name": parsed_call.name,
+                        "arguments": dict(parsed_call.arguments),
+                    },
+                }
+            ],
+        }
+    else:
+        if finish_reason != "tool_calls" or len(calls) != 1:
+            raise ProbeFailure("chat model did not make exactly one preflight_echo function call")
+        call = calls[0]
+        function = call["function"]
+        try:
+            parsed_arguments = json.loads(function.get("arguments", ""))
+        except json.JSONDecodeError as exc:
+            raise ProbeFailure("chat preflight_echo arguments were invalid JSON") from exc
+        if not isinstance(parsed_arguments, dict) or parsed_arguments.get("value") != "ping":
+            raise ProbeFailure("chat preflight_echo arguments were invalid")
+        call_id = call.get("id")
+        if not isinstance(call_id, str) or not call_id:
+            raise ProbeFailure("chat preflight_echo call had no id")
     result["tool_roundtrip"] = True
 
     second_payload = {
         **common,
         "messages": [
             *first_messages,
-            assistant,
+            assistant_for_replay,
             {"role": "tool", "tool_call_id": call_id, "content": TOOL_RESULT},
         ],
         "tool_choice": "none",
@@ -873,7 +931,7 @@ def _probe_chat(
         spec.endpoint,
         headers=_bearer_headers(api_key),
         payload=second_payload,
-        known_secrets=(api_key,),
+        known_secrets=(api_key, *_chat_reasoning_secrets(assistant)),
     )
     _record_ids(result, request_ids, response_ids)
     _add_usage(result["usage"], _chat_usage(second))
