@@ -13,6 +13,8 @@ from chi_bench.experiment.agents.nemotron_tool_protocol import (
     parse_nemotron_tool_calls,
 )
 
+_MISSING = object()
+
 
 def test_protocol_exports_exact_model_and_frozen_call_value() -> None:
     assert NEMOTRON_ULTRA_256K_MODEL == "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16:peft:262144"
@@ -188,6 +190,51 @@ def test_replay_normalizer_copies_items_and_decodes_only_function_call_arguments
     assert normalized[1]["content"] is not request_input[1]["content"]
     assert normalized[3]["arguments"] is not request_input[3]["arguments"]
     assert request_input[0]["arguments"] == ('{"case_id": "case-1", "filters": [1, true]}')
+
+
+def test_replay_normalizer_preserves_mapping_arguments_and_is_idempotent() -> None:
+    request_input: list[dict[str, object]] = [
+        {
+            "type": "function_call",
+            "call_id": "call_1",
+            "name": "lookup_case",
+            "arguments": {"case": {"id": "case-1"}},
+        }
+    ]
+
+    normalized = normalize_nemotron_replay_input(request_input)
+    normalized_again = normalize_nemotron_replay_input(normalized)
+
+    assert normalized_again == normalized == request_input
+    assert normalized is not request_input
+    assert normalized_again is not normalized
+    assert normalized[0] is not request_input[0]
+    assert normalized_again[0] is not normalized[0]
+    assert normalized[0]["arguments"] is not request_input[0]["arguments"]
+    assert normalized_again[0]["arguments"] is not normalized[0]["arguments"]
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        pytest.param(_MISSING, id="missing"),
+        pytest.param([], id="list"),
+        pytest.param(None, id="none"),
+        pytest.param(7, id="integer"),
+        pytest.param(False, id="boolean"),
+    ],
+)
+def test_replay_normalizer_rejects_malformed_argument_values(arguments: object) -> None:
+    function_call: dict[str, object] = {
+        "type": "function_call",
+        "call_id": "call_1",
+        "name": "lookup_case",
+    }
+    if arguments is not _MISSING:
+        function_call["arguments"] = arguments
+
+    with pytest.raises(ValueError, match="function-call arguments must be a JSON object"):
+        normalize_nemotron_replay_input([function_call])
 
 
 @pytest.mark.parametrize(

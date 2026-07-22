@@ -86,8 +86,10 @@ def normalize_nemotron_replay_input(
         if item.get("type") != "function_call":
             continue
         arguments = item.get("arguments")
-        if not isinstance(arguments, str):
+        if isinstance(arguments, dict):
             continue
+        if not isinstance(arguments, str):
+            raise ValueError("function-call arguments must be a JSON object")
         try:
             decoded = _load_json(arguments)
         except (TypeError, ValueError) as exc:
