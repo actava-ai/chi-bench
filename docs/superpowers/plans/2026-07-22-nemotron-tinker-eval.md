@@ -282,14 +282,14 @@
 - Create: `src/chi_bench/experiment/agents/nemotron_tool_protocol.py`
 - Create: `tests/unit/test_nemotron_tool_protocol.py`
 
-- [ ] **Step 1: Write failing pure-protocol tests.** Define the exact model constant and a
+- [x] **Step 1: Write failing pure-protocol tests.** Define the exact model constant and a
   `NemotronToolCall` value object. Require the parser to accept one or multiple complete calls,
   preserve multiline strings, decode JSON objects/lists/numbers/booleans, and generate stable
   call IDs. Require it to reject trailing prose, malformed tags, duplicate parameters, invalid
   names, and text with no calls. Require replay normalization to copy inputs, decode function-call
   argument strings to mappings, preserve unrelated items, and reject invalid or non-object JSON.
 
-- [ ] **Step 2: Run RED.**
+- [x] **Step 2: Run RED.**
 
   ```bash
   uv run pytest tests/unit/test_nemotron_tool_protocol.py -v
@@ -297,7 +297,7 @@
 
   Expected: collection fails because `nemotron_tool_protocol` does not exist.
 
-- [ ] **Step 3: Implement the pure fail-closed protocol.** Export this interface without any SDK
+- [x] **Step 3: Implement the pure fail-closed protocol.** Export this interface without any SDK
   imports so the runner and redacted preflight share it:
 
   ```python
@@ -323,7 +323,7 @@
       """Copy replay items and decode function-call argument JSON into mappings."""
   ```
 
-- [ ] **Step 4: Run GREEN and commit.**
+- [x] **Step 4: Run GREEN and commit.**
 
   ```bash
   uv run pytest tests/unit/test_nemotron_tool_protocol.py -v
