@@ -258,6 +258,10 @@ class OpenAIAgentsHarness(BaseInstalledAgent):
             os.environ,
             provider_route=self._resolved_flags.get("provider_route"),
         )
+        if env.get("OPENAI_BASE_URL") == self.TINKER_BASE_URL:
+            self._extra_env = {
+                k: v for k, v in self._extra_env.items() if k != "OPENAI_AGENTS_API_MODE"
+            }
 
         env["OPENAI_AGENTS_MAX_TURNS"] = str(self._resolved_flags.get("max_turns", 50))
         env["OPENAI_AGENTS_MAX_RETRIES"] = str(self._resolved_flags.get("max_retries", 10))

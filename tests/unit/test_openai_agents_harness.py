@@ -243,3 +243,70 @@ async def test_tinker_route_forces_chat_completions_over_api_mode_flag(
     await harness.run("Complete the task", object(), AgentContext())
 
     assert captured["env"]["OPENAI_AGENTS_API_MODE"] == "chat_completions"
+
+
+@pytest.mark.asyncio
+async def test_tinker_route_ignores_api_mode_from_extra_env(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TINKER_API_KEY", "test-tinker-key")
+    harness = OpenAIAgentsHarness(
+        logs_dir=tmp_path,
+        model_name=NEMOTRON_MODEL,
+        mcp_servers=[
+            MCPServerConfig(
+                name="chi_bench",
+                transport="streamable-http",
+                url="http://chi-bench-server:8000/mcp",
+            )
+        ],
+        provider_route="tinker",
+    )
+    saved_extra_env = {"OPENAI_AGENTS_API_MODE": "responses"}
+    harness._extra_env = saved_extra_env
+    captured: dict[str, Any] = {}
+
+    async def fake_exec_as_agent(environment, *, command: str, env: dict[str, str]):
+        captured["env"] = {**env, **harness._extra_env}
+
+    monkeypatch.setattr(harness, "exec_as_agent", fake_exec_as_agent)
+
+    await harness.run("Complete the task", object(), AgentContext())
+
+    assert captured["env"]["OPENAI_AGENTS_API_MODE"] == "chat_completions"
+    assert harness._extra_env is saved_extra_env
+    assert saved_extra_env == {"OPENAI_AGENTS_API_MODE": "responses"}
+
+
+@pytest.mark.asyncio
+async def test_non_tinker_route_keeps_api_mode_from_extra_env(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    harness = OpenAIAgentsHarness(
+        logs_dir=tmp_path,
+        model_name="openai/gpt-5.6-sol",
+        mcp_servers=[
+            MCPServerConfig(
+                name="chi_bench",
+                transport="streamable-http",
+                url="http://chi-bench-server:8000/mcp",
+            )
+        ],
+        api_mode="chat_completions",
+    )
+    saved_extra_env = {"OPENAI_AGENTS_API_MODE": "responses"}
+    harness._extra_env = saved_extra_env
+    captured: dict[str, Any] = {}
+
+    async def fake_exec_as_agent(environment, *, command: str, env: dict[str, str]):
+        captured["env"] = {**env, **harness._extra_env}
+
+    monkeypatch.setattr(harness, "exec_as_agent", fake_exec_as_agent)
+
+    await harness.run("Complete the task", object(), AgentContext())
+
+    assert captured["env"]["OPENAI_AGENTS_API_MODE"] == "responses"
+    assert harness._extra_env is saved_extra_env
+    assert saved_extra_env == {"OPENAI_AGENTS_API_MODE": "responses"}
