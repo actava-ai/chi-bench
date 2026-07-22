@@ -212,6 +212,10 @@ Configs:
   `openai==2.36.0`.** **Why:** an unconstrained install resolved OpenAI 2.46.0, whose required
   `InputTokensDetails.cache_write_tokens` field makes Agents 0.13.6 fail while constructing its
   default `Usage`, before the first model call.
+- **Treat zero token/cost fields on an `openai-agents` exception trial as unknown, not free.**
+  **Why:** the current runner loses partial SDK usage and trace data when `Runner.run` raises
+  (for example, `MaxTurnsExceeded` or an invalid tool alias); inspect the server audit log for
+  behavioral diagnosis and report cost coverage separately from known spend.
 - **Do not force a named tool choice for models with always-on/adaptive thinking.** Fable 5 and
   Kimi K3 reject forced tool selection while thinking is enabled; use `auto` plus an imperative
   prompt, then validate that the expected tool call actually occurred and replay all reasoning.
