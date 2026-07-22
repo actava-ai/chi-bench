@@ -109,6 +109,14 @@ cb experiment run [-f <config.yaml>] [--dataset <path-or-id>]
 | `--modal-sandbox-timeout-secs` | `86400` | Per-sandbox lifetime cap. Matches YAML key `modal.sandbox_timeout_secs`. |
 | `--modal-force-build` | unset | Force Modal to rebuild the environment image. |
 
+**Agent-scoped environment (`agent_env`)**
+
+A flat `ExperimentConfig` YAML, or a row in a matrix expanded by `scripts/_emit_run_table_commands.py`, may include an `agent_env: {KEY: VALUE}` mapping. The runner appends these entries after automatically forwarded provider keys and agent defaults, so the last value for a duplicate key wins in the agent process. The mapping does not mutate the simulation server or judge environment; for example, an agent-scoped Anthropic override leaves the native `ANTHROPIC_API_KEY` available to the judge. `scripts/run_table.sh` wraps the emitter only for the named `table1`–`table5` configs; invoke the emitter directly for a custom matrix.
+
+Harbor resolves `${VAR}` from the host environment and supports `${VAR:-default}` when a variable may be absent. Keep credentials in `.env` and reference them with templates; never hardcode secret values in YAML. To deliberately shadow an automatically forwarded credential with an empty value while retaining resumable Harbor configs, use a stable empty-default template such as `${CHI_BENCH_EMPTY_AGENT_ENV:-}` instead of a literal blank.
+
+Choose the harness by model vendor rather than gateway: Anthropic models such as Fable 5 use stock `claude-code` even through OpenRouter; third-party vendors routed through OpenRouter use `openai-agents`. See [Extending chi-bench](extending.md#case-b-your-model-is-on-openrouter-or-any-vendorid-style-provider) for a complete Fable example.
+
 **Examples**
 
 ```bash
@@ -389,7 +397,7 @@ API keys and tokens are read from process env (or `run.env_file` for `cb submiss
 | `ANTHROPIC_API_KEY` | Claude-family agents and the judge. |
 | `OPENAI_API_KEY` | Codex rows. |
 | `GEMINI_API_KEY` | Gemini-CLI rows. |
-| `OPENROUTER_API_KEY` | OpenClaw, Hermes, OAI Agents, DeepAgents rows. |
+| `OPENROUTER_API_KEY` | OpenClaw, Hermes, OAI Agents, DeepAgents, and agent-scoped Claude Code/OpenRouter rows. |
 | `CLAUDE_CODE_OAUTH_TOKEN` | Claude Code agent harness OAuth token. |
 | `HF_TOKEN` | Hugging Face dataset access (private/gated revisions). |
 | `MODAL_PROFILE` | Modal profile for `cb experiment run -e modal` and `cb submission run` with `run.environment: modal`. |

@@ -49,35 +49,68 @@ Run `uv run cb submission validate -f configs/submissions/my-finetune.yaml` and 
 
 ### Case B: your model is on OpenRouter (or any `vendor/id`-style provider)
 
-Drop the `OPENAI_BASE_URL` line. `openai-agents` auto-routes any `<vendor>/<id>` model id through OpenRouter using `OPENROUTER_API_KEY`.
+Choose the harness by the **model vendor**, not by the gateway:
+
+- Anthropic models, including Fable 5, use the stock `claude-code` harness even when OpenRouter carries the request.
+- Third-party model vendors use `openai-agents`, which auto-routes `<vendor>/<id>` model ids through OpenRouter.
 
 ```bash
 OPENROUTER_API_KEY=sk-or-...
-ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_API_KEY=sk-ant-...     # native key retained for the judge
 ```
+
+For a third-party model, the submission config remains simple:
 
 ```yaml
 submission:
   agent: openai-agents
-  model: anthropic/claude-opus-4-7    # or xai/grok-4.3, deepseek/deepseek-v4, etc.
+  model: xai/grok-4.3                 # or deepseek/deepseek-v4, etc.
 ```
+
+For Anthropic through OpenRouter, use a flat `ExperimentConfig` (or the same keys in a matrix `rows:` entry); `agent_env` is not part of the `submission/v1` schema. The full model aliases keep Claude Code's primary and subagent calls on the same OpenRouter model:
+
+```yaml
+agent: claude-code
+model: anthropic/claude-fable-5
+agent_env:
+  ANTHROPIC_BASE_URL: https://openrouter.ai/api
+  ANTHROPIC_AUTH_TOKEN: ${OPENROUTER_API_KEY}
+  ANTHROPIC_API_KEY: ${CHI_BENCH_EMPTY_AGENT_ENV:-}
+  CLAUDE_CODE_OAUTH_TOKEN: ${CHI_BENCH_EMPTY_AGENT_ENV:-}
+  ANTHROPIC_MODEL: anthropic/claude-fable-5
+  ANTHROPIC_DEFAULT_SONNET_MODEL: anthropic/claude-fable-5
+  ANTHROPIC_DEFAULT_OPUS_MODEL: anthropic/claude-fable-5
+  ANTHROPIC_DEFAULT_HAIKU_MODEL: anthropic/claude-fable-5
+  CLAUDE_CODE_SUBAGENT_MODEL: anthropic/claude-fable-5
+```
+
+> **The judge and simulation server are not affected by `agent_env`.** Those overrides are scoped to the agent process; the native `ANTHROPIC_API_KEY` loaded from the run environment remains available to the pinned `claude-opus-4-7` judge. chi-bench also strips a process-level `ANTHROPIC_BASE_URL` from the judge subprocess so grading stays on `api.anthropic.com` (`src/chi_bench/verifier/judge/claude_runner.py:_subprocess_env`).
 
 ### Case C: your model is on an Anthropic-compatible proxy
 
 Bedrock-fronted, internal gateway, anything that speaks the Anthropic API.
 
 ```bash
-ANTHROPIC_BASE_URL=https://anthropic.my-proxy.com
-ANTHROPIC_API_KEY=sk-ant-proxy-...
+ANTHROPIC_API_KEY=sk-ant-native-...              # native key for the judge
+PROXY_ANTHROPIC_API_KEY=sk-ant-proxy-...         # proxy credential for the agent
 ```
+
+Use a flat `ExperimentConfig` or matrix row so the proxy credential stays agent-scoped:
 
 ```yaml
-submission:
-  agent: claude-code
-  model: anthropic/<your-id>
+agent: claude-code
+model: anthropic/<your-id>
+agent_env:
+  ANTHROPIC_BASE_URL: https://anthropic.my-proxy.com
+  ANTHROPIC_API_KEY: ${PROXY_ANTHROPIC_API_KEY}
+  ANTHROPIC_AUTH_TOKEN: ${CHI_BENCH_EMPTY_AGENT_ENV:-}
+  CLAUDE_CODE_OAUTH_TOKEN: ${CHI_BENCH_EMPTY_AGENT_ENV:-}
 ```
 
-> **The judge is not affected.** chi-bench strips `ANTHROPIC_BASE_URL` from the judge's subprocess env so `claude-opus-4-7` always hits `api.anthropic.com` (`src/chi_bench/verifier/judge/claude_runner.py:_subprocess_env`). The pin is unconditional — routing the judge would break leaderboard comparability. Your `ANTHROPIC_API_KEY` is forwarded as-is, so real Anthropic uses it for grading.
+Do not set the proxy base URL or credential process-wide: the judge deliberately removes
+`ANTHROPIC_BASE_URL` and calls `api.anthropic.com`, so it must retain a native Anthropic key.
+The `submission/v1` schema does not expose `agent_env`; use a flat experiment or matrix when
+agent/judge credential isolation is required.
 
 ### Which harness supports which provider?
 
@@ -85,7 +118,7 @@ submission:
 |---|:---:|:---:|:---:|:---:|
 | `openai-agents` | ✅ | ✅ | ✅ | via OpenRouter |
 | `deepagents` | ✅ | ✅ | ✅ | ✅ |
-| `claude-code` | — | — | — | ✅ |
+| `claude-code` | — | ✅ (Anthropic models) | — | ✅ |
 | `codex-cli` | ✅ | ✅ | ✅ | — |
 | `hermes`, `openclaw` | ✅ | ✅ | ✅ | ✅ |
 | `gemini-cli` | — | — | — | — (Gemini only) |
@@ -245,7 +278,7 @@ These are the failure modes that have bitten every harness so far. The line numb
 - **Forgot the venv prefix in `install()`.** Use `uv pip install --python /workspace/.venv …`. Without it, the package lands in the wrong site-packages and your runner errors with `ModuleNotFoundError` at trial start.
 - **Forgot to `tee` the runner's stdout.** Without `2>&1 | tee /logs/agent/run_log.txt`, a failure mid-trial leaves you with no log to read. Modal makes this especially painful.
 - **Forgot `shlex.quote(instruction)`.** Task instructions sometimes contain `$`, backticks, or quotes. Without quoting, the shell mangles them and your agent runs on a corrupted prompt.
-- **Per-row API keys aren't picked up.** Harbor's `--ae` flag populates `self._extra_env`, not `os.environ`. If your routing reads `os.environ` directly, mirror the keys at `run()` entry. See `openai_agents_harness.py:191-194`.
+- **Per-row routing belongs in `agent_env`.** Harbor supplies these values through `self._extra_env`, not `os.environ`. If a custom harness reads `os.environ` directly, mirror the keys at `run()` entry. See `openai_agents_harness.py:191-194`.
 - **`_extra_env` clobbers your routing decisions.** Harbor merges `_extra_env` over the env you pass to `exec_as_agent`. If you set `OPENAI_BASE_URL` and the shared `.env` also has one, theirs wins. Strip the conflicting keys from `self._extra_env` before exec, restore in `finally`. See `openai_agents_harness.py:204-233`.
 
 ### Step 6 (optional): emit an ATIF trajectory

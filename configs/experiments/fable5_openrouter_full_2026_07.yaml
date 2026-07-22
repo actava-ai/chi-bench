@@ -1,0 +1,39 @@
+name: fable5_openrouter_full_2026_07
+description: Fable 5 via OpenRouter across all chi-Bench tasks in the three benchmark domains.
+
+defaults:
+  environment: modal
+  env_file: .env
+  concurrency: 5
+  n_attempts: 1
+  max_retries: 2
+  trials_root: logs/experiments/fable5_openrouter_full_2026_07
+  agent_timeout_multiplier: 2.0
+
+domains:
+  pa_provider:
+    dataset: data/prior_auth_provider/tasks
+    registry_path: data/prior_auth_provider/registry.json
+  pa_um:
+    dataset: data/prior_auth_um/tasks
+    registry_path: data/prior_auth_um/registry.json
+  cm:
+    dataset: data/care_management/tasks
+    registry_path: data/care_management/registry.json
+
+rows:
+  - agent: claude-code
+    model: anthropic/claude-fable-5
+    agent_kwargs:
+      version: "2.1.216"
+      reasoning_effort: high
+    agent_env:
+      ANTHROPIC_BASE_URL: https://openrouter.ai/api
+      ANTHROPIC_AUTH_TOKEN: ${OPENROUTER_API_KEY}
+      ANTHROPIC_API_KEY: ${CHI_BENCH_EMPTY_AGENT_ENV:-}
+      CLAUDE_CODE_OAUTH_TOKEN: ${CHI_BENCH_EMPTY_AGENT_ENV:-}
+      ANTHROPIC_MODEL: anthropic/claude-fable-5
+      ANTHROPIC_DEFAULT_SONNET_MODEL: anthropic/claude-fable-5
+      ANTHROPIC_DEFAULT_OPUS_MODEL: anthropic/claude-fable-5
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: anthropic/claude-fable-5
+      CLAUDE_CODE_SUBAGENT_MODEL: anthropic/claude-fable-5

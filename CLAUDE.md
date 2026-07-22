@@ -167,11 +167,10 @@ Configs:
   harness.** **Why:** calling a hypothetical Inkling adapter `tinker-claude-code` obscured that
   it did not exist and made the evaluation configuration look hallucinated; keep the selected
   existing harness name and make any new routing layer explicit.
-- **Use the in-tree `openai-agents` harness for third-party evaluation models; reserve
-  `claude-code` and `codex` rows for their first-party Anthropic and OpenAI models.** **Why:** this
-  is the validated comparison convention for this repo, even when a third-party vendor also
-  exposes an Anthropic-compatible Claude Code endpoint. Extend `openai-agents` provider routing
-  explicitly when a provider requires Chat Completions instead of Responses.
+- **Choose the harness by model vendor, not gateway: Anthropic Fable uses `claude-code` even
+  through OpenRouter, while third-party model vendors use `openai-agents`.** **Why:** the gateway
+  does not change harness identity, and agent-scoped OpenRouter credentials must not replace the
+  native `ANTHROPIC_API_KEY` used by the WorkspaceJudge.
 - **`ANTHROPIC_API_KEY` is always required**, even for non-Anthropic agents — the judge is pinned
   to `claude-opus-4-7`. `CHI_BENCH_JUDGE_MODEL` overrides it but deviates from the paper protocol.
   Use `CHI_BENCH_JUDGE_NUM_VOTES > 1` for majority-voted judging.
@@ -216,6 +215,14 @@ Configs:
   **Why:** the current runner loses partial SDK usage and trace data when `Runner.run` raises
   (for example, `MaxTurnsExceeded` or an invalid tool alias); inspect the server audit log for
   behavioral diagnosis and report cost coverage separately from known spend.
+- **Combine disjoint evaluation roots by aggregating each root independently and concatenating
+  their model rows; do not stage and re-aggregate the trial files.** **Why:** the fixed-seed
+  bootstrap samples task vectors in filesystem traversal order, so staging can reorder tasks and
+  shift confidence intervals even when every underlying outcome is unchanged.
+- **Never inspect a live Harbor command with `ps`, `pgrep -a`, or another command-line dump.**
+  **Why:** chi-Bench forwards provider credentials to Harbor as `--ae KEY=value`, so the process
+  table contains raw secrets. Use the runner's redacted `Running:` line, Modal container counts,
+  and trial artifact counts for monitoring instead.
 - **Do not force a named tool choice for models with always-on/adaptive thinking.** Fable 5 and
   Kimi K3 reject forced tool selection while thinking is enabled; use `auto` plus an imperative
   prompt, then validate that the expected tool call actually occurred and replay all reasoning.

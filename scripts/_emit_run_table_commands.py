@@ -44,6 +44,7 @@ _DEFAULT_PASSTHROUGH_KEYS = (
 _ROW_PASSTHROUGH_KEYS = (
     "agent",
     "model",
+    "agent_env",
     "provider_agent",
     "provider_model",
     "payer_agent",
@@ -95,7 +96,7 @@ def _build_slice_config(
     if "modal" in defaults:
         out["modal"] = defaults["modal"]
 
-    # 2. row passthrough (agent/model/provider_*/payer_*)
+    # 2. row passthrough (agent/model/agent_env/provider_*/payer_*)
     for k in _ROW_PASSTHROUGH_KEYS:
         if k in row and row[k] is not None:
             out[k] = row[k]

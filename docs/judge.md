@@ -9,8 +9,10 @@ an `claude-code`-based agent that reads:
 - The full trial workspace (every file the agent wrote).
 
 It then produces `verdicts.json` with per-rubric `pass: bool` and
-`evidence_refs: list` fields. The trial reward is the AND of all rubric
-verdicts (or, for CM, a continuous score over rubrics).
+`evidence_refs: list` fields. The leaderboard trial reward is the AND of all
+non-N/A rubric verdicts in every domain. The scorecard also records
+`fractional_reward = passed_checks / total_checks` for diagnostics, including
+Care Management; fractional reward is not the published leaderboard axis.
 
 ## Why a single judge model?
 

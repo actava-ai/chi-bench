@@ -10,6 +10,9 @@ from pathlib import Path
 
 import pytest
 import yaml
+from harbor.models.job.config import JobConfig
+from harbor.models.trial.config import AgentConfig
+from harbor.utils.env import resolve_env_vars
 
 from chi_bench.experiment.config import ExperimentConfig
 
@@ -17,6 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_ROOT = REPO_ROOT / "data"
 MATRIX_PATH = REPO_ROOT / "configs/experiments/frontier_models_smoke_2026_07.yaml"
 FULL_MATRIX_PATH = REPO_ROOT / "configs/experiments/frontier_models_full_2026_07.yaml"
+FABLE_FULL_MATRIX_PATH = REPO_ROOT / "configs/experiments/fable5_openrouter_full_2026_07.yaml"
 PRICES_PATH = REPO_ROOT / "configs/prices.yaml"
 
 EXPECTED_DOMAINS = {
@@ -111,6 +115,152 @@ EXPECTED_FULL_DOMAINS = {
 }
 
 EXPECTED_FULL_ROWS = EXPECTED_ROWS[1:]
+
+FABLE_FULL_TRIALS_ROOT = "logs/experiments/fable5_openrouter_full_2026_07"
+EMPTY_AGENT_ENV_TEMPLATE = "${CHI_BENCH_EMPTY_AGENT_ENV:-}"
+FABLE_EMPTY_CREDENTIAL_KEYS = {
+    "ANTHROPIC_API_KEY",
+    "CLAUDE_CODE_OAUTH_TOKEN",
+}
+EXPECTED_FABLE_AGENT_ENV = {
+    "ANTHROPIC_BASE_URL": "https://openrouter.ai/api",
+    "ANTHROPIC_AUTH_TOKEN": "${OPENROUTER_API_KEY}",
+    "ANTHROPIC_API_KEY": EMPTY_AGENT_ENV_TEMPLATE,
+    "CLAUDE_CODE_OAUTH_TOKEN": EMPTY_AGENT_ENV_TEMPLATE,
+    "ANTHROPIC_MODEL": "anthropic/claude-fable-5",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "anthropic/claude-fable-5",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "anthropic/claude-fable-5",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "anthropic/claude-fable-5",
+    "CLAUDE_CODE_SUBAGENT_MODEL": "anthropic/claude-fable-5",
+}
+EXPECTED_FABLE_FULL_MATRIX = {
+    "name": "fable5_openrouter_full_2026_07",
+    "description": (
+        "Fable 5 via OpenRouter across all chi-Bench tasks in the three benchmark domains."
+    ),
+    "defaults": {
+        "environment": "modal",
+        "env_file": ".env",
+        "concurrency": 5,
+        "n_attempts": 1,
+        "max_retries": 2,
+        "trials_root": FABLE_FULL_TRIALS_ROOT,
+        "agent_timeout_multiplier": 2.0,
+    },
+    "domains": EXPECTED_FULL_DOMAINS,
+    "rows": [
+        {
+            "agent": "claude-code",
+            "model": "anthropic/claude-fable-5",
+            "agent_kwargs": {
+                "version": "2.1.216",
+                "reasoning_effort": "high",
+            },
+            "agent_env": EXPECTED_FABLE_AGENT_ENV,
+        }
+    ],
+}
+
+
+def test_fable_openrouter_full_matrix_matches_reviewed_configuration() -> None:
+    assert FABLE_FULL_MATRIX_PATH.is_file(), (
+        f"missing Fable full-eval matrix: {FABLE_FULL_MATRIX_PATH}"
+    )
+    matrix = yaml.safe_load(FABLE_FULL_MATRIX_PATH.read_text())
+
+    assert matrix == EXPECTED_FABLE_FULL_MATRIX
+    assert {row["agent"] for row in matrix["rows"]} == {"claude-code"}
+    assert all(row["agent"] != "openai-agents" for row in matrix["rows"])
+
+
+def test_fable_openrouter_full_matrix_emits_3_unique_valid_slices() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "scripts/_emit_run_table_commands.py"),
+            "--config",
+            str(FABLE_FULL_MATRIX_PATH),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+    commands = [line for line in result.stdout.splitlines() if line.strip()]
+    assert len(commands) == 3
+    assert len(set(commands)) == 3
+
+    expected_registry_by_dataset = {
+        domain["dataset"]: domain["registry_path"] for domain in EXPECTED_FULL_DOMAINS.values()
+    }
+    emitted_datasets: set[str] = set()
+    trials_dirs: set[str] = set()
+    for command in commands:
+        tokens = shlex.split(command)
+        assert tokens[:3] == ["cb", "experiment", "run"]
+        slice_path = REPO_ROOT / tokens[tokens.index("-f") + 1]
+        config = ExperimentConfig.from_yaml(slice_path)
+
+        assert config.agent == "claude-code"
+        assert config.agent != "openai-agents"
+        assert config.model == "anthropic/claude-fable-5"
+        assert config.agent_kwargs == {
+            "version": "2.1.216",
+            "reasoning_effort": "high",
+        }
+        assert config.agent_env == EXPECTED_FABLE_AGENT_ENV
+        assert config.dataset in expected_registry_by_dataset
+        assert config.registry_path == expected_registry_by_dataset[config.dataset]
+        assert config.environment == "modal"
+        assert config.concurrency == 5
+        assert config.n_attempts == 1
+        assert config.max_retries == 2
+        assert config.agent_timeout_multiplier == 2.0
+        assert config.trials_dir is not None
+        assert str(Path(config.trials_dir).parent) == FABLE_FULL_TRIALS_ROOT
+        assert not config.trials_dir.startswith("logs/experiments/frontier_models_full_2026_07/")
+
+        emitted_datasets.add(config.dataset)
+        trials_dirs.add(config.trials_dir)
+
+    assert emitted_datasets == set(expected_registry_by_dataset)
+    assert len(trials_dirs) == 3
+
+
+def test_fable_empty_credentials_use_resumable_empty_default_template(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CHI_BENCH_EMPTY_AGENT_ENV", raising=False)
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "scripts/_emit_run_table_commands.py"),
+            "--config",
+            str(FABLE_FULL_MATRIX_PATH),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+    command = next(line for line in result.stdout.splitlines() if line.strip())
+    tokens = shlex.split(command)
+    slice_path = REPO_ROOT / tokens[tokens.index("-f") + 1]
+    emitted_env = ExperimentConfig.from_yaml(slice_path).agent_env
+
+    empty_credentials = {key: emitted_env[key] for key in FABLE_EMPTY_CREDENTIAL_KEYS}
+    assert set(empty_credentials.values()) == {EMPTY_AGENT_ENV_TEMPLATE}
+    assert resolve_env_vars(empty_credentials) == {key: "" for key in FABLE_EMPTY_CREDENTIAL_KEYS}
+
+    agent_config = AgentConfig(name="claude-code", env=emitted_env)
+    assert AgentConfig.model_validate_json(agent_config.model_dump_json()) == agent_config
+
+    job_config = JobConfig(agents=[agent_config])
+    assert JobConfig.model_validate_json(job_config.model_dump_json()) == job_config
 
 
 def test_frontier_full_matrix_matches_reviewed_configuration() -> None:
