@@ -22,6 +22,7 @@ def _install_fake_agents_sdk(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[
         "chat_models": [],
         "clients": [],
         "model_settings": [],
+        "nemotron_models": [],
         "providers": [],
         "run_configs": [],
     }
@@ -60,6 +61,11 @@ def _install_fake_agents_sdk(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[
             self.openai_client = openai_client
             self.should_replay_reasoning_content = should_replay_reasoning_content
             captured["chat_models"].append(self)
+
+    class CapturingNemotronTinkerChatCompletionsModel(CapturingOpenAIChatCompletionsModel):
+        def __init__(self, **kwargs: Any) -> None:
+            super().__init__(**kwargs)
+            captured["nemotron_models"].append(self)
 
     class CapturingMultiProvider:
         def __init__(self, **kwargs: Any) -> None:
@@ -129,6 +135,11 @@ def _install_fake_agents_sdk(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[
     local_tools_module = ModuleType("chi_bench.experiment.agents.openai_agents_local_tools")
     local_tools_module.build_local_tools = lambda _logs_dir: []
 
+    nemotron_model_module = ModuleType("chi_bench.experiment.agents.nemotron_tinker_model")
+    nemotron_model_module.NemotronTinkerChatCompletionsModel = (
+        CapturingNemotronTinkerChatCompletionsModel
+    )
+
     monkeypatch.setitem(sys.modules, "agents", agents_module)
     monkeypatch.setitem(sys.modules, "agents.mcp", mcp_module)
     monkeypatch.setitem(sys.modules, "agents.models", models_module)
@@ -139,6 +150,11 @@ def _install_fake_agents_sdk(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[
         "chi_bench.experiment.agents.openai_agents_local_tools",
         local_tools_module,
     )
+    monkeypatch.setitem(
+        sys.modules,
+        "chi_bench.experiment.agents.nemotron_tinker_model",
+        nemotron_model_module,
+    )
     monkeypatch.setattr(openai_agents_runner, "_install_oversize_output_patch", lambda _path: None)
     monkeypatch.setattr(openai_agents_runner, "_install_mcp_tool_name_sanitizer", lambda: None)
     monkeypatch.setattr(openai_agents_runner, "_dump_trace", lambda **_kwargs: None)
@@ -147,16 +163,61 @@ def _install_fake_agents_sdk(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("model", "api_mode", "base_url", "uses_responses", "uses_explicit_tinker_model"),
+    (
+        "model",
+        "api_mode",
+        "base_url",
+        "uses_responses",
+        "uses_explicit_tinker_model",
+        "uses_nemotron_adapter",
+    ),
     [
-        ("gpt-5.6-sol", None, None, True, False),
-        ("moonshotai/kimi-k3", None, None, True, False),
-        (TINKER_MODEL, "chat_completions", TINKER_BASE_URL, False, True),
-        (NEMOTRON_MODEL, "chat_completions", TINKER_BASE_URL, False, True),
-        (TINKER_MODEL, "chat_completions", "https://example.invalid/v1", False, False),
-        (TINKER_MODEL, "responses", TINKER_BASE_URL, True, False),
-        ("custom-chat-model", "chat_completions", TINKER_BASE_URL, False, True),
-        ("custom-chat-model", "chat_completions", "https://example.invalid/v1", False, False),
+        ("gpt-5.6-sol", None, None, True, False, False),
+        ("moonshotai/kimi-k3", None, None, True, False, False),
+        (TINKER_MODEL, "chat_completions", TINKER_BASE_URL, False, True, False),
+        (NEMOTRON_MODEL, "chat_completions", TINKER_BASE_URL, False, True, True),
+        (
+            NEMOTRON_MODEL,
+            "chat_completions",
+            f"{TINKER_BASE_URL}/",
+            False,
+            True,
+            True,
+        ),
+        (
+            NEMOTRON_MODEL,
+            "chat_completions",
+            "https://example.invalid/v1",
+            False,
+            False,
+            False,
+        ),
+        (NEMOTRON_MODEL, "responses", TINKER_BASE_URL, True, False, False),
+        (
+            TINKER_MODEL,
+            "chat_completions",
+            "https://example.invalid/v1",
+            False,
+            False,
+            False,
+        ),
+        (TINKER_MODEL, "responses", TINKER_BASE_URL, True, False, False),
+        (
+            "custom-chat-model",
+            "chat_completions",
+            TINKER_BASE_URL,
+            False,
+            True,
+            False,
+        ),
+        (
+            "custom-chat-model",
+            "chat_completions",
+            "https://example.invalid/v1",
+            False,
+            False,
+            False,
+        ),
     ],
 )
 async def test_runner_selects_requested_sdk_api_without_changing_model_id(
@@ -167,6 +228,7 @@ async def test_runner_selects_requested_sdk_api_without_changing_model_id(
     base_url: str | None,
     uses_responses: bool,
     uses_explicit_tinker_model: bool,
+    uses_nemotron_adapter: bool,
 ) -> None:
     captured = _install_fake_agents_sdk(monkeypatch)
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
@@ -203,7 +265,7 @@ async def test_runner_selects_requested_sdk_api_without_changing_model_id(
         assert agent_model.openai_client is captured["clients"][0]
         assert agent_model.openai_client.kwargs == {}
         assert agent_model.openai_client.api_key == "test-openai-key"
-        assert agent_model.openai_client.base_url == TINKER_BASE_URL
+        assert agent_model.openai_client.base_url.rstrip("/") == TINKER_BASE_URL
         assert agent_model.openai_client.closed is True
         hook = agent_model.should_replay_reasoning_content
         assert hook(
@@ -245,6 +307,10 @@ async def test_runner_selects_requested_sdk_api_without_changing_model_id(
         assert agent_model == model
         assert captured["chat_models"] == []
         assert "extra_body" not in model_settings
+    if uses_nemotron_adapter:
+        assert captured["nemotron_models"] == [agent_model]
+    else:
+        assert captured["nemotron_models"] == []
 
 
 @pytest.mark.parametrize(

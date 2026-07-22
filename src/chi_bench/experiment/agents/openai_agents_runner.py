@@ -33,6 +33,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
+from chi_bench.experiment.agents.nemotron_tool_protocol import NEMOTRON_ULTRA_256K_MODEL
+
 logger = logging.getLogger("openai_agents_runner")
 
 # Verbatim copy of Toolathlon's general_v0.txt agent template
@@ -567,11 +569,23 @@ async def _agent_model_context(model: str, api_mode: str):
         yield model
         return
 
-    from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel  # type: ignore
     from openai import AsyncOpenAI
 
+    if model == NEMOTRON_ULTRA_256K_MODEL:
+        from chi_bench.experiment.agents.nemotron_tinker_model import (
+            NemotronTinkerChatCompletionsModel,
+        )
+
+        model_type = NemotronTinkerChatCompletionsModel
+    else:
+        from agents.models.openai_chatcompletions import (  # type: ignore
+            OpenAIChatCompletionsModel,
+        )
+
+        model_type = OpenAIChatCompletionsModel
+
     async with AsyncOpenAI() as openai_client:
-        yield OpenAIChatCompletionsModel(
+        yield model_type(
             model=model,
             openai_client=openai_client,
             should_replay_reasoning_content=_should_replay_same_model_reasoning_content,
