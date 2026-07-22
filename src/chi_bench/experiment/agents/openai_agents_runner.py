@@ -543,30 +543,27 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 # ---------------------------------------------------------------------------
 # Main run loop
 # ---------------------------------------------------------------------------
-def _is_tinker_chat_route(model: str, api_mode: str) -> bool:
+def _is_tinker_chat_route(api_mode: str) -> bool:
     base_url = os.environ.get("OPENAI_BASE_URL", "").rstrip("/")
-    return (
-        api_mode == "chat_completions"
-        and model.startswith("thinkingmachines/")
-        and base_url == TINKER_BASE_URL
-    )
+    return api_mode == "chat_completions" and base_url == TINKER_BASE_URL
 
 
 def _should_replay_same_model_reasoning_content(context: Any) -> bool:
     """Replay opaque reasoning only to the exact model that produced it."""
 
     reasoning = getattr(context, "reasoning", None)
+    model = getattr(context, "model", None)
     base_url = (getattr(context, "base_url", None) or "").rstrip("/")
     return (
-        context.model.startswith("thinkingmachines/")
+        isinstance(model, str)
         and base_url == TINKER_BASE_URL
-        and getattr(reasoning, "origin_model", None) == context.model
+        and getattr(reasoning, "origin_model", None) == model
     )
 
 
 @asynccontextmanager
 async def _agent_model_context(model: str, api_mode: str):
-    if not _is_tinker_chat_route(model, api_mode):
+    if not _is_tinker_chat_route(api_mode):
         yield model
         return
 
@@ -636,7 +633,7 @@ async def run_agent(instruction: str, mcp_url: str, logs_dir: Path = DEFAULT_LOG
     max_turns = int(os.environ.get("OPENAI_AGENTS_MAX_TURNS", "50"))
     api_mode = os.environ.get("OPENAI_AGENTS_API_MODE", "responses")
     reasoning_effort = os.environ.get("OPENAI_AGENTS_REASONING_EFFORT")
-    is_tinker_chat = _is_tinker_chat_route(model, api_mode)
+    is_tinker_chat = _is_tinker_chat_route(api_mode)
 
     _install_oversize_output_patch(logs_dir)
     _install_mcp_tool_name_sanitizer()

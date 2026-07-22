@@ -11,6 +11,7 @@ import pytest
 
 from chi_bench.experiment.agents import openai_agents_runner
 
+NEMOTRON_MODEL = "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16:peft:262144"
 TINKER_MODEL = "thinkingmachines/Inkling:peft:262144"
 TINKER_BASE_URL = "https://tinker.thinkingmachines.dev/services/tinker-prod/oai/api/v1"
 
@@ -151,9 +152,11 @@ def _install_fake_agents_sdk(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[
         ("gpt-5.6-sol", None, None, True, False),
         ("moonshotai/kimi-k3", None, None, True, False),
         (TINKER_MODEL, "chat_completions", TINKER_BASE_URL, False, True),
+        (NEMOTRON_MODEL, "chat_completions", TINKER_BASE_URL, False, True),
         (TINKER_MODEL, "chat_completions", "https://example.invalid/v1", False, False),
         (TINKER_MODEL, "responses", TINKER_BASE_URL, True, False),
-        ("custom-chat-model", "chat_completions", TINKER_BASE_URL, False, False),
+        ("custom-chat-model", "chat_completions", TINKER_BASE_URL, False, True),
+        ("custom-chat-model", "chat_completions", "https://example.invalid/v1", False, False),
     ],
 )
 async def test_runner_selects_requested_sdk_api_without_changing_model_id(
@@ -191,6 +194,10 @@ async def test_runner_selects_requested_sdk_api_without_changing_model_id(
     agent_model = captured["agents"][0]["model"]
     model_settings = captured["model_settings"][0]
     if uses_explicit_tinker_model:
+        assert captured["chat_models"], (
+            "expected an explicit Tinker Chat Completions model, "
+            f"got agent_model={agent_model!r}, model_settings={model_settings!r}"
+        )
         assert agent_model is captured["chat_models"][0]
         assert agent_model.model == model
         assert agent_model.openai_client is captured["clients"][0]
@@ -220,6 +227,19 @@ async def test_runner_selects_requested_sdk_api_without_changing_model_id(
                 reasoning=SimpleNamespace(origin_model=model),
             )
         )
+        assert not hook(
+            SimpleNamespace(
+                base_url=TINKER_BASE_URL,
+                reasoning=SimpleNamespace(origin_model=model),
+            )
+        )
+        assert not hook(
+            SimpleNamespace(
+                model=123,
+                base_url=TINKER_BASE_URL,
+                reasoning=SimpleNamespace(origin_model=123),
+            )
+        )
         assert model_settings["extra_body"] == {"separate_reasoning": True}
     else:
         assert agent_model == model
@@ -227,16 +247,25 @@ async def test_runner_selects_requested_sdk_api_without_changing_model_id(
         assert "extra_body" not in model_settings
 
 
-def test_pinned_sdk_replays_inkling_reasoning_only_with_same_model_hook() -> None:
+@pytest.mark.parametrize(
+    ("model", "reasoning_content"),
+    [
+        (TINKER_MODEL, "opaque-inkling-reasoning"),
+        (NEMOTRON_MODEL, "opaque-nemotron-reasoning"),
+    ],
+)
+def test_pinned_sdk_replays_tinker_reasoning_only_with_same_model_hook(
+    model: str, reasoning_content: str
+) -> None:
     pytest.importorskip("agents")
     from agents.models.chatcmpl_converter import Converter
 
     items = [
         {
-            "id": "rs_inkling",
+            "id": "rs_tinker",
             "type": "reasoning",
-            "summary": [{"type": "summary_text", "text": "opaque-inkling-reasoning"}],
-            "provider_data": {"model": TINKER_MODEL},
+            "summary": [{"type": "summary_text", "text": reasoning_content}],
+            "provider_data": {"model": model},
         },
         {
             "type": "function_call",
@@ -253,10 +282,10 @@ def test_pinned_sdk_replays_inkling_reasoning_only_with_same_model_hook() -> Non
         },
     ]
 
-    default_messages = Converter.items_to_messages(items, model=TINKER_MODEL)
+    default_messages = Converter.items_to_messages(items, model=model)
     hooked_messages = Converter.items_to_messages(
         items,
-        model=TINKER_MODEL,
+        model=model,
         base_url=TINKER_BASE_URL,
         should_replay_reasoning_content=(
             openai_agents_runner._should_replay_same_model_reasoning_content
@@ -264,7 +293,7 @@ def test_pinned_sdk_replays_inkling_reasoning_only_with_same_model_hook() -> Non
     )
     cross_model_messages = Converter.items_to_messages(
         items,
-        model=f"{TINKER_MODEL}-other",
+        model=f"{model}-other",
         base_url=TINKER_BASE_URL,
         should_replay_reasoning_content=(
             openai_agents_runner._should_replay_same_model_reasoning_content
@@ -272,7 +301,7 @@ def test_pinned_sdk_replays_inkling_reasoning_only_with_same_model_hook() -> Non
     )
     wrong_route_messages = Converter.items_to_messages(
         items,
-        model=TINKER_MODEL,
+        model=model,
         base_url="https://example.invalid/v1",
         should_replay_reasoning_content=(
             openai_agents_runner._should_replay_same_model_reasoning_content
@@ -280,7 +309,7 @@ def test_pinned_sdk_replays_inkling_reasoning_only_with_same_model_hook() -> Non
     )
 
     assert "reasoning_content" not in default_messages[0]
-    assert hooked_messages[0]["reasoning_content"] == "opaque-inkling-reasoning"
+    assert hooked_messages[0]["reasoning_content"] == reasoning_content
     assert "reasoning_content" not in cross_model_messages[0]
     assert "reasoning_content" not in wrong_route_messages[0]
 
