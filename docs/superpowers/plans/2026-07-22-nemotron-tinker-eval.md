@@ -32,7 +32,7 @@
 - Modify: `tests/unit/test_openai_agents_harness.py`
 - Modify: `src/chi_bench/experiment/agents/openai_agents_harness.py`
 
-- [ ] **Step 1: Write failing route tests.** Add the exact model constant and tests that request an explicit Tinker route, require the Tinker key, and prove the same model still auto-routes to OpenRouter without the override:
+- [x] **Step 1: Write failing route tests.** Add the exact model constant and tests that request an explicit Tinker route, require the Tinker key, and prove the same model still auto-routes to OpenRouter without the override:
 
   ```python
   NEMOTRON_MODEL = "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16:peft:262144"
@@ -67,7 +67,7 @@
       assert env["OPENAI_API_KEY"] == "test-openrouter-key"
   ```
 
-- [ ] **Step 2: Run RED.**
+- [x] **Step 2: Run RED.**
 
   ```bash
   uv run pytest tests/unit/test_openai_agents_harness.py -v
@@ -75,7 +75,7 @@
 
   Expected: the first two tests fail because `_resolve_routing` has no `provider_route` argument.
 
-- [ ] **Step 3: Add the minimal explicit route.** Add a `provider_route` CLI enum with choices `auto` and `tinker`; add a keyword-only `provider_route` argument to `_resolve_routing`; treat `provider_route == "tinker"` or `thinkingmachines/*` as Tinker; and pass the resolved flag from `run()`:
+- [x] **Step 3: Add the minimal explicit route.** Add a `provider_route` CLI enum with choices `auto` and `tinker`; add a keyword-only `provider_route` argument to `_resolve_routing`; treat `provider_route == "tinker"` or `thinkingmachines/*` as Tinker; and pass the resolved flag from `run()`:
 
   ```python
   CliFlag(
@@ -119,7 +119,7 @@
   )
   ```
 
-- [ ] **Step 4: Run GREEN and commit.**
+- [x] **Step 4: Run GREEN and commit.**
 
   ```bash
   uv run pytest tests/unit/test_openai_agents_harness.py -v
@@ -136,9 +136,9 @@
 - Modify: `tests/unit/test_openai_agents_runner_config.py`
 - Modify: `src/chi_bench/experiment/agents/openai_agents_runner.py`
 
-- [ ] **Step 1: Write failing runner tests.** Add `NEMOTRON_MODEL`, include `(NEMOTRON_MODEL, "chat_completions", TINKER_BASE_URL, False, True)` in the API-selection cases, and assert the replay hook accepts Nemotron only when `origin_model`, current model, and Tinker base URL match. Keep the existing wrong-base and cross-model assertions.
+- [x] **Step 1: Write failing runner tests.** Add `NEMOTRON_MODEL`, include `(NEMOTRON_MODEL, "chat_completions", TINKER_BASE_URL, False, True)` in the API-selection cases, and assert the replay hook accepts Nemotron only when `origin_model`, current model, and Tinker base URL match. Keep the existing wrong-base and cross-model assertions.
 
-- [ ] **Step 2: Run RED.**
+- [x] **Step 2: Run RED.**
 
   ```bash
   uv run pytest tests/unit/test_openai_agents_runner_config.py -v
@@ -146,7 +146,7 @@
 
   Expected: Nemotron remains a plain model string and receives no `separate_reasoning` body.
 
-- [ ] **Step 3: Remove model-prefix coupling.** Change route detection to depend only on Chat Completions plus the normalized Tinker endpoint, and change replay to depend only on that endpoint plus exact model equality:
+- [x] **Step 3: Remove model-prefix coupling.** Change route detection to depend only on Chat Completions plus the normalized Tinker endpoint, and change replay to depend only on that endpoint plus exact model equality:
 
   ```python
   def _is_tinker_chat_route(api_mode: str) -> bool:
@@ -169,7 +169,7 @@
 
   Update both call sites to `_is_tinker_chat_route(api_mode)`.
 
-- [ ] **Step 4: Run GREEN and commit.**
+- [x] **Step 4: Run GREEN and commit.**
 
   ```bash
   uv run pytest tests/unit/test_openai_agents_runner_config.py -v
@@ -186,7 +186,7 @@
 - Modify: `tests/unit/test_preflight_frontier_models.py`
 - Modify: `scripts/preflight_frontier_models.py`
 
-- [ ] **Step 1: Write failing classification and replay tests.** Build a temporary one-row config containing the exact Nemotron model and these kwargs:
+- [x] **Step 1: Write failing classification and replay tests.** Build a temporary one-row config containing the exact Nemotron model and these kwargs:
 
   ```yaml
   rows:
@@ -200,7 +200,7 @@
 
   Assert `load_probe_specs()` returns one Tinker Chat Completions spec using `TINKER_API_KEY`, then run the existing fake two-turn chat response and assert the second request replays the full assistant message with `reasoning_content` and the tool result.
 
-- [ ] **Step 2: Run RED.**
+- [x] **Step 2: Run RED.**
 
   ```bash
   uv run pytest tests/unit/test_preflight_frontier_models.py -v
@@ -208,7 +208,7 @@
 
   Expected: the loader rejects one row and classification defaults to OpenRouter.
 
-- [ ] **Step 3: Honor explicit routing and non-empty matrices.** In `_provider_spec`, check `agent_kwargs.get("provider_route") == "tinker"` before vendor prefixes. In `load_probe_specs`, replace the six-row guard with:
+- [x] **Step 3: Honor explicit routing and non-empty matrices.** In `_provider_spec`, check `agent_kwargs.get("provider_route") == "tinker"` before vendor prefixes. In `load_probe_specs`, replace the six-row guard with:
 
   ```python
   if not isinstance(rows, list) or not rows:
@@ -217,7 +217,7 @@
 
   Update the module and function docstrings from “six” to “configured,” without changing redaction, support-model checks, or the two-turn probe.
 
-- [ ] **Step 4: Run GREEN and commit.**
+- [x] **Step 4: Run GREEN and commit.**
 
   ```bash
   uv run pytest tests/unit/test_preflight_frontier_models.py -v
@@ -237,9 +237,9 @@
 - Modify: `configs/prices.yaml`
 - Modify: `CLAUDE.md`
 
-- [ ] **Step 1: Write failing matrix and price contracts.** Require both files, the exact model ID, `openai-agents`, `provider_route: tinker`, `api_mode: chat_completions`, `reasoning_effort: high`, 50 turns, ten SDK retries, and the 100,000-character tool cap. Require the smoke matrix to emit three distinct single-task Modal slices at concurrency one and the full matrix to emit three distinct 25-task Modal slices at concurrency five. Require exact price values `input: 3.32`, `cache: 0.664`, `output: 8.30`.
+- [x] **Step 1: Write failing matrix and price contracts.** Require both files, the exact model ID, `openai-agents`, `provider_route: tinker`, `api_mode: chat_completions`, `reasoning_effort: high`, 50 turns, ten SDK retries, and the 100,000-character tool cap. Require the smoke matrix to emit three distinct single-task Modal slices at concurrency one and the full matrix to emit three distinct 25-task Modal slices at concurrency five. Require exact price values `input: 3.32`, `cache: 0.664`, `output: 8.30`.
 
-- [ ] **Step 2: Run RED.**
+- [x] **Step 2: Run RED.**
 
   ```bash
   uv run pytest tests/unit/test_frontier_models_smoke_config.py -v
@@ -247,11 +247,11 @@
 
   Expected: both matrix files and the price entry are missing.
 
-- [ ] **Step 3: Add the smoke matrix.** Use the three existing single-task datasets, Modal, concurrency one, one attempt, two infrastructure retries, timeout multiplier 2.0, and trials root `logs/experiments/nemotron3_ultra_tinker_smoke_2026_07`.
+- [x] **Step 3: Add the smoke matrix.** Use the three existing single-task datasets, Modal, concurrency one, one attempt, two infrastructure retries, timeout multiplier 2.0, and trials root `logs/experiments/nemotron3_ultra_tinker_smoke_2026_07`.
 
-- [ ] **Step 4: Add the full matrix.** Use the three 25-task dataset/registry pairs, Modal, concurrency five, one attempt, two infrastructure retries, timeout multiplier 2.0, and trials root `logs/experiments/nemotron3_ultra_tinker_full_2026_07`.
+- [x] **Step 4: Add the full matrix.** Use the three 25-task dataset/registry pairs, Modal, concurrency five, one attempt, two infrastructure retries, timeout multiplier 2.0, and trials root `logs/experiments/nemotron3_ultra_tinker_full_2026_07`.
 
-- [ ] **Step 5: Add exact pricing and the repo lesson.** Add:
+- [x] **Step 5: Add exact pricing and the repo lesson.** Add:
 
   ```yaml
   nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16:peft:262144:
@@ -262,7 +262,7 @@
 
   In `CLAUDE.md` record: “Treat Tinker as an explicit provider route independent of model vendor prefix. Tinker-served `nvidia/*` models use the same `openai-agents` Chat Completions, `TINKER_API_KEY`, separated-reasoning replay path as Inkling; never infer OpenRouter solely from a non-`thinkingmachines/*` ID.”
 
-- [ ] **Step 6: Run GREEN and commit.**
+- [x] **Step 6: Run GREEN and commit.**
 
   ```bash
   uv run pytest tests/unit/test_frontier_models_smoke_config.py -v
