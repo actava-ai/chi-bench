@@ -310,3 +310,39 @@ async def test_non_tinker_route_keeps_api_mode_from_extra_env(
     assert captured["env"]["OPENAI_AGENTS_API_MODE"] == "responses"
     assert harness._extra_env is saved_extra_env
     assert saved_extra_env == {"OPENAI_AGENTS_API_MODE": "responses"}
+
+
+@pytest.mark.asyncio
+async def test_routing_failure_restores_original_extra_env(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("TINKER_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "host-openai-key")
+    harness = OpenAIAgentsHarness(
+        logs_dir=tmp_path,
+        model_name=NEMOTRON_MODEL,
+        mcp_servers=[
+            MCPServerConfig(
+                name="chi_bench",
+                transport="streamable-http",
+                url="http://chi-bench-server:8000/mcp",
+            )
+        ],
+        provider_route="tinker",
+    )
+    saved_extra_env = {
+        "OPENAI_API_KEY": "extra-openai-key",
+        "OPENAI_BASE_URL": "https://example.invalid/v1",
+        "KEEP_ME": "test-value",
+    }
+    harness._extra_env = saved_extra_env
+
+    with pytest.raises(RuntimeError, match="TINKER_API_KEY"):
+        await harness.run("Complete the task", object(), AgentContext())
+
+    assert harness._extra_env is saved_extra_env
+    assert harness._extra_env == {
+        "OPENAI_API_KEY": "extra-openai-key",
+        "OPENAI_BASE_URL": "https://example.invalid/v1",
+        "KEEP_ME": "test-value",
+    }

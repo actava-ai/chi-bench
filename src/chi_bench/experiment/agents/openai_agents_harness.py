@@ -253,30 +253,30 @@ class OpenAIAgentsHarness(BaseInstalledAgent):
             if k not in ("OPENAI_API_KEY", "OPENAI_BASE_URL")
         }
 
-        env: dict[str, str] = self._resolve_routing(
-            self.model_name,
-            os.environ,
-            provider_route=self._resolved_flags.get("provider_route"),
-        )
-        if env.get("OPENAI_BASE_URL") == self.TINKER_BASE_URL:
-            self._extra_env = {
-                k: v for k, v in self._extra_env.items() if k != "OPENAI_AGENTS_API_MODE"
-            }
-
-        env["OPENAI_AGENTS_MAX_TURNS"] = str(self._resolved_flags.get("max_turns", 50))
-        env["OPENAI_AGENTS_MAX_RETRIES"] = str(self._resolved_flags.get("max_retries", 10))
-        env["OPENAI_AGENTS_MAX_TOOL_RETURN_CHARS"] = str(
-            self._resolved_flags.get("max_tool_return_chars", 100_000)
-        )
-        if env.get("OPENAI_BASE_URL") == self.TINKER_BASE_URL:
-            env["OPENAI_AGENTS_API_MODE"] = "chat_completions"
-        elif api_mode := self._resolved_flags.get("api_mode"):
-            env["OPENAI_AGENTS_API_MODE"] = api_mode
-        if reasoning_effort := self._resolved_flags.get("reasoning_effort"):
-            env["OPENAI_AGENTS_REASONING_EFFORT"] = reasoning_effort
-
-        escaped = shlex.quote(instruction)
         try:
+            env: dict[str, str] = self._resolve_routing(
+                self.model_name,
+                os.environ,
+                provider_route=self._resolved_flags.get("provider_route"),
+            )
+            if env.get("OPENAI_BASE_URL") == self.TINKER_BASE_URL:
+                self._extra_env = {
+                    k: v for k, v in self._extra_env.items() if k != "OPENAI_AGENTS_API_MODE"
+                }
+
+            env["OPENAI_AGENTS_MAX_TURNS"] = str(self._resolved_flags.get("max_turns", 50))
+            env["OPENAI_AGENTS_MAX_RETRIES"] = str(self._resolved_flags.get("max_retries", 10))
+            env["OPENAI_AGENTS_MAX_TOOL_RETURN_CHARS"] = str(
+                self._resolved_flags.get("max_tool_return_chars", 100_000)
+            )
+            if env.get("OPENAI_BASE_URL") == self.TINKER_BASE_URL:
+                env["OPENAI_AGENTS_API_MODE"] = "chat_completions"
+            elif api_mode := self._resolved_flags.get("api_mode"):
+                env["OPENAI_AGENTS_API_MODE"] = api_mode
+            if reasoning_effort := self._resolved_flags.get("reasoning_effort"):
+                env["OPENAI_AGENTS_REASONING_EFFORT"] = reasoning_effort
+
+            escaped = shlex.quote(instruction)
             await self.exec_as_agent(
                 environment,
                 command=(
