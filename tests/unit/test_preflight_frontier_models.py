@@ -16,6 +16,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "scripts/preflight_frontier_models.py"
 MATRIX_PATH = REPO_ROOT / "configs/experiments/frontier_models_smoke_2026_07.yaml"
+NEMOTRON_MODEL = "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16:peft:262144"
 
 TEST_CREDENTIALS = {
     "ANTHROPIC_API_KEY": "anthropic-test-secret-123456",
@@ -339,6 +340,20 @@ def _write_env_file(path: Path) -> None:
     path.write_text("".join(f"{key}={value}\n" for key, value in TEST_CREDENTIALS.items()))
 
 
+def _write_nemotron_config(path: Path) -> None:
+    path.write_text(
+        f"""rows:
+  - agent: openai-agents
+    model: {NEMOTRON_MODEL}
+    agent_kwargs:
+      provider_route: tinker
+      api_mode: chat_completions
+      reasoning_effort: high
+""",
+        encoding="utf-8",
+    )
+
+
 def test_loads_six_exact_matrix_rows_and_dispatches_provider_modes(preflight: ModuleType) -> None:
     specs = preflight.load_probe_specs(MATRIX_PATH)
 
@@ -371,6 +386,75 @@ def test_loads_six_exact_matrix_rows_and_dispatches_provider_modes(preflight: Mo
             "TINKER_API_KEY",
         ),
     ]
+
+
+def test_loads_explicit_tinker_route_for_one_row_nemotron_config(
+    preflight: ModuleType, tmp_path: Path
+) -> None:
+    config = tmp_path / "nemotron.yaml"
+    _write_nemotron_config(config)
+
+    specs = preflight.load_probe_specs(config)
+
+    assert specs == [
+        preflight.ProbeSpec(
+            provider="tinker",
+            model=NEMOTRON_MODEL,
+            resolved_model=NEMOTRON_MODEL,
+            endpoint_mode="chat_completions",
+            api_key_env="TINKER_API_KEY",
+            endpoint=preflight.TINKER_CHAT_URL,
+            agent_kwargs={
+                "provider_route": "tinker",
+                "api_mode": "chat_completions",
+                "reasoning_effort": "high",
+            },
+        )
+    ]
+
+
+def test_explicit_tinker_nemotron_probe_replays_full_assistant_message(
+    preflight: ModuleType, tmp_path: Path
+) -> None:
+    config = tmp_path / "nemotron.yaml"
+    _write_nemotron_config(config)
+    spec = preflight.load_probe_specs(config)[0]
+    first = _chat_tool_response(NEMOTRON_MODEL)
+    requester = SequenceRequester([first, _chat_text_response(NEMOTRON_MODEL)])
+
+    result = preflight.probe_model(spec, TEST_CREDENTIALS, requester)
+
+    assert result["success"] is True
+    assert result["tool_roundtrip"] is True
+    assert result["reasoning_metadata"] is True
+    assert all(call["json"]["reasoning_effort"] == "high" for call in requester.calls)
+    assert all(call["json"]["separate_reasoning"] is True for call in requester.calls)
+    second_messages = requester.calls[1]["json"]["messages"]
+    assert second_messages[1] == first["choices"][0]["message"]
+    assert second_messages[2] == {
+        "role": "tool",
+        "tool_call_id": "call_echo",
+        "content": '{"echo":"ping","ok":true}',
+    }
+
+
+@pytest.mark.parametrize("rows_yaml", ["[]", "{}"])
+def test_load_probe_specs_requires_at_least_one_row(
+    preflight: ModuleType, tmp_path: Path, rows_yaml: str
+) -> None:
+    config = tmp_path / "invalid-rows.yaml"
+    config.write_text(f"rows: {rows_yaml}\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="requires at least one row"):
+        preflight.load_probe_specs(config)
+
+
+def test_load_probe_specs_rejects_malformed_row(preflight: ModuleType, tmp_path: Path) -> None:
+    config = tmp_path / "malformed-row.yaml"
+    config.write_text("rows:\n  - malformed\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="every frontier preflight row must be a mapping"):
+        preflight.load_probe_specs(config)
 
 
 def test_anthropic_two_turn_probe_preserves_all_assistant_blocks(preflight: ModuleType) -> None:

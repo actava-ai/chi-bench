@@ -209,6 +209,16 @@ def _provider_spec(row: Mapping[str, Any]) -> ProbeSpec:
         raise ValueError(f"agent_kwargs for {model!r} must be a mapping")
     agent_kwargs = {str(key): str(value) for key, value in raw_kwargs.items()}
 
+    if agent_kwargs.get("provider_route") == "tinker":
+        return ProbeSpec(
+            "tinker",
+            model,
+            model,
+            "chat_completions",
+            "TINKER_API_KEY",
+            TINKER_CHAT_URL,
+            agent_kwargs,
+        )
     if model.startswith("anthropic/"):
         return ProbeSpec(
             "anthropic",
@@ -251,15 +261,14 @@ def _provider_spec(row: Mapping[str, Any]) -> ProbeSpec:
 
 
 def load_probe_specs(config_path: str | Path) -> list[ProbeSpec]:
-    """Load the six evaluated rows in their reviewed matrix order."""
+    """Load the configured rows in their reviewed matrix order."""
 
     data = yaml.safe_load(Path(config_path).read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError("frontier preflight config must be a YAML mapping")
     rows = data.get("rows")
-    if not isinstance(rows, list) or len(rows) != 6:
-        count = len(rows) if isinstance(rows, list) else 0
-        raise ValueError(f"frontier preflight requires exactly six rows; found {count}")
+    if not isinstance(rows, list) or not rows:
+        raise ValueError("frontier preflight requires at least one row")
     if not all(isinstance(row, dict) for row in rows):
         raise ValueError("every frontier preflight row must be a mapping")
     return [_provider_spec(row) for row in rows]
@@ -970,7 +979,7 @@ def run_preflight(
     credentials: Mapping[str, str],
     request_fn: RequestFn = httpx.request,
 ) -> dict[str, Any]:
-    """Run all six evaluated cells and both Anthropic support checks."""
+    """Run all configured cells and both Anthropic support checks."""
 
     specs = load_probe_specs(config_path)
     evaluated = [probe_model(spec, credentials, request_fn) for spec in specs]
