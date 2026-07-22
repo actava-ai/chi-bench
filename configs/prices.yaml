@@ -135,3 +135,8 @@ prices:
     input: 3.74
     output: 9.36
     cache: 0.748
+  # Limited-time Tinker discount for NVIDIA Nemotron 3 Ultra, verified 2026-07-22.
+  nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16:peft:262144:
+    input: 3.32
+    output: 8.30
+    cache: 0.664

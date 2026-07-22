@@ -171,6 +171,10 @@ Configs:
   through OpenRouter, while third-party model vendors use `openai-agents`.** **Why:** the gateway
   does not change harness identity, and agent-scoped OpenRouter credentials must not replace the
   native `ANTHROPIC_API_KEY` used by the WorkspaceJudge.
+- **Treat Tinker as an explicit provider route independent of vendor prefix: Tinker-served
+  `nvidia/*` uses `openai-agents` Chat Completions, `TINKER_API_KEY`, and the same separated-
+  reasoning replay as Inkling; do not infer OpenRouter solely from a non-`thinkingmachines` ID.**
+  **Why:** gateway/provider routing differs from model vendor identity.
 - **`ANTHROPIC_API_KEY` is always required**, even for non-Anthropic agents — the judge is pinned
   to `claude-opus-4-7`. `CHI_BENCH_JUDGE_MODEL` overrides it but deviates from the paper protocol.
   Use `CHI_BENCH_JUDGE_NUM_VOTES > 1` for majority-voted judging.

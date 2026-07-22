@@ -21,7 +21,31 @@ DATA_ROOT = REPO_ROOT / "data"
 MATRIX_PATH = REPO_ROOT / "configs/experiments/frontier_models_smoke_2026_07.yaml"
 FULL_MATRIX_PATH = REPO_ROOT / "configs/experiments/frontier_models_full_2026_07.yaml"
 FABLE_FULL_MATRIX_PATH = REPO_ROOT / "configs/experiments/fable5_openrouter_full_2026_07.yaml"
+NEMOTRON_SMOKE_MATRIX_PATH = (
+    REPO_ROOT / "configs/experiments/nemotron3_ultra_tinker_smoke_2026_07.yaml"
+)
+NEMOTRON_FULL_MATRIX_PATH = (
+    REPO_ROOT / "configs/experiments/nemotron3_ultra_tinker_full_2026_07.yaml"
+)
 PRICES_PATH = REPO_ROOT / "configs/prices.yaml"
+
+NEMOTRON_MODEL = "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16:peft:262144"
+NEMOTRON_AGENT_KWARGS = {
+    "provider_route": "tinker",
+    "api_mode": "chat_completions",
+    "reasoning_effort": "high",
+    "max_turns": "50",
+    "max_retries": "10",
+    "max_tool_return_chars": "100000",
+}
+NEMOTRON_ROW = {
+    "agent": "openai-agents",
+    "model": NEMOTRON_MODEL,
+    "agent_kwargs": NEMOTRON_AGENT_KWARGS,
+}
+NEMOTRON_SLICE_PREFIX = "01_openai-agents_nvidia-NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16-peft-262144"
+NEMOTRON_SMOKE_TRIALS_ROOT = "logs/experiments/nemotron3_ultra_tinker_smoke_2026_07"
+NEMOTRON_FULL_TRIALS_ROOT = "logs/experiments/nemotron3_ultra_tinker_full_2026_07"
 
 EXPECTED_DOMAINS = {
     "pa_provider": {
@@ -97,6 +121,7 @@ EXPECTED_PRICES = {
         "cache": 0.748,
         "output": 9.36,
     },
+    NEMOTRON_MODEL: {"input": 3.32, "cache": 0.664, "output": 8.30},
 }
 
 EXPECTED_FULL_DOMAINS = {
@@ -115,6 +140,43 @@ EXPECTED_FULL_DOMAINS = {
 }
 
 EXPECTED_FULL_ROWS = EXPECTED_ROWS[1:]
+
+EXPECTED_NEMOTRON_SMOKE_MATRIX = {
+    "name": "nemotron3_ultra_tinker_smoke_2026_07",
+    "description": (
+        "NVIDIA Nemotron 3 Ultra via Tinker on one representative task in each chi-Bench domain."
+    ),
+    "defaults": {
+        "environment": "modal",
+        "env_file": ".env",
+        "concurrency": 1,
+        "n_attempts": 1,
+        "max_retries": 2,
+        "trials_root": NEMOTRON_SMOKE_TRIALS_ROOT,
+        "agent_timeout_multiplier": 2.0,
+    },
+    "domains": EXPECTED_DOMAINS,
+    "rows": [NEMOTRON_ROW],
+}
+
+EXPECTED_NEMOTRON_FULL_MATRIX = {
+    "name": "nemotron3_ultra_tinker_full_2026_07",
+    "description": (
+        "NVIDIA Nemotron 3 Ultra via Tinker across all chi-Bench tasks in the three benchmark "
+        "domains."
+    ),
+    "defaults": {
+        "environment": "modal",
+        "env_file": ".env",
+        "concurrency": 5,
+        "n_attempts": 1,
+        "max_retries": 2,
+        "trials_root": NEMOTRON_FULL_TRIALS_ROOT,
+        "agent_timeout_multiplier": 2.0,
+    },
+    "domains": EXPECTED_FULL_DOMAINS,
+    "rows": [NEMOTRON_ROW],
+}
 
 FABLE_FULL_TRIALS_ROOT = "logs/experiments/fable5_openrouter_full_2026_07"
 EMPTY_AGENT_ENV_TEMPLATE = "${CHI_BENCH_EMPTY_AGENT_ENV:-}"
@@ -160,6 +222,158 @@ EXPECTED_FABLE_FULL_MATRIX = {
         }
     ],
 }
+
+
+def _load_emitted_slices(
+    matrix_path: Path,
+) -> tuple[list[str], list[tuple[dict[str, object], ExperimentConfig]]]:
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "scripts/_emit_run_table_commands.py"),
+            "--config",
+            str(matrix_path),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+    commands = [line for line in result.stdout.splitlines() if line.strip()]
+    assert len(commands) == len(set(commands))
+
+    slices: list[tuple[dict[str, object], ExperimentConfig]] = []
+    for command in commands:
+        tokens = shlex.split(command)
+        assert tokens[:3] == ["cb", "experiment", "run"]
+        slice_path = REPO_ROOT / tokens[tokens.index("-f") + 1]
+        slices.append(
+            (
+                yaml.safe_load(slice_path.read_text()),
+                ExperimentConfig.from_yaml(slice_path),
+            )
+        )
+    return commands, slices
+
+
+def _assert_nemotron_slice(
+    raw_slice: dict[str, object],
+    config: ExperimentConfig,
+    *,
+    concurrency: int,
+    trials_root: str,
+    domain_name: str,
+) -> None:
+    assert config.agent == "openai-agents"
+    assert config.model == NEMOTRON_MODEL
+    assert config.agent_kwargs == NEMOTRON_AGENT_KWARGS
+    assert "agent_env" not in raw_slice
+    assert config.agent_env == {}
+    assert config.environment == "modal"
+    assert config.concurrency == concurrency
+    assert config.n_attempts == 1
+    assert config.max_retries == 2
+    assert config.agent_timeout_multiplier == 2.0
+    assert config.trials_dir == (f"{trials_root}/{NEMOTRON_SLICE_PREFIX}_{domain_name}")
+
+
+def test_nemotron_tinker_smoke_matrix_matches_reviewed_configuration() -> None:
+    assert NEMOTRON_SMOKE_MATRIX_PATH.is_file(), (
+        f"missing Nemotron Tinker smoke matrix: {NEMOTRON_SMOKE_MATRIX_PATH}"
+    )
+    matrix = yaml.safe_load(NEMOTRON_SMOKE_MATRIX_PATH.read_text())
+
+    assert matrix == EXPECTED_NEMOTRON_SMOKE_MATRIX
+
+
+def test_nemotron_tinker_smoke_matrix_emits_3_unique_valid_slices() -> None:
+    commands, slices = _load_emitted_slices(NEMOTRON_SMOKE_MATRIX_PATH)
+    assert len(commands) == 3
+
+    expected_domain_by_dataset = {
+        domain["dataset"]: domain_name for domain_name, domain in EXPECTED_DOMAINS.items()
+    }
+    emitted_datasets: set[str] = set()
+    trials_dirs: set[str] = set()
+    for raw_slice, config in slices:
+        assert config.dataset in expected_domain_by_dataset
+        assert config.registry_path is None
+        _assert_nemotron_slice(
+            raw_slice,
+            config,
+            concurrency=1,
+            trials_root=NEMOTRON_SMOKE_TRIALS_ROOT,
+            domain_name=expected_domain_by_dataset[config.dataset],
+        )
+        emitted_datasets.add(config.dataset)
+        assert config.trials_dir is not None
+        trials_dirs.add(config.trials_dir)
+
+    assert emitted_datasets == set(expected_domain_by_dataset)
+    assert len(trials_dirs) == 3
+
+
+def test_nemotron_tinker_full_matrix_matches_reviewed_configuration() -> None:
+    assert NEMOTRON_FULL_MATRIX_PATH.is_file(), (
+        f"missing Nemotron Tinker full matrix: {NEMOTRON_FULL_MATRIX_PATH}"
+    )
+    matrix = yaml.safe_load(NEMOTRON_FULL_MATRIX_PATH.read_text())
+
+    assert matrix == EXPECTED_NEMOTRON_FULL_MATRIX
+
+
+def test_nemotron_tinker_full_matrix_emits_3_unique_valid_slices() -> None:
+    commands, slices = _load_emitted_slices(NEMOTRON_FULL_MATRIX_PATH)
+    assert len(commands) == 3
+
+    expected_domain_by_dataset = {
+        domain["dataset"]: domain_name for domain_name, domain in EXPECTED_FULL_DOMAINS.items()
+    }
+    expected_registry_by_dataset = {
+        domain["dataset"]: domain["registry_path"] for domain in EXPECTED_FULL_DOMAINS.values()
+    }
+    emitted_datasets: set[str] = set()
+    trials_dirs: set[str] = set()
+    for raw_slice, config in slices:
+        assert config.dataset in expected_domain_by_dataset
+        assert config.registry_path == expected_registry_by_dataset[config.dataset]
+        _assert_nemotron_slice(
+            raw_slice,
+            config,
+            concurrency=5,
+            trials_root=NEMOTRON_FULL_TRIALS_ROOT,
+            domain_name=expected_domain_by_dataset[config.dataset],
+        )
+        emitted_datasets.add(config.dataset)
+        assert config.trials_dir is not None
+        trials_dirs.add(config.trials_dir)
+
+    assert emitted_datasets == set(expected_domain_by_dataset)
+    assert len(trials_dirs) == 3
+
+
+@pytest.mark.skipif(
+    not all(
+        (REPO_ROOT / domain["registry_path"]).is_file() for domain in EXPECTED_FULL_DOMAINS.values()
+    ),
+    reason="downloaded chi-Bench registries are unavailable",
+)
+def test_nemotron_tinker_full_matrix_schedules_75_registry_tasks() -> None:
+    assert NEMOTRON_FULL_MATRIX_PATH.is_file(), (
+        f"missing Nemotron Tinker full matrix: {NEMOTRON_FULL_MATRIX_PATH}"
+    )
+    matrix = yaml.safe_load(NEMOTRON_FULL_MATRIX_PATH.read_text())
+
+    scheduled_tasks = 0
+    for domain in matrix["domains"].values():
+        registry = json.loads((REPO_ROOT / domain["registry_path"]).read_text())
+        registry_tasks = [task for entry in registry for task in entry["tasks"]]
+        assert len(registry_tasks) == 25
+        scheduled_tasks += len(registry_tasks) * matrix["defaults"]["n_attempts"]
+
+    assert scheduled_tasks == 75
 
 
 def test_fable_openrouter_full_matrix_matches_reviewed_configuration() -> None:

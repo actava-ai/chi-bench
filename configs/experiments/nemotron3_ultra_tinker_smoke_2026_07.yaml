@@ -1,0 +1,30 @@
+name: nemotron3_ultra_tinker_smoke_2026_07
+description: NVIDIA Nemotron 3 Ultra via Tinker on one representative task in each chi-Bench domain.
+
+defaults:
+  environment: modal
+  env_file: .env
+  concurrency: 1
+  n_attempts: 1
+  max_retries: 2
+  trials_root: logs/experiments/nemotron3_ultra_tinker_smoke_2026_07
+  agent_timeout_multiplier: 2.0
+
+domains:
+  pa_provider:
+    dataset: data/prior_auth_provider/tasks/pa_t014_t014_o001_p01_new_referral_provider
+  pa_um:
+    dataset: data/prior_auth_um/tasks/pa_t034_t034_o002_p01_intake_payer
+  cm:
+    dataset: data/care_management/tasks/cm_afib_moderate_anxious_001
+
+rows:
+  - agent: openai-agents
+    model: "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16:peft:262144"
+    agent_kwargs:
+      provider_route: tinker
+      api_mode: chat_completions
+      reasoning_effort: high
+      max_turns: "50"
+      max_retries: "10"
+      max_tool_return_chars: "100000"
