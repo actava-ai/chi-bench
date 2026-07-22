@@ -391,7 +391,7 @@
 
 ## Task 7: Re-run local verification and the live Tinker gate
 
-- [ ] **Step 1: Re-run repository verification before paid benchmark calls.**
+- [x] **Step 1: Re-run repository verification before paid benchmark calls.**
 
   ```bash
   uv run pytest
@@ -401,7 +401,7 @@
   uv run cb data verify
   ```
 
-- [ ] **Step 2: Run the committed default-reasoning redacted probe.**
+- [x] **Step 2: Run the committed default-reasoning redacted probe.**
 
   ```bash
   uv run python scripts/preflight_frontier_models.py \
@@ -414,9 +414,15 @@
   require both Anthropic support checks to pass. Treat the prior `high.json` HTTP 400 as the
   evidence for selecting default reasoning, not as an evaluation result.
 
+Execution record: the redacted default-reasoning probe passed all three gates. The exact
+Nemotron row reported `success`, `tool_roundtrip`, and `reasoning_metadata` true with 728 input,
+92 output, 512 cached, and 820 total tokens; both Anthropic support checks passed. After the
+empty-argument replay correction in `ba49f78`, repository verification passed with 234 tests,
+one deselected test, Ruff check/format, `git diff --check`, and `cb data verify` all clean.
+
 ## Task 8: Run three Modal domain canaries
 
-- [ ] **Step 1: Materialize and audit the smoke slices.**
+- [x] **Step 1: Materialize and audit the smoke slices.**
 
   ```bash
   uv run python scripts/_emit_run_table_commands.py \
@@ -426,13 +432,28 @@
 
   Require three generated YAML files, one per domain, with distinct trials directories outside the full root.
 
-- [ ] **Step 2: Run each canary sequentially.** Execute each command emitted by the prior step at concurrency one. Do not inspect process command lines.
+- [x] **Step 2: Run each canary sequentially.** Execute each command emitted by the prior step at concurrency one. Do not inspect process command lines.
 
-- [ ] **Step 3: Gate the full run.** Require exactly three verifier-backed `result.json` files, three `verifier/scorecard.json` files, no infrastructure exceptions, exact Nemotron model identity in each result, and agent logs showing a completed Tinker reasoning/tool conversation. Preserve genuine task failures as valid canary outcomes if the infrastructure and harness are healthy.
+- [x] **Step 3: Gate the full run.** Require exactly three verifier-backed `result.json` files, three `verifier/scorecard.json` files, no infrastructure exceptions, exact Nemotron model identity in each result, and agent logs showing a completed Tinker reasoning/tool conversation. Preserve genuine task failures as valid canary outcomes if the infrastructure and harness are healthy.
+
+First-attempt incident: the provider canary completed two same-turn tool calls, one with seven
+arguments and one with none, then Tinker returned HTTP 400 while rendering replay history. A
+redacted live diagnostic proved two non-empty parallel mappings succeed, while an exact local SDK
+reproduction showed the pinned Agents converter changed the empty mapping back to the string
+`"{}"`. Commit `ba49f78` preserves empty arguments as a private truthy mapping until the SDK's
+wire serializer emits an ordinary `{}` and adds a real `Runner`/HTTP regression for the mixed
+non-empty/empty case. The failed slice was preserved outside the aggregation root before the
+force-built provider rerun.
+
+Canary record: all three domain slices produced verifier-backed results and scorecards with the
+exact model identity. Provider and care-management completed normally; their canary rewards were
+both 0. The payer-UM canary exhausted the configured 50-turn agent budget and was preserved as a
+genuine model outcome. No canary retained an adapter, provider, Modal, or verifier infrastructure
+failure after the archived first provider attempt.
 
 ## Task 9: Execute and monitor the 75-task full evaluation
 
-- [ ] **Step 1: Materialize the full slices.**
+- [x] **Step 1: Materialize the full slices.**
 
   ```bash
   uv run python scripts/_emit_run_table_commands.py \
@@ -442,15 +463,20 @@
 
   Require exactly three generated slice YAMLs and 75 scheduled registry cells.
 
-- [ ] **Step 2: Create a resumable driver.** Adapt the verified frontier driver to `logs/.slices/nemotron3_ultra_tinker_full_2026_07/run_all.sh`, with output root `logs/experiments/nemotron3_ultra_tinker_full_2026_07`, expected slice count three, and the existing 25-result/25-scorecard per-slice gate. Keep its directory lock and refusal to append to a partial slice.
+- [x] **Step 2: Create a resumable driver.** Adapt the verified frontier driver to `logs/.slices/nemotron3_ultra_tinker_full_2026_07/run_all.sh`, with output root `logs/experiments/nemotron3_ultra_tinker_full_2026_07`, expected slice count three, and the existing 25-result/25-scorecard per-slice gate. Keep its directory lock and refusal to append to a partial slice.
 
-- [ ] **Step 3: Run and monitor.** Run the driver in the Codex task terminal. Monitor `driver.log`, verifier-backed result/scorecard counts, Modal container counts, and terminal output only. Never use `ps`, `pgrep -a`, or any process-command-line dump.
+- [x] **Step 3: Run and monitor.** Run the driver in the Codex task terminal. Monitor `driver.log`, verifier-backed result/scorecard counts, Modal container counts, and terminal output only. Never use `ps`, `pgrep -a`, or any process-command-line dump.
 
-- [ ] **Step 4: Resume narrowly.** Skip completed slices. For a verified provider/infrastructure transient, archive the entire partial slice outside the aggregation root before rerunning. Do not rerun max-turn exhaustion, invalid tool calls, task failures, or other genuine agent outcomes.
+- [x] **Step 4: Resume narrowly.** Skip completed slices. For a verified provider/infrastructure transient, archive the entire partial slice outside the aggregation root before rerunning. Do not rerun max-turn exhaustion, invalid tool calls, task failures, or other genuine agent outcomes.
+
+Execution record: the uninterrupted driver completed all three 25-task slices with 75
+verifier-backed results and 75 scorecards. Provider contained one `MaxTurnsExceeded` agent outcome,
+which was preserved; payer UM and care management had no execution exceptions. No full-evaluation
+slice required archival or rerun.
 
 ## Task 10: Aggregate, verify, and report seven models
 
-- [ ] **Step 1: Aggregate Nemotron independently.**
+- [x] **Step 1: Aggregate Nemotron independently.**
 
   ```bash
   uv run python scripts/aggregate.py \
@@ -460,11 +486,11 @@
     --out-json logs/experiments/nemotron3_ultra_tinker_full_2026_07/summary.json
   ```
 
-- [ ] **Step 2: Verify completeness.** Require exactly 75 verifier-backed unique `(model, task)` cells, 25 tasks in each domain, 75 scorecards, exact model identity, and no duplicate task for the model.
+- [x] **Step 2: Verify completeness.** Require exactly 75 verifier-backed unique `(model, task)` cells, 25 tasks in each domain, 75 scorecards, exact model identity, and no duplicate task for the model.
 
-- [ ] **Step 3: Build the seven-model report.** Copy the verified six-model report generator to the new slice root, add the Nemotron display name and root argument, change its completeness contracts from 450 to 525 trials and from 150 to 175 trials per domain, and write outputs to `logs/experiments/frontier_models_seven_model_full_2026_07/`. Concatenate the independent Nemotron native summary row with the existing six-model native rows without running bootstrap again.
+- [x] **Step 3: Build the seven-model report.** Copy the verified six-model report generator to the new slice root, add the Nemotron display name and root argument, change its completeness contracts from 450 to 525 trials and from 150 to 175 trials per domain, and write outputs to `logs/experiments/frontier_models_seven_model_full_2026_07/`. Concatenate the independent Nemotron native summary row with the existing six-model native rows without running bootstrap again.
 
-- [ ] **Step 4: Run final code and report verification.**
+- [x] **Step 4: Run final code and report verification.**
 
   ```bash
   uv run pytest
@@ -474,4 +500,24 @@
   git status --short
   ```
 
-- [ ] **Step 5: Close the execution record.** Mark this plan's completed checkboxes, record the sanitized preflight outcome, 3/3 canary count, 75/75 trial and scorecard count, report locations, and limitations. Commit the plan update and report that this is pass@1, not pass@3.
+- [x] **Step 5: Close the execution record.** Mark this plan's completed checkboxes, record the sanitized preflight outcome, 3/3 canary count, 75/75 trial and scorecard count, report locations, and limitations. Commit the plan update and report that this is pass@1, not pass@3.
+
+Final execution record:
+
+- Nemotron native pass@1 was 0/75 with mean fractional reward 0.216844; domain fractional
+  means were 0.112390 provider PA, 0.244745 payer UM, and 0.293397 care management.
+- The only execution exception was one provider `MaxTurnsExceeded` at the configured 50-turn
+  limit. It was preserved as a genuine agent outcome; there were no provider/infrastructure
+  failures in the completed full root.
+- Usage was 36,717,929 input tokens (33,434,624 cached) and 279,098 output tokens. Cost coverage
+  was 74/75 trials with $35.417676 known Nemotron agent spend; the native mean across all 75 was
+  $0.472236 per trial.
+- The seven-model report is under
+  `logs/experiments/frontier_models_seven_model_full_2026_07/` with `report.md`, `report.json`,
+  native `summary.csv`/`summary.json`, and detailed model/domain/failure/exception CSVs.
+- Independent verification found 525 unique model/task trials, 525 scorecards, 175 trials per
+  domain, exact model identities, no duplicates, and no score/reward integrity discrepancies.
+- Final repository verification passed 234 tests (one deselected), Ruff check/format,
+  `git diff --check`, and `cb data verify`.
+- This run is leaderboard pass@1: one attempt per task. It is not paper pass@3 or pass^3; those
+  require two additional attempts per model/task cell.

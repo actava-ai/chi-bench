@@ -177,9 +177,11 @@ Configs:
   **Why:** gateway/provider routing differs from model vendor identity.
 - **For the exact Nemotron 3 Ultra Tinker route, omit `reasoning_effort` and keep the strict
   `nemotron_tinker_model` adapter: inbound XML-only calls become SDK function calls, while replay
-  arguments become mappings only at the Tinker boundary.** **Why:** Tinker rejects the model's
+  arguments become mappings only at the Tinker boundary; preserve empty argument objects with the
+  adapter's private truthy mapping until wire serialization.** **Why:** Tinker rejects the model's
   `reasoning_effort` parameter, returns valid Nemotron tool XML as plain content, and its Hugging
-  Face template cannot iterate the SDK's normal JSON-string historical arguments.
+  Face template cannot iterate JSON-string historical arguments. The pinned Agents SDK otherwise
+  applies a falsy fallback that changes an empty `{}` mapping back into the string `"{}"`.
 - **`ANTHROPIC_API_KEY` is always required**, even for non-Anthropic agents — the judge is pinned
   to `claude-opus-4-7`. `CHI_BENCH_JUDGE_MODEL` overrides it but deviates from the paper protocol.
   Use `CHI_BENCH_JUDGE_NUM_VOTES > 1` for majority-voted judging.
