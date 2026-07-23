@@ -182,6 +182,10 @@ Configs:
   `reasoning_effort` parameter, returns valid Nemotron tool XML as plain content, and its Hugging
   Face template cannot iterate JSON-string historical arguments. The pinned Agents SDK otherwise
   applies a falsy fallback that changes an empty `{}` mapping back into the string `"{}"`.
+- **Do not infer same-turn tool-call concurrency from `agent/trajectory.json`: its serializer
+  flattens SDK tool-call items into one-call steps.** **Why:** this makes parallel batches look
+  sequential. Reconstruct batches from `agent/trace.jsonl` call/result adjacency and correlated
+  IDs, or corroborate them with server timestamps, without inspecting arguments or reasoning.
 - **`ANTHROPIC_API_KEY` is always required**, even for non-Anthropic agents — the judge is pinned
   to `claude-opus-4-7`. `CHI_BENCH_JUDGE_MODEL` overrides it but deviates from the paper protocol.
   Use `CHI_BENCH_JUDGE_NUM_VOTES > 1` for majority-voted judging.
