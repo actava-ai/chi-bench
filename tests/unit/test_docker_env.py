@@ -1,10 +1,18 @@
+import logging
+
+import pytest
+from harbor.models.task.config import TaskConfig
+
+import chi_bench.experiment.docker_env as docker_env
 from chi_bench.experiment.docker_env import (
+    ChiBenchDockerEnvironment,
     DEFAULT_IMAGE,
     FORWARDED_ENV_KEYS,
     build_docker_exec_argv,
     build_docker_run_argv,
     sanitize_container_name,
 )
+from harbor.environments.base import ExecResult
 
 
 def test_build_docker_run_argv_default_shape():
@@ -40,6 +48,56 @@ def test_build_docker_run_argv_no_internet_adds_network_none():
     )
     flat = " ".join(argv)
     assert "--network none" in flat
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("allow_internet", "expected_network_none"),
+    [(True, False), (False, True)],
+)
+async def test_start_uses_harbor_migrated_network_policy(
+    monkeypatch,
+    allow_internet,
+    expected_network_none,
+):
+    with pytest.warns(DeprecationWarning, match="'allow_internet' field is deprecated"):
+        task_config = TaskConfig.model_validate({"environment": {"allow_internet": allow_internet}})
+    assert task_config.environment.allow_internet is None
+
+    environment = object.__new__(ChiBenchDockerEnvironment)
+    environment._image = "chi-bench:test"
+    environment._force_build_default = False
+    environment._host_env = {}
+    environment._container_name = None
+    environment._network_policy = task_config.environment.resolve_baseline()
+    environment._persistent_env = {}
+    environment.environment_name = "task"
+    environment.session_id = "task__trial__env"
+    environment.task_env_config = task_config.environment
+    environment.logger = logging.getLogger(__name__)
+
+    commands: list[list[str]] = []
+
+    async def fake_run_subprocess(argv, timeout_sec=None):
+        commands.append(argv)
+        return ExecResult(stdout="", stderr="", return_code=0)
+
+    async def fake_exec(*args, **kwargs):
+        return ExecResult(stdout="", stderr="", return_code=0)
+
+    async def fake_wait_for_server_ready():
+        return None
+
+    environment.exec = fake_exec
+    environment._wait_for_server_ready = fake_wait_for_server_ready
+    monkeypatch.setattr(docker_env, "_run_subprocess", fake_run_subprocess)
+    monkeypatch.setattr(docker_env, "_register_container", lambda _name: None)
+
+    await environment.start(force_build=False)
+
+    assert commands
+    has_network_none = ("--network", "none") in zip(commands[0], commands[0][1:])
+    assert has_network_none is expected_network_none
 
 
 def test_build_docker_run_argv_forwards_only_known_nonempty_keys():

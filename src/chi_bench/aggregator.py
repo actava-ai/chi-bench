@@ -20,6 +20,7 @@ import random
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 import yaml
@@ -96,15 +97,56 @@ def _parse_trial(result_path: Path) -> Trial | None:
     rb = vr.get("rewards")
     reward = float((rb or {}).get("reward", 0.0)) if rb else float(vr.get("reward", 0.0))
     ar = data.get("agent_result") or {}
-    info = (data.get("agent_info") or {}).get("model_info") or {}
+    if not isinstance(ar, dict):
+        ar = {}
+    agent_info = data.get("agent_info") or {}
+    if not isinstance(agent_info, dict):
+        agent_info = {}
+    info = agent_info.get("model_info") or {}
+    if not isinstance(info, dict):
+        info = {}
     provider = info.get("provider") or "unknown"
     name = info.get("name") or "unknown"
     model = f"{provider}/{name}"
-    agent = (data.get("agent_info") or {}).get("agent", info.get("agent", "unknown"))
-    if agent == "unknown":
-        agent = data.get("agent") or "unknown"
-    task_path = (data.get("task") or {}).get("path") or ""
-    task_name = Path(task_path).name or result_path.parent.name.split("__", 1)[0]
+    agent = (
+        agent_info.get("name")
+        or agent_info.get("agent")
+        or info.get("agent")
+        or data.get("agent")
+        or "unknown"
+    )
+
+    task = data.get("task") or {}
+    if not isinstance(task, dict):
+        task = {}
+    task_identity = data.get("task_name") or task.get("path") or ""
+    task_name = Path(str(task_identity)).name or result_path.parent.name.split("__", 1)[0]
+
+    def usage(field: str, legacy_field: str) -> int:
+        value = ar.get(field) if field in ar else ar.get(legacy_field)
+        try:
+            return int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    wall_clock_seconds: float | None = None
+    execution = data.get("agent_execution")
+    if isinstance(execution, dict):
+        started_at = execution.get("started_at")
+        finished_at = execution.get("finished_at")
+        if started_at and finished_at:
+            try:
+                started = datetime.fromisoformat(str(started_at))
+                finished = datetime.fromisoformat(str(finished_at))
+                wall_clock_seconds = (finished - started).total_seconds()
+            except (TypeError, ValueError):
+                pass
+    if wall_clock_seconds is None:
+        try:
+            wall_clock_seconds = float(ar.get("wall_clock_seconds") or 0.0)
+        except (TypeError, ValueError):
+            wall_clock_seconds = 0.0
+
     return Trial(
         task_name=task_name,
         agent=agent,
@@ -113,10 +155,10 @@ def _parse_trial(result_path: Path) -> Trial | None:
         # `or 0` (not a get-default) so an explicit null value — emitted by the
         # openai-agents/OpenRouter path, which leaves cost/token fields None —
         # coerces to 0 instead of crashing int(None)/float(None).
-        input_tokens=int(ar.get("input_tokens") or 0),
-        output_tokens=int(ar.get("output_tokens") or 0),
-        cache_tokens=int(ar.get("n_cache_tokens") or 0),
-        wall_clock_seconds=float(ar.get("wall_clock_seconds") or 0.0),
+        input_tokens=usage("n_input_tokens", "input_tokens"),
+        output_tokens=usage("n_output_tokens", "output_tokens"),
+        cache_tokens=usage("n_cache_tokens", "cache_tokens"),
+        wall_clock_seconds=wall_clock_seconds,
     )
 
 
@@ -132,7 +174,7 @@ def _cost(trial: Trial, prices: dict[str, dict[str, float]]) -> float:
     out = p.get("output", 0.0)
     cache = p.get("cache", inp * 0.1)
     return (
-        trial.input_tokens / 1_000_000.0 * inp
+        max(trial.input_tokens - trial.cache_tokens, 0) / 1_000_000.0 * inp
         + trial.output_tokens / 1_000_000.0 * out
         + trial.cache_tokens / 1_000_000.0 * cache
     )
