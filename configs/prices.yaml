@@ -30,10 +30,12 @@ prices:
 
   # ── Anthropic ──────────────────────────────────────────────────
   # Cache-read = 0.1x base input (Anthropic standard: "Cache read (hit) =
-  # 0.1x base input price"). Opus 4.7 uses a new tokenizer that may consume
-  # ~35% more tokens for the same fixed text vs earlier Opus versions; the
-  # per-token rate is identical to Opus 4.6, but ROI denominator on 4.7 runs
-  # skews higher accordingly.
+  # 0.1x base input price").
+  # Standard pricing verified at launch on 2026-07-24.
+  anthropic/claude-opus-5:
+    input: 5.00
+    output: 25.00
+    cache: 0.50
   anthropic/claude-sonnet-5:
     # Standard rate $3/$15 per 1M, same sticker as sonnet-4-6. Introductory
     # pricing is $2/$10 (cache 0.20) through 2026-08-31 — swap in input:2.00/
@@ -41,6 +43,9 @@ prices:
     input: 3.00
     output: 15.00
     cache: 0.30          # 0.1x input (Anthropic standard)
+  # Opus 4.7 uses a new tokenizer that may consume ~35% more tokens for the
+  # same fixed text vs earlier Opus versions; the per-token rate is identical
+  # to Opus 4.6, but ROI denominator on 4.7 runs skews higher accordingly.
   anthropic/claude-opus-4-7:
     input: 5.00
     output: 25.00

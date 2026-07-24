@@ -31,6 +31,7 @@ import warnings
 from pathlib import Path
 from typing import Any
 
+from harbor.environments.capabilities import EnvironmentCapabilities
 from harbor.environments.modal import ModalEnvironment, _ModalDirect
 from harbor.models.trial.paths import EnvironmentPaths
 from harbor.utils.env import resolve_env_vars
@@ -226,6 +227,20 @@ class ChiBenchModalEnvironment(ModalEnvironment):
         --environment-import-path chi_bench.experiment.modal_env:ChiBenchModalEnvironment
     """
 
+    @property
+    def capabilities(self) -> EnvironmentCapabilities:
+        """Advertise the direct-mode capabilities this subclass actually uses.
+
+        Harbor detects the task's Docker Compose file before base validation,
+        but this subclass intentionally replaces compose mode with a single
+        Modal sandbox after initialization. Reporting direct-mode networking
+        here lets Harbor validate the policy that `_create_sandbox` enforces.
+        """
+        return EnvironmentCapabilities(
+            gpus=not self._vm_runtime_enabled and not self._sandbox_v2_enabled,
+            disable_internet=True,
+        )
+
     def _validate_definition(self) -> None:
         # Single-image design: start() builds from docker/Dockerfile (repo root),
         # not the per-task environment/ dir. The stub environment/ created by
@@ -277,7 +292,7 @@ class ChiBenchModalEnvironment(ModalEnvironment):
             cpu=self.task_env_config.cpus,
             memory=self.task_env_config.memory_mb,
             gpu=gpu_config,
-            block_network=not self.task_env_config.allow_internet,
+            block_network=self._network_disabled,
             secrets=secrets_config,
             volumes=volumes_config,
             env=sandbox_env or None,
