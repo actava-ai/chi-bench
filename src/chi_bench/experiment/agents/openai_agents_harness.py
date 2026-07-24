@@ -489,7 +489,14 @@ def _build_atif_trajectory(
         next_step_id += 1
 
     if not steps:
-        steps.append(Step(step_id=1, source="system", message="No openai-agents trace captured."))
+        steps.append(
+            Step(
+                step_id=next_step_id,
+                source="system",
+                message="No openai-agents trace captured.",
+            )
+        )
+        next_step_id += 1
 
     if error:
         steps.append(

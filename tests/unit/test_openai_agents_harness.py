@@ -8,11 +8,32 @@ import pytest
 from harbor.models.agent.context import AgentContext
 from harbor.models.task.config import MCPServerConfig
 
-from chi_bench.experiment.agents.openai_agents_harness import OpenAIAgentsHarness
+from chi_bench.experiment.agents.openai_agents_harness import (
+    OpenAIAgentsHarness,
+    _build_atif_trajectory,
+)
 
 
 INKLING_MODEL = "thinkingmachines/Inkling:peft:262144"
 NEMOTRON_MODEL = "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16:peft:262144"
+
+
+def test_empty_trace_with_error_has_sequential_fallback_steps() -> None:
+    trajectory = _build_atif_trajectory(
+        records=[],
+        model_name=INKLING_MODEL,
+        final_output=None,
+        error="ModelBehaviorError: Tool bash not found in agent chi_bench-agent",
+        agent_version="0.13.6",
+        cost_usd=None,
+    )
+
+    payload = trajectory.to_json_dict()
+    assert [step["step_id"] for step in payload["steps"]] == [1, 2]
+    assert [step["message"] for step in payload["steps"]] == [
+        "No openai-agents trace captured.",
+        "[run error] ModelBehaviorError: Tool bash not found in agent chi_bench-agent",
+    ]
 
 
 def test_thinkingmachines_model_routes_to_tinker_chat_completions() -> None:
