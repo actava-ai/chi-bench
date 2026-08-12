@@ -175,6 +175,23 @@ Configs:
   response parser and token budget are redesigned for thinking blocks.** **Why:** Sonnet 5 enables
   thinking by default, while this simulator expects a text-first response within 1,024 output
   tokens; `thinking={"type": "disabled"}` also requires `anthropic>=0.101.0`.
+- **The public leaderboard at `actava.ai/benchmarks/leaderboards` is NOT generated from the
+  `actava-ai/leaderboard` repo** — it is a hand-maintained array in
+  `actava-official-website/lib/benchmarks-data.ts` (row → packet dir via `evidence(<slug>)`).
+  **Why:** Merging a submission PR into `actava-ai/leaderboard` publishes nothing; the site needs
+  a separate PR, so merged-but-unpublished entries and packet-vs-site number drift both happen.
+  **How to apply:** to audit, diff `git ls-tree -d origin/main benchmarks/chi-bench/submissions/`
+  against the `evidence(...)` slugs, and compare each row's `accuracy` to the packet's
+  `submission.json` `results`.
+- **Publishing a result is four independent manual steps that drift apart: run → leaderboard PR →
+  website PR → social infographic.** A finished run in `logs/experiments/` or `logs/submissions/`
+  is published nowhere until each is done separately. **How to apply:** when auditing "what have
+  we published", enumerate all four — including `~/.codex/visualizations/<yyyy>/<mm>/<dd>/` for
+  generated post assets, which is where broadcast-but-unsubmitted results show up first.
+- **Never cite a `chi_bench_git_sha` in a published packet that is unreachable from `main`.**
+  **Why:** the 2026-07-24 GPT-5.6/Inkling packets pin `4f39c1e`, a commit that exists only on the
+  unmerged `codex/frontier-models-smoke` branch, so the published runs cannot be reproduced from
+  a clean clone. Merge the eval branch before, not after, filing the submission.
 - **`ANTHROPIC_API_KEY` is always required**, even for non-Anthropic agents — the judge is pinned
   to `claude-opus-4-7`. `CHI_BENCH_JUDGE_MODEL` overrides it but deviates from the paper protocol.
   Use `CHI_BENCH_JUDGE_NUM_VOTES > 1` for majority-voted judging.
