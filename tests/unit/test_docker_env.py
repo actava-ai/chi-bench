@@ -38,6 +38,19 @@ def test_build_docker_run_argv_default_shape():
     assert "--network" not in argv
 
 
+def test_build_docker_run_argv_uses_leaf_task_id_for_qualified_harbor_name():
+    argv = build_docker_run_argv(
+        image=DEFAULT_IMAGE,
+        container_name="pa_t014__abc123",
+        task_id="actava-ai/pa_t014_t014_o001_p01_new_referral_provider",
+        host_env={},
+        allow_internet=True,
+    )
+
+    assert "CHI_BENCH_TASK_ID=pa_t014_t014_o001_p01_new_referral_provider" in argv
+    assert not any("CHI_BENCH_TASK_ID=actava-ai/" in arg for arg in argv)
+
+
 def test_build_docker_run_argv_no_internet_adds_network_none():
     argv = build_docker_run_argv(
         image="chi-bench:test",

@@ -38,6 +38,43 @@ def _make_trial(
     (d / "reward.txt").write_text(str(reward))
 
 
+def _make_harbor_020_trial(
+    tmp: Path,
+    name: str,
+    *,
+    reward: float,
+    agent_result: dict[str, object] | None,
+    agent_execution: dict[str, str | None] | None,
+    exception_info: dict[str, str] | None = None,
+    task_name: str = "datasets/chi-bench/task-current",
+    model: str = "openai/gpt-5.6-sol",
+    agent: str = "openai-agents",
+) -> Path:
+    d = tmp / name
+    d.mkdir(parents=True, exist_ok=True)
+    result_path = d / "result.json"
+    result_path.write_text(
+        json.dumps(
+            {
+                "task_name": task_name,
+                "verifier_result": {"rewards": {"reward": reward}},
+                "agent_result": agent_result,
+                "agent_execution": agent_execution,
+                "exception_info": exception_info,
+                "agent_info": {
+                    "name": agent,
+                    "version": "1.0.0",
+                    "model_info": {
+                        "provider": model.split("/")[0],
+                        "name": model.split("/", 1)[1],
+                    },
+                },
+            }
+        )
+    )
+    return result_path
+
+
 def test_aggregate_reads_harbor_020_agent_context_and_cost(tmp_path):
     from chi_bench.aggregator import _parse_trial, aggregate_to_rows
 
@@ -120,6 +157,127 @@ def test_parse_trial_keeps_legacy_usage_field_fallback(tmp_path):
     assert trial.output_tokens == 200
     assert trial.cache_tokens == 400
     assert trial.wall_clock_seconds == 12.5
+
+
+def test_parse_trial_reads_harbor_020_fields(tmp_path):
+    from chi_bench.aggregator import _parse_trial
+
+    result_path = _make_harbor_020_trial(
+        tmp_path,
+        "trial-directory-name",
+        reward=1.0,
+        task_name="datasets/chi-bench/provider/task-current",
+        agent_result={
+            "n_input_tokens": 1_000,
+            "n_output_tokens": 200,
+            "n_cache_tokens": 400,
+            # Conflicting legacy values prove the current schema wins.
+            "input_tokens": 9_999,
+            "output_tokens": 9_999,
+            "wall_clock_seconds": 999.0,
+        },
+        agent_execution={
+            "started_at": "2026-07-21T12:00:00+00:00",
+            "finished_at": "2026-07-21T12:00:12.500000+00:00",
+        },
+    )
+
+    trial = _parse_trial(result_path)
+
+    assert trial is not None
+    assert trial.task_name == "task-current"
+    assert trial.agent == "openai-agents"
+    assert trial.model == "openai/gpt-5.6-sol"
+    assert trial.reward == 1.0
+    assert trial.input_tokens == 1_000
+    assert trial.output_tokens == 200
+    assert trial.cache_tokens == 400
+    assert trial.wall_clock_seconds == 12.5
+
+
+def test_cost_does_not_charge_cached_tokens_twice():
+    from chi_bench.aggregator import Trial, _cost
+
+    trial = Trial(
+        task_name="task-current",
+        agent="openai-agents",
+        model="openai/gpt-5.6-sol",
+        reward=1.0,
+        input_tokens=1_000,
+        output_tokens=200,
+        cache_tokens=400,
+        wall_clock_seconds=12.5,
+    )
+    prices = {"openai/gpt-5.6-sol": {"input": 2.0, "output": 4.0, "cache": 0.2}}
+
+    # Harbor's n_input_tokens includes cache: 600 uncached input + 400 cache.
+    assert abs(_cost(trial, prices) - 0.00208) < 1e-12
+
+
+def test_cost_does_not_produce_negative_uncached_input_charge():
+    from chi_bench.aggregator import Trial, _cost
+
+    trial = Trial(
+        task_name="task-current",
+        agent="openai-agents",
+        model="openai/gpt-5.6-sol",
+        reward=0.0,
+        input_tokens=100,
+        output_tokens=0,
+        cache_tokens=200,
+        wall_clock_seconds=0.0,
+    )
+    prices = {"openai/gpt-5.6-sol": {"input": 2.0, "output": 4.0, "cache": 0.2}}
+
+    assert abs(_cost(trial, prices) - 0.00004) < 1e-12
+
+
+def test_parse_trial_prefers_zero_current_duration_over_legacy_walltime(tmp_path):
+    from chi_bench.aggregator import _parse_trial
+
+    result_path = _make_harbor_020_trial(
+        tmp_path,
+        "zero-duration-trial",
+        reward=0.0,
+        agent_result={"wall_clock_seconds": 999.0},
+        agent_execution={
+            "started_at": "2026-07-21T12:00:00+00:00",
+            "finished_at": "2026-07-21T12:00:00+00:00",
+        },
+    )
+
+    trial = _parse_trial(result_path)
+
+    assert trial is not None
+    assert trial.wall_clock_seconds == 0.0
+
+
+def test_aggregate_keeps_reward_when_harbor_020_agent_result_is_null(tmp_path):
+    from chi_bench.aggregator import aggregate_to_rows
+
+    trials = tmp_path / "trials"
+    _make_harbor_020_trial(
+        trials,
+        "failed-agent-trial",
+        reward=1.0,
+        agent_result=None,
+        agent_execution={"started_at": None, "finished_at": None},
+        exception_info={
+            "exception_type": "RuntimeError",
+            "exception_message": "agent failed before reporting usage",
+            "exception_traceback": "RuntimeError: agent failed before reporting usage",
+            "occurred_at": "2026-07-21T12:00:00+00:00",
+        },
+    )
+
+    rows = aggregate_to_rows(trials)
+
+    assert len(rows) == 1
+    assert rows[0]["agent"] == "openai-agents"
+    assert rows[0]["n_tasks"] == 1
+    assert rows[0]["pass_at_1"] == 1.0
+    assert rows[0]["mean_cost_usd"] == 0.0
+    assert rows[0]["mean_walltime_s"] == 0.0
 
 
 def test_aggregate_produces_pass_at_1_and_bootstrap_ci(tmp_path):

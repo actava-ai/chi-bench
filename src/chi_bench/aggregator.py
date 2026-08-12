@@ -95,7 +95,12 @@ def _parse_trial(result_path: Path) -> Trial | None:
     if not isinstance(vr, dict):
         return None
     rb = vr.get("rewards")
-    reward = float((rb or {}).get("reward", 0.0)) if rb else float(vr.get("reward", 0.0))
+    reward_value = rb.get("reward") if isinstance(rb, dict) else vr.get("reward")
+    try:
+        reward = float(reward_value or 0.0)
+    except (TypeError, ValueError):
+        reward = 0.0
+
     ar = data.get("agent_result") or {}
     if not isinstance(ar, dict):
         ar = {}

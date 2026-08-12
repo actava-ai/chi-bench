@@ -117,6 +117,13 @@ class ExperimentConfig(BaseModel):
         default_factory=dict,
         description="Additional Harbor agent kwargs passed as key=value.",
     )
+    agent_env: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Additional Harbor agent-scoped KEY=VALUE entries; Harbor resolves "
+            "${VAR} templates before starting the agent."
+        ),
+    )
     verifier_env: dict[str, str] = Field(
         default_factory=dict,
         description="Verifier environment variables passed as KEY=VALUE.",

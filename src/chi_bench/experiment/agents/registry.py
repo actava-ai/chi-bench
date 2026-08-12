@@ -44,7 +44,12 @@ KNOWN_AGENTS: frozenset[str] = frozenset(IN_TREE_AGENT_IMPORT_PATHS) | HARBOR_BU
 # Best-effort per-agent env-var hints for `cb agent list`. Not a runtime
 # contract — the runtime allowlist is AGENT_ENV_ALLOWLIST in runner.py.
 AGENT_ENV_VARS: dict[str, tuple[str, ...]] = {
-    "openai-agents": ("OPENAI_API_KEY", "OPENROUTER_API_KEY", "OPENAI_BASE_URL"),
+    "openai-agents": (
+        "OPENAI_API_KEY",
+        "OPENROUTER_API_KEY",
+        "TINKER_API_KEY",
+        "OPENAI_BASE_URL",
+    ),
     "deepagents": (
         "OPENAI_API_KEY",
         "OPENROUTER_API_KEY",

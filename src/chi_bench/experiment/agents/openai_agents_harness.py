@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 # the agent container starts. Same pattern as hermes_harness.
 _PROVIDER_PREFLIGHT_KEYS: tuple[str, ...] = (
     "OPENROUTER_API_KEY",
+    "TINKER_API_KEY",
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
     "GEMINI_API_KEY",
@@ -72,6 +73,27 @@ class OpenAIAgentsHarness(BaseInstalledAgent):
             default=100_000,
             env_fallback="OPENAI_AGENTS_MAX_TOOL_RETURN_CHARS",
         ),
+        CliFlag(
+            "provider_route",
+            cli="--provider-route",
+            type="enum",
+            choices=["auto", "tinker"],
+            env_fallback="OPENAI_AGENTS_PROVIDER_ROUTE",
+        ),
+        CliFlag(
+            "api_mode",
+            cli="--api-mode",
+            type="enum",
+            choices=["responses", "chat_completions"],
+            env_fallback="OPENAI_AGENTS_API_MODE",
+        ),
+        CliFlag(
+            "reasoning_effort",
+            cli="--reasoning-effort",
+            type="enum",
+            choices=["none", "minimal", "low", "medium", "high", "xhigh"],
+            env_fallback="OPENAI_AGENTS_REASONING_EFFORT",
+        ),
     ]
 
     @staticmethod
@@ -80,18 +102,29 @@ class OpenAIAgentsHarness(BaseInstalledAgent):
 
     OPENAI_DIRECT_BASE_URL = "https://api.openai.com/v1"
     OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+    TINKER_BASE_URL = "https://tinker.thinkingmachines.dev/services/tinker-prod/oai/api/v1"
 
     @classmethod
     def _resolve_routing(
-        cls, model_name: str | None, host_env: Mapping[str, str]
+        cls,
+        model_name: str | None,
+        host_env: Mapping[str, str],
+        *,
+        provider_route: str | None = None,
     ) -> dict[str, str]:
         """Decide which endpoint + key + model id to forward to the runner.
 
-        Auto-routing rules (only applied when ``OPENAI_BASE_URL`` is *not*
-        set in the host env — that env var acts as the explicit override):
+        An explicit ``provider_route="tinker"`` or a
+        ``thinkingmachines/<id>`` model selects Tinker Chat Completions. This
+        route forwards ``TINKER_API_KEY`` as ``OPENAI_API_KEY``, sets the
+        Tinker base URL, preserves the model id verbatim, and takes precedence
+        over a host ``OPENAI_BASE_URL``.
+
+        Otherwise, a host ``OPENAI_BASE_URL`` is treated as an explicit
+        override. When it is absent, the auto-routing rules are:
 
         - ``openai/<id>`` or bare ``<id>`` → direct OpenAI. Forward
-          ``OPENAI_API_KEY`` from host env, do not set ``OPENAI_BASE_URL``,
+          ``OPENAI_API_KEY`` from host env, set the direct OpenAI base URL,
           and strip the ``openai/`` prefix from the model id (OpenAI's API
           rejects the prefix).
         - ``<vendor>/<id>`` for any other vendor → OpenRouter. Forward
@@ -99,12 +132,6 @@ class OpenAIAgentsHarness(BaseInstalledAgent):
           ``OPENAI_BASE_URL`` to OpenRouter, pass the model id verbatim
           (OpenRouter requires the full ``vendor/id`` form). Raises if
           ``OPENROUTER_API_KEY`` is not set.
-
-        Escape hatch: if the host env already has ``OPENAI_BASE_URL`` set,
-        no auto-routing is applied — the user's explicit settings win and
-        the model id is forwarded verbatim. This preserves the ability to
-        run e.g. ``openai/gpt-5.4`` against OpenRouter for cross-harness
-        parity with deepagents/codex configs.
         """
         env: dict[str, str] = {}
         if model_name is None:
@@ -112,6 +139,19 @@ class OpenAIAgentsHarness(BaseInstalledAgent):
                 env["OPENAI_API_KEY"] = val
             if val := host_env.get("OPENAI_BASE_URL"):
                 env["OPENAI_BASE_URL"] = val
+            return env
+
+        if provider_route == "tinker" or model_name.startswith("thinkingmachines/"):
+            tinker_key = host_env.get("TINKER_API_KEY")
+            if not tinker_key:
+                raise RuntimeError(
+                    f"Model {model_name!r} requires Tinker routing, but "
+                    "TINKER_API_KEY is not set in the host environment."
+                )
+            env["OPENAI_API_KEY"] = tinker_key
+            env["OPENAI_BASE_URL"] = cls.TINKER_BASE_URL
+            env["OPENAI_AGENTS_MODEL"] = model_name
+            env["OPENAI_AGENTS_API_MODE"] = "chat_completions"
             return env
 
         explicit_base = host_env.get("OPENAI_BASE_URL")
@@ -155,7 +195,12 @@ class OpenAIAgentsHarness(BaseInstalledAgent):
     async def install(self, environment: BaseEnvironment) -> None:
         await self.exec_as_root(
             environment,
-            command="uv pip install --no-cache-dir --python /workspace/.venv openai-agents==0.13.6",
+            # Keep this pair aligned with uv.lock. Newer OpenAI SDK releases can
+            # change usage-model fields before the pinned Agents SDK adapts.
+            command=(
+                "uv pip install --no-cache-dir --python /workspace/.venv "
+                "openai-agents==0.13.6 openai==2.36.0"
+            ),
         )
 
     @with_prompt_template
@@ -208,16 +253,30 @@ class OpenAIAgentsHarness(BaseInstalledAgent):
             if k not in ("OPENAI_API_KEY", "OPENAI_BASE_URL")
         }
 
-        env: dict[str, str] = self._resolve_routing(self.model_name, os.environ)
-
-        env["OPENAI_AGENTS_MAX_TURNS"] = str(self._resolved_flags.get("max_turns", 50))
-        env["OPENAI_AGENTS_MAX_RETRIES"] = str(self._resolved_flags.get("max_retries", 10))
-        env["OPENAI_AGENTS_MAX_TOOL_RETURN_CHARS"] = str(
-            self._resolved_flags.get("max_tool_return_chars", 100_000)
-        )
-
-        escaped = shlex.quote(instruction)
         try:
+            env: dict[str, str] = self._resolve_routing(
+                self.model_name,
+                os.environ,
+                provider_route=self._resolved_flags.get("provider_route"),
+            )
+            if env.get("OPENAI_BASE_URL") == self.TINKER_BASE_URL:
+                self._extra_env = {
+                    k: v for k, v in self._extra_env.items() if k != "OPENAI_AGENTS_API_MODE"
+                }
+
+            env["OPENAI_AGENTS_MAX_TURNS"] = str(self._resolved_flags.get("max_turns", 50))
+            env["OPENAI_AGENTS_MAX_RETRIES"] = str(self._resolved_flags.get("max_retries", 10))
+            env["OPENAI_AGENTS_MAX_TOOL_RETURN_CHARS"] = str(
+                self._resolved_flags.get("max_tool_return_chars", 100_000)
+            )
+            if env.get("OPENAI_BASE_URL") == self.TINKER_BASE_URL:
+                env["OPENAI_AGENTS_API_MODE"] = "chat_completions"
+            elif api_mode := self._resolved_flags.get("api_mode"):
+                env["OPENAI_AGENTS_API_MODE"] = api_mode
+            if reasoning_effort := self._resolved_flags.get("reasoning_effort"):
+                env["OPENAI_AGENTS_REASONING_EFFORT"] = reasoning_effort
+
+            escaped = shlex.quote(instruction)
             await self.exec_as_agent(
                 environment,
                 command=(
@@ -430,7 +489,14 @@ def _build_atif_trajectory(
         next_step_id += 1
 
     if not steps:
-        steps.append(Step(step_id=1, source="system", message="No openai-agents trace captured."))
+        steps.append(
+            Step(
+                step_id=next_step_id,
+                source="system",
+                message="No openai-agents trace captured.",
+            )
+        )
+        next_step_id += 1
 
     if error:
         steps.append(

@@ -29,8 +29,11 @@ import os
 import re
 import sys
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
+
+from chi_bench.experiment.agents.nemotron_tool_protocol import NEMOTRON_ULTRA_256K_MODEL
 
 logger = logging.getLogger("openai_agents_runner")
 
@@ -98,6 +101,7 @@ Answer the user's request using the relevant tool(s), if they are available. Che
 """
 
 DEFAULT_LOGS_DIR = Path("/logs/agent")
+TINKER_BASE_URL = "https://tinker.thinkingmachines.dev/services/tinker-prod/oai/api/v1"
 # Read once at import time. Inside the container subprocess this is fine
 # because the harness sets ``OPENAI_AGENTS_MAX_TOOL_RETURN_CHARS`` in the
 # child env *before* the interpreter starts. Local-tool callsites
@@ -541,7 +545,58 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 # ---------------------------------------------------------------------------
 # Main run loop
 # ---------------------------------------------------------------------------
-def _build_model_settings():
+def _is_tinker_chat_route(api_mode: str) -> bool:
+    base_url = os.environ.get("OPENAI_BASE_URL", "").rstrip("/")
+    return api_mode == "chat_completions" and base_url == TINKER_BASE_URL
+
+
+def _should_replay_same_model_reasoning_content(context: Any) -> bool:
+    """Replay opaque reasoning only to the exact model that produced it."""
+
+    reasoning = getattr(context, "reasoning", None)
+    model = getattr(context, "model", None)
+    base_url = (getattr(context, "base_url", None) or "").rstrip("/")
+    return (
+        isinstance(model, str)
+        and base_url == TINKER_BASE_URL
+        and getattr(reasoning, "origin_model", None) == model
+    )
+
+
+@asynccontextmanager
+async def _agent_model_context(model: str, api_mode: str):
+    if not _is_tinker_chat_route(api_mode):
+        yield model
+        return
+
+    from openai import AsyncOpenAI
+
+    if model == NEMOTRON_ULTRA_256K_MODEL:
+        from chi_bench.experiment.agents.nemotron_tinker_model import (
+            NemotronTinkerChatCompletionsModel,
+        )
+
+        model_type = NemotronTinkerChatCompletionsModel
+    else:
+        from agents.models.openai_chatcompletions import (  # type: ignore
+            OpenAIChatCompletionsModel,
+        )
+
+        model_type = OpenAIChatCompletionsModel
+
+    async with AsyncOpenAI() as openai_client:
+        yield model_type(
+            model=model,
+            openai_client=openai_client,
+            should_replay_reasoning_content=_should_replay_same_model_reasoning_content,
+        )
+
+
+def _build_model_settings(
+    reasoning_effort: str | None = None,
+    *,
+    separate_reasoning: bool = False,
+):
     """Configure model_settings with runner-managed retries.
 
     SDK 0.13.6 ships an opt-in retry pipeline (``ModelRetrySettings`` +
@@ -571,7 +626,12 @@ def _build_model_settings():
             retry_policies.provider_suggested(),
         ),
     )
-    return ModelSettings(retry=retry)
+    kwargs: dict[str, Any] = {"retry": retry}
+    if reasoning_effort:
+        kwargs["reasoning"] = {"effort": reasoning_effort}
+    if separate_reasoning:
+        kwargs["extra_body"] = {"separate_reasoning": True}
+    return ModelSettings(**kwargs)
 
 
 async def run_agent(instruction: str, mcp_url: str, logs_dir: Path = DEFAULT_LOGS_DIR) -> None:
@@ -585,6 +645,9 @@ async def run_agent(instruction: str, mcp_url: str, logs_dir: Path = DEFAULT_LOG
 
     model = os.environ.get("OPENAI_AGENTS_MODEL", "gpt-4.1")
     max_turns = int(os.environ.get("OPENAI_AGENTS_MAX_TURNS", "50"))
+    api_mode = os.environ.get("OPENAI_AGENTS_API_MODE", "responses")
+    reasoning_effort = os.environ.get("OPENAI_AGENTS_REASONING_EFFORT")
+    is_tinker_chat = _is_tinker_chat_route(api_mode)
 
     _install_oversize_output_patch(logs_dir)
     _install_mcp_tool_name_sanitizer()
@@ -597,20 +660,31 @@ async def run_agent(instruction: str, mcp_url: str, logs_dir: Path = DEFAULT_LOG
     # MultiProvider raises ``UserError: Unknown prefix: anthropic`` on the
     # first turn. The OpenAI provider itself uses OPENAI_BASE_URL +
     # OPENAI_API_KEY, so OpenRouter just needs those env vars set.
-    run_config = RunConfig(model_provider=MultiProvider(unknown_prefix_mode="model_id"))
+    run_config = RunConfig(
+        model_provider=MultiProvider(
+            unknown_prefix_mode="model_id",
+            openai_use_responses=api_mode == "responses",
+        )
+    )
 
-    async with MCPServerStreamableHttp(
-        name="chi_bench",
-        params={"url": mcp_url},
-        cache_tools_list=True,
-    ) as mcp_server:
+    async with (
+        MCPServerStreamableHttp(
+            name="chi_bench",
+            params={"url": mcp_url},
+            cache_tools_list=True,
+        ) as mcp_server,
+        _agent_model_context(model, api_mode) as agent_model,
+    ):
         agent = Agent(
             name="chi_bench-agent",
             instructions=SYSTEM_PROMPT,
             mcp_servers=[mcp_server],
             tools=local_tools,
-            model=model,
-            model_settings=_build_model_settings(),
+            model=agent_model,
+            model_settings=_build_model_settings(
+                reasoning_effort,
+                separate_reasoning=is_tinker_chat,
+            ),
         )
 
         print(f"Running agent with model={model}, max_turns={max_turns}")

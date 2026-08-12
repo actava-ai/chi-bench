@@ -40,6 +40,7 @@ AGENT_ENV_ALLOWLIST: tuple[str, ...] = (
     "GEMINI_API_KEY",
     # OpenAI-compatible / additional providers supported by deepagents-cli
     "OPENROUTER_API_KEY",
+    "TINKER_API_KEY",
     "XAI_API_KEY",
     "GROK_API_KEY",
     "GROQ_API_KEY",
@@ -533,6 +534,12 @@ def _build_harbor_command(
         already_set = env is not None and bool(env.get("GEMINI_CLI_TRUST_WORKSPACE"))
         if not already_set:
             cmd += ["--ae", "GEMINI_CLI_TRUST_WORKSPACE=true"]
+
+    # Keep row-scoped overrides after every automatic agent entry without
+    # mutating the child server/judge environment. The --ae spelling is
+    # covered by the command redactor, including blanks and key templates.
+    for key, value in sorted(cfg.agent_env.items()):
+        cmd += ["--ae", f"{key}={value}"]
 
     if cfg.trials_dir:
         if is_single_trial:

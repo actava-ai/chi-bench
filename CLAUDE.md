@@ -175,6 +175,34 @@ Configs:
   response parser and token budget are redesigned for thinking blocks.** **Why:** Sonnet 5 enables
   thinking by default, while this simulator expects a text-first response within 1,024 output
   tokens; `thinking={"type": "disabled"}` also requires `anthropic>=0.101.0`.
+- **Do not pass Harbor's `thinking` agent kwarg to the stock `claude-code` harness without first
+  checking the pinned Claude Code CLI.** **Why:** Harbor 0.6.1 renders it as `--thinking`, but
+  Claude Code 2.1.207 and 2.1.216 do not expose that flag; use `reasoning_effort`/`--effort`
+  instead, while models such as Fable keep their inherent adaptive-thinking behavior.
+- **Do not present a proposed provider adapter as an existing harness, and do not add a new
+  harness solely to remap credentials/base URLs when agent-scoped routing can reuse a stock
+  harness.** **Why:** calling a hypothetical Inkling adapter `tinker-claude-code` obscured that
+  it did not exist and made the evaluation configuration look hallucinated; keep the selected
+  existing harness name and make any new routing layer explicit.
+- **Choose the harness by model vendor, not gateway: Anthropic Fable uses `claude-code` even
+  through OpenRouter, while third-party model vendors use `openai-agents`.** **Why:** the gateway
+  does not change harness identity, and agent-scoped OpenRouter credentials must not replace the
+  native `ANTHROPIC_API_KEY` used by the WorkspaceJudge.
+- **Treat Tinker as an explicit provider route independent of vendor prefix: Tinker-served
+  `nvidia/*` uses `openai-agents` Chat Completions, `TINKER_API_KEY`, and the same separated-
+  reasoning replay as Inkling; do not infer OpenRouter solely from a non-`thinkingmachines` ID.**
+  **Why:** gateway/provider routing differs from model vendor identity.
+- **For the exact Nemotron 3 Ultra Tinker route, omit `reasoning_effort` and keep the strict
+  `nemotron_tinker_model` adapter: inbound XML-only calls become SDK function calls, while replay
+  arguments become mappings only at the Tinker boundary; preserve empty argument objects with the
+  adapter's private truthy mapping until wire serialization.** **Why:** Tinker rejects the model's
+  `reasoning_effort` parameter, returns valid Nemotron tool XML as plain content, and its Hugging
+  Face template cannot iterate JSON-string historical arguments. The pinned Agents SDK otherwise
+  applies a falsy fallback that changes an empty `{}` mapping back into the string `"{}"`.
+- **Do not infer same-turn tool-call concurrency from `agent/trajectory.json`: its serializer
+  flattens SDK tool-call items into one-call steps.** **Why:** this makes parallel batches look
+  sequential. Reconstruct batches from `agent/trace.jsonl` call/result adjacency and correlated
+  IDs, or corroborate them with server timestamps, without inspecting arguments or reasoning.
 - **`ANTHROPIC_API_KEY` is always required**, even for non-Anthropic agents — the judge is pinned
   to `claude-opus-4-7`. `CHI_BENCH_JUDGE_MODEL` overrides it but deviates from the paper protocol.
   Use `CHI_BENCH_JUDGE_NUM_VOTES > 1` for majority-voted judging.
@@ -194,12 +222,42 @@ Configs:
 - **Two data layouts.** Host source: `data/<domain>/tasks/...`. Inside the baked image
   (`/opt/chi-bench`): flat `tasks/` with `marathon/`/`worlds/` siblings, handbook at
   `/workspace/skills/managed-care-operations-handbook`. `cb data verify` auto-detects.
+- **Local Docker must pass the leaf task ID to `CHI_BENCH_TASK_ID`, not Harbor's qualified
+  `environment_name`.** **Why:** task metadata names are typically `actava-ai/<task-id>`, while
+  the runtime image stores fixtures at `/opt/chi-bench/tasks/<task-id>`; forwarding the qualified
+  name makes the entrypoint exit 65 before Harbor can provision `/logs`.
 - **`cb serve` starts the payer in agent mode** by setting `CHI_BENCH_PAYER_MODE=agent` if unset.
 - **Never use `--no-verify` / `--no-gpg-sign` / hook skips on commits.** Fix the underlying issue.
 - **Test markers gate by default.** `pyproject.toml` sets `addopts = "-m 'not requires_anthropic_key and not slow'"`,
   so live-judge and docker-build smokes are opt-in via `-m`.
 - **Modal profile.** `cb experiment run -e modal` defaults to profile `actava`; pass
   `--modal-profile ''` to skip Modal preflight, or `MODAL_PROFILE=<name>` for a named profile.
+- **Git worktrees do not inherit `.env` or downloaded `data/`.** Link them from the primary
+  checkout (or pass absolute paths) before live checks. `.env` stays ignored, but a `data`
+  symlink appears as untracked because the `data/` ignore rule matches directories, not the
+  symlink; remove it before final staging. Never copy keys or downloaded data into commits.
+- **OpenAI Agents SDK 0.13.6 replays Chat Completions `reasoning_content` only for DeepSeek by
+  default.** Tinker/Inkling tool loops need an explicit `should_replay_reasoning_content` hook;
+  otherwise the second turn drops the signed/reasoning state even though the first call succeeds.
+- **Pin the runtime `openai` SDK together with `openai-agents==0.13.6`; the validated pair is
+  `openai==2.36.0`.** **Why:** an unconstrained install resolved OpenAI 2.46.0, whose required
+  `InputTokensDetails.cache_write_tokens` field makes Agents 0.13.6 fail while constructing its
+  default `Usage`, before the first model call.
+- **Treat zero token/cost fields on an `openai-agents` exception trial as unknown, not free.**
+  **Why:** the current runner loses partial SDK usage and trace data when `Runner.run` raises
+  (for example, `MaxTurnsExceeded` or an invalid tool alias); inspect the server audit log for
+  behavioral diagnosis and report cost coverage separately from known spend.
+- **Combine disjoint evaluation roots by aggregating each root independently and concatenating
+  their model rows; do not stage and re-aggregate the trial files.** **Why:** the fixed-seed
+  bootstrap samples task vectors in filesystem traversal order, so staging can reorder tasks and
+  shift confidence intervals even when every underlying outcome is unchanged.
+- **Never inspect a live Harbor command with `ps`, `pgrep -a`, or another command-line dump.**
+  **Why:** chi-Bench forwards provider credentials to Harbor as `--ae KEY=value`, so the process
+  table contains raw secrets. Use the runner's redacted `Running:` line, Modal container counts,
+  and trial artifact counts for monitoring instead.
+- **Do not force a named tool choice for models with always-on/adaptive thinking.** Fable 5 and
+  Kimi K3 reject forced tool selection while thinking is enabled; use `auto` plus an imperative
+  prompt, then validate that the expected tool call actually occurred and replay all reasoning.
 - **Agent-phase failures: read `trials/<name>/agent/claude-code.txt` tail first.** The stream-json
   log carries the raw API error + request_id; `NonZeroAgentExitCodeError` alone says nothing.
   Known case: Fable 5 (`claude-fable-5`) 400s with `model_not_available` ("organization or
