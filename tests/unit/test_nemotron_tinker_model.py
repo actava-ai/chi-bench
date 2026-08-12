@@ -8,25 +8,30 @@ from typing import Any, cast
 
 import httpx
 import pytest
-from agents import Agent, Runner, function_tool
-from agents.items import ModelResponse
-from agents.models.fake_id import FAKE_RESPONSES_ID
-from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
-from agents.usage import Usage
-from openai import AsyncOpenAI
-from openai.types.responses import (
+
+# The openai-agents SDK is an optional extra; CI installs only `--extra dev`.
+# Skip the whole module when it is absent, matching test_openai_agents_runner_config.py.
+pytest.importorskip("agents")
+
+from agents import Agent, Runner, function_tool  # noqa: E402
+from agents.items import ModelResponse  # noqa: E402
+from agents.models.fake_id import FAKE_RESPONSES_ID  # noqa: E402
+from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel  # noqa: E402
+from agents.usage import Usage  # noqa: E402
+from openai import AsyncOpenAI  # noqa: E402
+from openai.types.responses import (  # noqa: E402
     ResponseFunctionToolCall,
     ResponseOutputMessage,
     ResponseOutputRefusal,
     ResponseOutputText,
     ResponseReasoningItem,
 )
-from openai.types.responses.response_reasoning_item import Summary
+from openai.types.responses.response_reasoning_item import Summary  # noqa: E402
 
-from chi_bench.experiment.agents.nemotron_tinker_model import (
+from chi_bench.experiment.agents.nemotron_tinker_model import (  # noqa: E402
     NemotronTinkerChatCompletionsModel,
 )
-from chi_bench.experiment.agents.nemotron_tool_protocol import (
+from chi_bench.experiment.agents.nemotron_tool_protocol import (  # noqa: E402
     NEMOTRON_ULTRA_256K_MODEL,
     parse_nemotron_tool_calls,
 )

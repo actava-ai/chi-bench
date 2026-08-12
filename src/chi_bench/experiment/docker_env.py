@@ -294,7 +294,7 @@ class ChiBenchDockerEnvironment(BaseEnvironment):
             container_name=self.container_name,
             task_id=self.task_id,
             host_env=self._host_env,
-            allow_internet=self.task_env_config.allow_internet,
+            allow_internet=self._network_is_public,
             extra_env=self._persistent_env,
         )
         self.logger.info("starting container %s from %s", self.container_name, self._image)

@@ -154,6 +154,23 @@ Configs:
 - **For simple, explicitly scoped maintenance PRs, work directly on a `codex/` branch in the
   current clean checkout unless the user asks for a worktree or design spec.** **Why:** The user
   prefers direct execution over extra process for low-risk changes such as a model-default update.
+- **After a Harbor upgrade, custom environments must read the canonical network policy
+  (`_network_is_public` / `_network_disabled`), not `task_env_config.allow_internet`.** **Why:**
+  Harbor 0.20 migrates the legacy field into `NetworkPolicy` and then clears it; treating the
+  resulting `None` as false launches API-backed agents with `--network none`.
+- **Aggregate Harbor 0.20 usage from `n_input_tokens` / `n_output_tokens` / `n_cache_tokens`,
+  preferring those over legacy names, and subtract cache tokens from total input before applying
+  the base input rate.** **Why:** `n_input_tokens` includes cached input; ignoring the renamed
+  fields or charging it as wholly uncached makes leaderboard cost wrong.
+- **When a newly released Claude model needs a newer CLI, verify the version inside
+  `chi-bench:latest`; if stale, rebuild with
+  `sed '1d' docker/Dockerfile | docker build --no-cache -f - --target runtime -t chi-bench:latest .`.**
+  **Why:** The Dockerfile installs `@anthropic-ai/claude-code@latest`, but Docker can reuse that
+  unchanged install layer across ordinary `cb docker build` runs; removing the first-line syntax
+  directive also avoids a Docker Hub frontend-resolution stall seen with the raw no-cache build.
+- **Do not `source .env`; let `cb` load it or parse ad-hoc checks with `python-dotenv`.** **Why:**
+  `.env` is dotenv syntax rather than guaranteed shell syntax, and currently contains an unquoted
+  value with spaces that a shell tries to execute as a command.
 - **Patient simulation on `claude-sonnet-5` must explicitly disable adaptive thinking unless its
   response parser and token budget are redesigned for thinking blocks.** **Why:** Sonnet 5 enables
   thinking by default, while this simulator expects a text-first response within 1,024 output

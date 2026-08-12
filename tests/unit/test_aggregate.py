@@ -38,7 +38,7 @@ def _make_trial(
     (d / "reward.txt").write_text(str(reward))
 
 
-def _make_harbor_061_trial(
+def _make_harbor_020_trial(
     tmp: Path,
     name: str,
     *,
@@ -75,10 +75,94 @@ def _make_harbor_061_trial(
     return result_path
 
 
-def test_parse_trial_reads_harbor_061_fields(tmp_path):
+def test_aggregate_reads_harbor_020_agent_context_and_cost(tmp_path):
+    from chi_bench.aggregator import _parse_trial, aggregate_to_rows
+
+    trials = tmp_path / "trials"
+    result_dir = trials / "trial-directory-name"
+    result_dir.mkdir(parents=True)
+    result_path = result_dir / "result.json"
+    result_path.write_text(
+        json.dumps(
+            {
+                "task_name": "datasets/chi-bench/provider/task-current",
+                "verifier_result": {"rewards": {"reward": 1.0}},
+                "agent_result": {
+                    "n_input_tokens": 4_219_791,
+                    "n_output_tokens": 30_206,
+                    "n_cache_tokens": 4_052_796,
+                    "input_tokens": 9_999,
+                    "output_tokens": 9_999,
+                    # Aggregation deliberately uses normalized price-table
+                    # rates rather than this provider-reported total.
+                    "cost_usd": 3.8251855,
+                },
+                "agent_execution": {
+                    "started_at": "2026-07-24T12:00:00+00:00",
+                    "finished_at": "2026-07-24T12:00:12.500000+00:00",
+                },
+                "agent_info": {
+                    "name": "claude-code",
+                    "version": "2.1.219",
+                    "model_info": {
+                        "provider": "anthropic",
+                        "name": "claude-opus-5",
+                    },
+                },
+            }
+        )
+    )
+    prices_path = tmp_path / "prices.yaml"
+    prices_path.write_text(
+        """
+prices:
+  anthropic/claude-opus-5:
+    input: 5.0
+    output: 25.0
+    cache: 0.5
+"""
+    )
+
+    trial = _parse_trial(result_path)
+    assert trial is not None
+    assert trial.task_name == "task-current"
+    assert trial.agent == "claude-code"
+    assert trial.input_tokens == 4_219_791
+    assert trial.output_tokens == 30_206
+    assert trial.cache_tokens == 4_052_796
+    assert trial.wall_clock_seconds == 12.5
+
+    rows = aggregate_to_rows(trials, prices_path)
+    assert len(rows) == 1
+    assert abs(float(rows[0]["mean_cost_usd"]) - 3.616523) < 1e-12
+
+
+def test_parse_trial_keeps_legacy_usage_field_fallback(tmp_path):
     from chi_bench.aggregator import _parse_trial
 
-    result_path = _make_harbor_061_trial(
+    trials = tmp_path / "trials"
+    _make_trial(
+        trials,
+        "legacy-task__abc",
+        reward=1.0,
+        n_in=1_000,
+        n_out=200,
+        cache=400,
+        walltime=12.5,
+    )
+
+    trial = _parse_trial(trials / "legacy-task__abc" / "result.json")
+    assert trial is not None
+    assert trial.input_tokens == 1_000
+    assert trial.output_tokens == 200
+    assert trial.cache_tokens == 400
+    assert trial.wall_clock_seconds == 12.5
+
+
+def test_parse_trial_reads_harbor_020_fields(tmp_path):
+    from chi_bench.aggregator import _parse_trial
+
+    result_path = _make_harbor_020_trial(
         tmp_path,
         "trial-directory-name",
         reward=1.0,
@@ -151,7 +235,7 @@ def test_cost_does_not_produce_negative_uncached_input_charge():
 def test_parse_trial_prefers_zero_current_duration_over_legacy_walltime(tmp_path):
     from chi_bench.aggregator import _parse_trial
 
-    result_path = _make_harbor_061_trial(
+    result_path = _make_harbor_020_trial(
         tmp_path,
         "zero-duration-trial",
         reward=0.0,
@@ -168,11 +252,11 @@ def test_parse_trial_prefers_zero_current_duration_over_legacy_walltime(tmp_path
     assert trial.wall_clock_seconds == 0.0
 
 
-def test_aggregate_keeps_reward_when_harbor_061_agent_result_is_null(tmp_path):
+def test_aggregate_keeps_reward_when_harbor_020_agent_result_is_null(tmp_path):
     from chi_bench.aggregator import aggregate_to_rows
 
     trials = tmp_path / "trials"
-    _make_harbor_061_trial(
+    _make_harbor_020_trial(
         trials,
         "failed-agent-trial",
         reward=1.0,
