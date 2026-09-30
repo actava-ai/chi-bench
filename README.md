@@ -3,6 +3,8 @@
   <h1><ins>C</ins>linical <ins>H</ins>ealthcare <ins>I</ins>n-Situ Environment</h1>
   <p><b>Benchmark for long-horizon, policy-rich healthcare workflow agents</b></p>
 
+**🎉 χ-Bench has been accepted to NeurIPS 2026, Evaluations & Datasets Track!** [Read the paper](https://arxiv.org/abs/2605.16679).
+
 [![Leaderboard](https://img.shields.io/badge/Leaderboard-chi--bench-blue?style=for-the-badge)](https://actava.ai/benchmarks/leaderboards)
 [![Docs](https://img.shields.io/badge/Docs-chi--bench-ff5baf?style=for-the-badge&logo=readthedocs&logoColor=white)](https://actava.ai/benchmarks/docs)
 [![arXiv](https://img.shields.io/badge/arXiv-2605.16679-b31b1b?style=for-the-badge&logo=arxiv&logoColor=white)](https://arxiv.org/pdf/2605.16679)
@@ -264,6 +266,7 @@ If you use $\chi$-Bench, please cite:
       title={CHI-Bench: Can AI Agents Automate End-to-End, Long-Horizon, Policy-Rich Healthcare Workflows?},
       author={Haolin Chen and Deon Metelski and Leon Qi and Tao Xia and Joonyul Lee and Steve Brown and Kevin Riley and Frank Wang and T. Y. Alvin Liu and Hank Capps MD and Zeyu Tang and Xiangchen Song and Lingjing Kong and Fan Feng and Tianyi Zeng and Zhiwei Liu and Zixian Ma and Hang Jiang and Fangli Geng and Yuan Yuan and Chenyu You and Qingsong Wen and Hua Wei and Yanjie Fu and Yue Zhao and Carl Yang and Biwei Huang and Kun Zhang and Caiming Xiong and Sanmi Koyejo and Eric P. Xing and Philip S. Yu and Weiran Yao},
       year={2026},
+      note={Accepted to NeurIPS 2026, Evaluations and Datasets Track},
       eprint={2605.16679},
       archivePrefix={arXiv},
       primaryClass={cs.CL},

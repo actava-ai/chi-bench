@@ -73,7 +73,7 @@ authors:
 preferred-citation:
   type: conference-paper
   conference:
-    name: "NeurIPS 2026 (Datasets and Benchmarks track)"
+    name: "NeurIPS 2026 (Evaluations and Datasets Track)"
   year: 2026
   title: "chi-Bench: Can AI Agents Automate End-to-End, Long-Horizon, Policy-Rich Healthcare Workflows?"
   authors:
