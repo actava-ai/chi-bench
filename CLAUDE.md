@@ -168,6 +168,14 @@ Configs:
   **Why:** The Dockerfile installs `@anthropic-ai/claude-code@latest`, but Docker can reuse that
   unchanged install layer across ordinary `cb docker build` runs; removing the first-line syntax
   directive also avoids a Docker Hub frontend-resolution stall seen with the raw no-cache build.
+- **Keep the image's Node version at or above the pinned `@anthropic-ai/claude-code` `engines.node`
+  (currently >=22; Dockerfiles use `setup_22.x`).** **Why:** with Node 20, `npm install -g
+  ...@latest` only warns `EBADENGINE`, silently skips the native optional package, and every trial
+  dies with "claude native binary not installed" (agent and judge). Check with
+  `docker run --rm --entrypoint claude chi-bench:latest --version`.
+- **`uv sync --extra dev` is required before `cb experiment run`:** Harbor lives in the `dev`
+  extra, otherwise `FileNotFoundError: 'harbor'`. Don't trust a background-task "exit 0" when the
+  command ends in `tail`/`echo`; capture `$?`.
 - **Do not `source .env`; let `cb` load it or parse ad-hoc checks with `python-dotenv`.** **Why:**
   `.env` is dotenv syntax rather than guaranteed shell syntax, and currently contains an unquoted
   value with spaces that a shell tries to execute as a command.
