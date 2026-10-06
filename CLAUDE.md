@@ -152,7 +152,8 @@ Configs:
 ## Things to remember
 
 - **For Kaggle announcements and FAQs, keep only necessary source links and state each
-  requirement once.**
+  requirement once. Assess existing rules against the intended workflow instead of assuming
+  they are reasonable.**
 - **Preserve published task paths with image compatibility aliases when fixing runtime renames.**
   **Why:** Rewriting downloaded `instruction.md` files changes task checksums. For tool references,
   alias `/opt/healthverse-task-assets` to `/opt/chi-bench-task-assets` as a directory so per-task
