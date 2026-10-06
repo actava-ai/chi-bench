@@ -154,6 +154,9 @@ Configs:
 - **For Kaggle announcements and FAQs, keep only necessary source links and state each
   requirement once. Assess existing rules against the intended workflow instead of assuming
   they are reasonable.**
+- **Use the CHI-Bench Cup sequence: competition deadline, private evaluation, result release,
+  then the IEEE-format camera-ready report. Do not add a paper-acceptance stage.** **Why:**
+  CHI-Bench evaluates competition systems; the report follows competition results.
 - **Preserve published task paths with image compatibility aliases when fixing runtime renames.**
   **Why:** Rewriting downloaded `instruction.md` files changes task checksums. For tool references,
   alias `/opt/healthverse-task-assets` to `/opt/chi-bench-task-assets` as a directory so per-task
