@@ -99,6 +99,9 @@ COPY data/marathon /opt/chi-bench/tasks/marathon
 COPY data/skills/managed-care-operations-handbook /workspace/skills/managed-care-operations-handbook
 RUN mkdir -p /opt/chi-bench-task-assets
 COPY data/care_management/shared/tool_reference.md /opt/chi-bench-task-assets/tool_reference.md
+# Published task instructions still use the healthverse asset path. Alias the
+# directory so per-task selection and tool-name rewriting remain visible there.
+RUN ln -s /opt/chi-bench-task-assets /opt/healthverse-task-assets
 
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh

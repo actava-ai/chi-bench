@@ -151,6 +151,10 @@ Configs:
 
 ## Things to remember
 
+- **Preserve published task paths with image compatibility aliases when fixing runtime renames.**
+  **Why:** Rewriting downloaded `instruction.md` files changes task checksums. For tool references,
+  alias `/opt/healthverse-task-assets` to `/opt/chi-bench-task-assets` as a directory so per-task
+  selection and tool-name rewriting remain visible through the published path.
 - **For simple, explicitly scoped maintenance PRs, work directly on a `codex/` branch in the
   current clean checkout unless the user asks for a worktree or design spec.** **Why:** The user
   prefers direct execution over extra process for low-risk changes such as a model-default update.
