@@ -121,6 +121,23 @@ uv run cb submission prepare  -f configs/submissions/my-team.yaml
 
 Edit `my-team.yaml` before running it. Set your team, contact, agent, model, environment, and dataset version. The prepared evidence packet contains the manifest, per-domain results, verifier evidence, provenance, and compressed trajectories required for validation.
 
+The runtime v1.1.0 repair steps are in [the changelog](../CHANGELOG.md). They apply
+local corrections to the downloaded `chi-bench-v1.0.0` dataset before rebuilding.
+
+### API costs and private package delivery
+
+The organizer's [API-cost clarification](https://www.kaggle.com/competitions/chi-bench/discussion/741283)
+states that development has no sponsored credits and that organizers pay all API
+costs during private evaluation. Local development uses the participant's keys
+for the chosen agent, Anthropic judge, and simulators.
+
+The [submission clarification](https://www.kaggle.com/competitions/chi-bench/discussion/745236)
+specifies email delivery to `research@actava.ai`, with `[Kaggle]` in the subject
+and team information included. November 15 is the final-package deadline;
+December 7 is for winners' conference materials. Discussion participation is
+optional. The thread's follow-up about an additional Kaggle CSV or Writeup
+requirement remains unanswered; the published Rules still specify a CSV.
+
 ## Evaluation
 
 ### Task reward

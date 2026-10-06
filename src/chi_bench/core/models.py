@@ -1031,7 +1031,9 @@ class DeterminationRecord(ChiBenchModel):
     id: str
     case_id: str
     intake_case_id: str
-    source: str  # "nurse_recommendation" | "md_decision"
+    source: (
+        str  # "nurse_recommendation" | "md_decision" | "triage_auto_approve" | "intake_eligibility"
+    )
     source_record_id: str
     original_recommendation: str
     final_decision: DeterminationDecision

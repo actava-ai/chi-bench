@@ -5,9 +5,11 @@
 #   cb submission validate -f <your-sub>.yaml
 #   cb submission run      -f <your-sub>.yaml
 #   cb submission status   -f <your-sub>.yaml
-#   cb submission package  -f <your-sub>.yaml
+#   cb submission prepare  -f <your-sub>.yaml
 #
-# The packet (<output_root>/<id>.zip) is what you upload to the leaderboard.
+# The prepared packet is under <output_root>/packet/YYYY-MM-DD-<id>/.
+# Follow the Kaggle organizer instructions for private-final package delivery;
+# the separate evidence leaderboard accepts the same packet through a GitHub PR.
 
 schema: chi-bench/submission/v1
 

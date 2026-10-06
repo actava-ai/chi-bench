@@ -1,6 +1,6 @@
 [project]
 name = "chi-bench"
-version = "0.1.0"
+version = "1.1.0"
 description = "chi-Bench: long-horizon, policy-rich healthcare workflows for AI agents."
 readme = "README.md"
 requires-python = ">=3.12"

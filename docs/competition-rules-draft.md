@@ -194,7 +194,15 @@ For eligibility, each team must privately provide:
 
 “Source code” refers to the participant-created agent and orchestration components. It does not require disclosure of proprietary third-party model weights or source code that the participant does not own.
 
-Materials may be delivered through a private organizer channel. Credentials must not be placed in Kaggle submissions or repositories.
+The organizer's [submission clarification](https://www.kaggle.com/competitions/chi-bench/discussion/745236)
+specifies delivery to `research@actava.ai`, with `[Kaggle]` in the email subject
+and team information included. The complete package is due November 15;
+December 7 is for prize winners' conference materials. Forum participation is
+not required. Credentials must not be placed in Kaggle submissions or repositories.
+
+The organizer's [API-cost clarification](https://www.kaggle.com/competitions/chi-bench/discussion/741283)
+states that participants fund development, with no sponsored token credits, and
+that organizers pay all API costs during private evaluation.
 
 Failure to provide complete materials, or inability to execute the submitted system within the verification period, may result in removal from consideration.
 
@@ -290,4 +298,8 @@ Questions should be posted in the Kaggle discussion forum or sent to [research@a
 
 The [Kaggle Rules](https://www.kaggle.com/competitions/chi-bench/rules) supply the competition policy; the [Overview](https://www.kaggle.com/competitions/chi-bench/overview) also specifies the simulator configuration. See the [local overview](kaggle-challenge-overview.md) for setup and submission commands.
 
-Two published inconsistencies remain: the Kaggle header says “IEEE Big Data Cup 2027,” while its rules, overview, and dates describe 2026; the timeline lists finalist materials on December 7, after the November 23 results announcement, while the submission text requires a complete package by the final deadline. This reference retains the published dates without inventing a different schedule. Ask the organizers to clarify those fields.
+The Kaggle header says “IEEE Big Data Cup 2027,” while its rules, overview, and
+dates describe 2026. The submission discussion clarifies the November 15
+final-package deadline and December 7 conference-material deadline. Its
+follow-up about whether email delivery also requires a Kaggle CSV or Writeup
+remains unanswered; Section 9 above retains the published CSV requirements.

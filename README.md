@@ -89,9 +89,22 @@ uv run huggingface-cli download actava/managed-care-operations-handbook \
 
 **5. Build the Docker image** (~5 min, one-time).
 
+Apply the `pa_t035` data correction before building. It restores the coverage
+termination date in the existing request form and requires a payer denial letter.
+The script changes only local data; it does not publish a dataset revision.
+
 ```bash
+uv run playwright install chromium
+uv run python scripts/repair_pa_t035.py
+uv run python scripts/regenerate_payer_request_forms.py
 uv run cb docker build
 ```
+
+The repair scripts render PDFs on the host. On Linux, use
+`uv run playwright install --with-deps chromium` if browser system libraries are missing.
+Runtime version `1.1.0` and dataset revision `chi-bench-v1.0.0` are separate;
+keep the dataset pin at the revision you downloaded and record the runtime commit
+and image digest with your results. See [the v1.1.0 changes](CHANGELOG.md).
 
 > [!NOTE]
 > `cb` is the short alias for `chi-bench`; both commands resolve to the same CLI. Pick whichever you prefer (the rest of this README uses `cb`). If your shell already aliases `cb` to something else (e.g. a clipboard tool), use `chi-bench`. For the full command surface and flag reference, read [`docs/cli.md`](docs/cli.md).

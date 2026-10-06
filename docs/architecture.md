@@ -48,6 +48,11 @@
 5. After the agent stops (success / timeout / abstain), Harbor invokes the verifier in the same container.
 6. Verifier writes `verifier/scorecard.json` and `verifier/verdicts.json`; Harbor produces `result.json`.
 
+When the payer confirms failed member eligibility, processing stops at intake.
+`determination.finalize` can use the completed intake record to set the existing
+case status `denied`, with reason `ELIG_TERMED`. The agent then generates and
+delivers the denial letter. Clinical review is not required for this result.
+
 ## Why the LLM judge needs Anthropic credits
 
 The verifier always uses `claude-opus-4-7` (configurable but paper-faithful default).

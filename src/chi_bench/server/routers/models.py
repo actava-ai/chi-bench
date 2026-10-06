@@ -268,8 +268,8 @@ class IntakeDecisionsBody(BaseModel):
     case_id: str
     request_complete: bool
     member_eligible: bool
-    service_covered: bool
-    provider_network_status: ProviderNetworkStatus
+    service_covered: bool | None = None
+    provider_network_status: ProviderNetworkStatus | None = None
 
 
 class IntakeProcedureLookupBody(BaseModel):
