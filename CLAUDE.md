@@ -158,7 +158,8 @@ Configs:
 - **Use the CHI-Bench Cup sequence: competition deadline, private evaluation, result release,
   then the IEEE-format camera-ready report. Do not add a paper-acceptance stage.** **Why:**
   CHI-Bench evaluates competition systems; the report follows competition results. Use its
-  own schedule; do not import another Cup's deadlines.
+  own schedule; do not import another Cup's deadlines. Use organizer-specified submission
+  routes; do not infer a requirement from a portal listing.
 - **Preserve published task paths with image compatibility aliases when fixing runtime renames.**
   **Why:** Rewriting downloaded `instruction.md` files changes task checksums. For tool references,
   alias `/opt/healthverse-task-assets` to `/opt/chi-bench-task-assets` as a directory so per-task
