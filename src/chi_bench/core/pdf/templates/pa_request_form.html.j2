@@ -38,7 +38,9 @@
   ("Payer", coverage.payer_name),
   ("Plan", coverage.plan_name),
   ("Network Status", coverage.network_status.replace("_", " ").title()),
-]) }}
+  ("Coverage Status", "Active" if coverage.active else "Inactive"),
+] + ([("Coverage Effective Date", coverage.effective_date)] if coverage.effective_date else [])
+  + ([("Coverage Termination Date", coverage.termination_date)] if coverage.termination_date else [])) }}
 
 <div class="payer-section-title">SECTION 3: REQUESTING PROVIDER</div>
 {{ metadata_table_1col([

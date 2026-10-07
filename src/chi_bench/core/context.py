@@ -4030,6 +4030,11 @@ class ServiceContext:
         """
         self.ensure_payer_mode_enabled()
         case = self.get_case(case_id)
+        intake = self.intake_case_for_case(case_id)
+        if intake is not None and intake.decision_member_eligible is False:
+            raise InvalidCaseActionError(
+                "Failed member eligibility must be denied at intake; do not route to review."
+            )
         policy = self.get_policy(case_id)
         _linked_intake_case = (
             None if case.payer_intake_case_id else self.intake_case_for_case(case_id)

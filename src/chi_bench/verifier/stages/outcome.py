@@ -69,6 +69,9 @@ def _lookup_source_record(exported: dict[str, Any], det: dict[str, Any]) -> dict
     elif source == "nurse_recommendation":
         table = exported.get("payer_nurse_case_recommendations") or []
         decision_field = "recommendation"
+    elif source == "intake_eligibility":
+        table = exported.get("intake_cases") or []
+        decision_field = None
     elif source == "triage_auto_approve":
         # Fast-track approval (gold_card_lane / notification_only_lane):
         # the routing record itself is the authorizing source. No
@@ -79,7 +82,11 @@ def _lookup_source_record(exported: dict[str, Any], det: dict[str, Any]) -> dict
     else:
         return None
     for row in table:
-        if isinstance(row, dict) and normalized_str(row.get("id")) == source_record_id:
+        if (
+            isinstance(row, dict)
+            and normalized_str(row.get("id")) == source_record_id
+            and normalized_str(row.get("case_id")) == normalized_str(det.get("case_id"))
+        ):
             return {"row": row, "decision_field": decision_field, "source": source}
     return None
 
@@ -98,6 +105,16 @@ def _recommendation_maps_to_final(exported: dict[str, Any], det: dict[str, Any])
         return False
 
     source = source_ref["source"]
+    if source == "intake_eligibility":
+        intake = source_ref["row"]
+        return (
+            intake.get("status") == "complete"
+            and intake.get("decision_member_eligible") is False
+            and normalized_str(det.get("intake_case_id")) == normalized_str(intake.get("id"))
+            and det.get("original_recommendation") == "deny"
+            and final == "denied"
+            and not overridden
+        )
     # Fast-track approval has no per-record decision field — the routing
     # record IS the authorization. `final_decision` must be 'approved',
     # `overridden` must be False (fast-track never overrides). No

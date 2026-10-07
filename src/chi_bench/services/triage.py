@@ -208,6 +208,10 @@ class TriageService:
         disp = TriageDisposition(disposition)
 
         intake_data = self.ctx.intake.get_intake_case(case_id)
+        if intake_data.get("decision_member_eligible") is False:
+            raise InvalidCaseActionError(
+                "Failed member eligibility must be denied at intake; do not enter triage."
+            )
         received_at = _parse_dt(intake_data["received_at"])
 
         record = TriageRecord(

@@ -128,11 +128,19 @@ class LettersService:
                         "letter": self.ctx.decorate_letter_payload(generated),
                         "letter_request": request.model_dump(mode="json"),
                     }
+        determination = self.ctx.latest_finalized_determination(case_id)
         letter = Letter(
             id=f"LET-{uuid4().hex[:8]}",
             case_id=case_id,
             letter_type=letter_type,
             subject=subject,
+            reason_code=(
+                "ELIG_TERMED"
+                if letter_type == "denial"
+                and determination is not None
+                and determination.source == "intake_eligibility"
+                else None
+            ),
             body=self._first_non_blank(
                 body,
                 request.rationale,

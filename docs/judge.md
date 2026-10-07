@@ -14,6 +14,12 @@ non-N/A rubric verdicts in every domain. The scorecard also records
 `fractional_reward = passed_checks / total_checks` for diagnostics, including
 Care Management; fractional reward is not the published leaderboard axis.
 
+A denial for failed member eligibility can use the completed intake record as
+its source. The stage verifier checks that the record belongs to the same case,
+that `decision_member_eligible` is false, and that the final decision is `denied`.
+The task must also require the denial letter. A clinical review record is not
+required for this intake result.
+
 ## Why a single judge model?
 
 All paper numbers were collected with `claude-opus-4-7` as the judge.

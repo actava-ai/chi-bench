@@ -394,8 +394,8 @@ class IntakeService:
         case_id: str,
         request_complete: bool,
         member_eligible: bool,
-        service_covered: bool,
-        provider_network_status: ProviderNetworkStatus,
+        service_covered: bool | None = None,
+        provider_network_status: ProviderNetworkStatus | None = None,
     ) -> dict[str, Any]:
         """Freeze the four intake-level decisions on an IntakeCase and mark intake `complete`. Validation of the decisions against intake-section content is caller-side — this call simply records what the caller supplies.
 
@@ -403,16 +403,25 @@ class IntakeService:
             case_id: PriorAuthCase.id, such as 'CASE-A1B2C3D4'.
             request_complete: True when all required intake fields are populated per the auth-type contract.
             member_eligible: True when the member's coverage is active for the requested service date.
-            service_covered: True when the requested procedure is within the member's benefit plan.
-            provider_network_status: network tier of the requesting provider. `in_network` = provider contracts with the payer; `out_of_network` = provider does not contract with the payer; `not_found` = provider identity could not be matched to the payer directory.
+            service_covered: True when the requested procedure is within the member's benefit plan. May be omitted when member_eligible is False, because processing stops at the failed eligibility check.
+            provider_network_status: network tier of the requesting provider. May be omitted when member_eligible is False. `in_network` = provider contracts with the payer; `out_of_network` = provider does not contract with the payer; `not_found` = provider identity could not be matched to the payer directory.
         """
         self.ctx._require_loaded()
         intake = self._load_intake(case_id)
 
+        if member_eligible and service_covered is None:
+            raise ValueError("service_covered is required when member_eligible is True.")
+        if member_eligible and provider_network_status is None:
+            raise ValueError("provider_network_status is required when member_eligible is True.")
+
         intake.decision_request_complete = request_complete
         intake.decision_member_eligible = member_eligible
         intake.decision_service_covered = service_covered
-        intake.decision_provider_network_status = ProviderNetworkStatus(provider_network_status)
+        intake.decision_provider_network_status = (
+            ProviderNetworkStatus(provider_network_status)
+            if provider_network_status is not None
+            else None
+        )
         intake.status = IntakeStatus.COMPLETE
         intake.completed_at = self.ctx.now
 

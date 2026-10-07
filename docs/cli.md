@@ -250,6 +250,29 @@ echo "$REV" > data/.chi-bench-version
 
 `cb data download` exists so the pin file is written in one step; the README documents the raw HF CLI invocation as the canonical path.
 
+For the `pa_t035` correction, run the following after downloading data and before
+building the Docker image:
+
+```bash
+uv run playwright install chromium
+uv run python scripts/repair_pa_t035.py --data-dir data
+uv run python scripts/regenerate_payer_request_forms.py --data-dir data
+```
+
+These scripts render PDFs on the host, so Playwright needs its Chromium browser
+there. On Linux, use `uv run playwright install --with-deps chromium` when system
+libraries are missing.
+
+This restores the coverage termination date in the existing request form and
+changes the expected payer result to `denied`, with a denial letter. It updates
+the task's expectation copies and its marathon copy. It does not publish data
+or change the dataset version pin.
+
+The second script updates all saved payer request forms with the same template,
+including their marathon copies. Coverage status appears on each form. Coverage
+dates appear only when the shared world provides them. Case facts and scoring
+expectations are unchanged by this regeneration.
+
 ---
 
 ## `cb submission`

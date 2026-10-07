@@ -21,6 +21,7 @@ from chi_bench.core.models import (
     DeterminationRecord,
     DirectoryContact,
     MdCaseDecision,
+    PayerLetterRequest,
     PriorAuthCase,
     ReviewDecision,
 )
@@ -56,7 +57,7 @@ class DeterminationService:
         self.ctx = ctx
 
     def get_determination_summary(self, case_id: str) -> dict[str, Any]:
-        """Aggregate the upstream review state into a ready-to-finalize summary: source artifact (nurse recommendation vs MD decision), source recommendation, criteria tallies, documentation gaps, policy metadata, any existing determination, and the current workflow state. `source` is `nurse_recommendation`, `md_decision`, or null when no finalizable upstream exists.
+        """Aggregate the upstream review state into a ready-to-finalize summary: source artifact (nurse recommendation vs MD decision), source recommendation, criteria tallies, documentation gaps, policy metadata, any existing determination, and the current workflow state. `source` is `intake_eligibility` for a completed intake with failed member eligibility, `nurse_recommendation`, `md_decision`, or null when no finalizable upstream exists.
 
         Args:
             case_id: PriorAuthCase.id, such as 'CASE-A1B2C3D4'.
@@ -172,6 +173,15 @@ class DeterminationService:
         if source_state["source"] is None:
             raise ValueError("No upstream recommendation or decision found for this case.")
 
+        # A failed eligibility check cannot authorize any part of the request.
+        intake_record = self.ctx.intake_case_for_case(case_id)
+        if (
+            intake_record is not None
+            and intake_record.decision_member_eligible is False
+            and det_decision != DeterminationDecision.DENIED
+        ):
+            raise InvalidCaseActionError("Failed member eligibility only permits denial.")
+
         # 5. Map + override validation
         recommended_decision = self._map_recommendation_to_final_decision(
             source_state["recommendation"]
@@ -206,7 +216,6 @@ class DeterminationService:
             ) from exc
 
         # 7. Intake-complete preflight
-        intake_record = self.ctx.intake_case_for_case(case_id)
         if intake_record is None:
             raise InvalidCaseActionError(
                 f"Cannot finalize determination for case {case_id!r}: no "
@@ -235,6 +244,10 @@ class DeterminationService:
         except KeyError:
             policy_citations = []
             supporting_basis = None
+
+        if source_state["source"] == "intake_eligibility":
+            policy_citations = ["Intake and Eligibility, section 5: ELIG_TERMED"]
+            supporting_basis = source_state["rationale"]
 
         # 11. Build in-memory records
         record = DeterminationRecord(
@@ -307,8 +320,28 @@ class DeterminationService:
         self.ctx.save_review_decision(plan.review_decision)
 
         # 3. Transition + save case (point of terminal status commit)
+        if plan.record.source == "intake_eligibility":
+            plan.case.outcome_reason = plan.review_decision.rationale
         case = self.ctx.transition(plan.case, plan.target_status, actor=plan.actor)
         self.ctx.save_case(case)
+
+        if plan.record.source == "intake_eligibility":
+            self.ctx.save_letter_request(
+                PayerLetterRequest(
+                    id=f"LREQ-{uuid4().hex[:8]}",
+                    case_id=case.id,
+                    letter_type="denial",
+                    rationale=plan.review_decision.rationale,
+                    supporting_basis=plan.review_decision.supporting_basis,
+                    policy_citations=plan.review_decision.policy_citations,
+                    appeal_information=(
+                        "You have the right to appeal this decision. Contact your health plan "
+                        "for filing instructions and the applicable deadline."
+                    ),
+                    requested_by=plan.actor,
+                    requested_at=self.ctx.now,
+                )
+            )
 
         # 4. Generate authorization number (approved / partially_approved only)
         if plan.generate_auth:
@@ -478,7 +511,7 @@ class DeterminationService:
         """Finalize the case determination. Persists a PayerDetermination + ReviewDecision and transitions the case (`approved`, `denied`, or `partially_approved`); for approvals, an authorization number is generated. Does not compose or deliver provider correspondence.
 
         Args:
-            case_id: PriorAuthCase.id, such as 'CASE-A1B2C3D4'. Must have a finalizable upstream recommendation or decision; pending peer-to-peer / outstanding info / incomplete physician review block the call.
+            case_id: PriorAuthCase.id, such as 'CASE-A1B2C3D4'. A completed intake with member_eligible=False permits denial for ELIG_TERMED without clinical review. Otherwise a finalizable review recommendation or decision is required; pending peer-to-peer / outstanding info / incomplete physician review block the call.
             decision: final determination. `approved` = approve the request; `denied` = deny the request; `partially_approved` = approve some lines, deny or modify others.
             overridden: True when `decision` intentionally differs from the upstream-recommended decision.
             override_reason: free-text rationale; required when `overridden` is True.
@@ -645,6 +678,21 @@ class DeterminationService:
                 state["blocking_reason"] = "awaiting_md_review"
             else:
                 state["blocking_reason"] = "awaiting_requested_information"
+
+        if nurse_rec is None:
+            intake = self.ctx.intake_case_for_case(case_id)
+            if (
+                intake is not None
+                and intake.status == IntakeStatus.COMPLETE
+                and intake.decision_member_eligible is False
+            ):
+                state.update(
+                    source="intake_eligibility",
+                    source_record_id=intake.id,
+                    recommendation="deny",
+                    original_recommendation="deny",
+                    rationale="ELIG_TERMED: Member coverage is inactive on the requested date of service.",
+                )
 
         return state
 

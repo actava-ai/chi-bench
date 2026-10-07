@@ -151,6 +151,20 @@ Configs:
 
 ## Things to remember
 
+- **Write Kaggle FAQs as direct participant answers in ASD-STE100 style, using the known
+  CHI-Bench dates. Omit organizer-reply citations, review notes, repeated requirements, and
+  verbatim restatements of user directions. Keep contact links in FAQs and only necessary
+  source links in announcements.
+  Assess existing rules against the intended workflow before proposing them.**
+- **Use the CHI-Bench Cup sequence: competition deadline, private evaluation, result release,
+  then the IEEE-format camera-ready report. Do not add a paper-acceptance stage.** **Why:**
+  CHI-Bench evaluates competition systems; the report follows competition results. Use its
+  own schedule and participation policy; do not import another Cup's instructions. Use
+  organizer-specified submission routes; do not infer a requirement from a portal listing.
+- **Preserve published task paths with image compatibility aliases when fixing runtime renames.**
+  **Why:** Rewriting downloaded `instruction.md` files changes task checksums. For tool references,
+  alias `/opt/healthverse-task-assets` to `/opt/chi-bench-task-assets` as a directory so per-task
+  selection and tool-name rewriting remain visible through the published path.
 - **For simple, explicitly scoped maintenance PRs, work directly on a `codex/` branch in the
   current clean checkout unless the user asks for a worktree or design spec.** **Why:** The user
   prefers direct execution over extra process for low-risk changes such as a model-default update.
