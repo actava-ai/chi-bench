@@ -151,7 +151,8 @@ Configs:
 
 ## Things to remember
 
-- **For Kaggle announcements and FAQs, keep only necessary source links and state each
+- **For Kaggle announcements, keep only necessary source links. For FAQs, state only the
+  answers in ASD-STE100 style; do not cite organizer replies or include review notes. State each
   requirement once. Assess existing rules against the intended workflow instead of assuming
   they are reasonable.**
 - **Use the CHI-Bench Cup sequence: competition deadline, private evaluation, result release,
