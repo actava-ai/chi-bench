@@ -531,7 +531,7 @@ class P2PService:
 
         model_env = os.environ.get("CHI_BENCH_P2P_SIMULATOR_MODEL", "sonnet")
         model_map = {
-            "sonnet": "claude-sonnet-4-20250514",
+            "sonnet": "claude-sonnet-5",
             "opus": "claude-opus-4-20250514",
             "haiku": "claude-haiku-4-5-20251001",
         }
@@ -549,11 +549,17 @@ class P2PService:
         messages.append({"role": "user", "content": message})
 
         client = anthropic.Anthropic()
+        request_options: dict[str, Any] = {}
+        if model == "claude-sonnet-5":
+            # Keep the text-only reply shape and 512-token budget, as in
+            # the patient simulator, when adaptive thinking defaults on.
+            request_options["thinking"] = {"type": "disabled"}
         response = client.messages.create(
             model=model,
             max_tokens=512,
             system=counterpart_context,
             messages=messages,
+            **request_options,
         )
         reply_text = response.content[0].text.strip()
         return reply_text, None

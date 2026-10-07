@@ -111,6 +111,11 @@ and image digest with your results. See [the v1.1.0 changes](CHANGELOG.md).
 
 The image bundles the FastAPI server, the workspace judge, the agent harness, and per-task fixtures.
 
+P2P counterpart simulation defaults to `claude-sonnet-5`; `CHI_BENCH_P2P_SIMULATOR_MODEL`
+overrides it, and the `sonnet` alias selects the same model. Both P2P and patient simulation
+disable adaptive thinking for `claude-sonnet-5` to preserve text replies within their token
+budgets. Rebuild the image after updating simulator code.
+
 **Verify setup:**
 
 ```bash
