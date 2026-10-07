@@ -153,7 +153,8 @@ Configs:
 
 - **Write Kaggle FAQs as direct participant answers in ASD-STE100 style, using the known
   CHI-Bench dates. Omit organizer-reply citations, review notes, repeated requirements, and
-  verbatim restatements of user directions. Keep only necessary links in announcements.
+  verbatim restatements of user directions. Keep contact links in FAQs and only necessary
+  source links in announcements.
   Assess existing rules against the intended workflow before proposing them.**
 - **Use the CHI-Bench Cup sequence: competition deadline, private evaluation, result release,
   then the IEEE-format camera-ready report. Do not add a paper-acceptance stage.** **Why:**
