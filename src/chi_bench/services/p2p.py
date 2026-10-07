@@ -529,7 +529,7 @@ class P2PService:
 
         import anthropic
 
-        model_env = os.environ.get("CHI_BENCH_P2P_SIMULATOR_MODEL", "sonnet")
+        model_env = os.environ.get("CHI_BENCH_P2P_SIMULATOR_MODEL") or "sonnet"
         model_map = {
             "sonnet": "claude-sonnet-5",
             "opus": "claude-opus-4-20250514",

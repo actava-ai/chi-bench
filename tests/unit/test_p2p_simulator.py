@@ -14,6 +14,7 @@ from chi_bench.services.p2p import P2PService
     ("model_env", "expected_model"),
     [
         (None, "claude-sonnet-5"),
+        ("", "claude-sonnet-5"),
         ("sonnet", "claude-sonnet-5"),
         ("claude-sonnet-5", "claude-sonnet-5"),
         ("haiku", "claude-haiku-4-5-20251001"),

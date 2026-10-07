@@ -191,6 +191,8 @@ Configs:
   `.text`, with budgets of 1,024 and 512 output tokens respectively. Updating only the patient
   call leaves P2P `send_turn` failing on `ThinkingBlock`; `thinking={"type": "disabled"}` also
   requires `anthropic>=0.101.0`.
+  Treat an empty P2P model override as the default too: Harbor Hub export forwards an omitted
+  override as an empty string, so testing only an absent environment variable misses that path.
 - **Do not pass Harbor's `thinking` agent kwarg to the stock `claude-code` harness without first
   checking the pinned Claude Code CLI.** **Why:** Harbor 0.6.1 renders it as `--thinking`, but
   Claude Code 2.1.207 and 2.1.216 do not expose that flag; use `reasoning_effort`/`--effort`
