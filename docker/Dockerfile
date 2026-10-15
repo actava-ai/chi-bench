@@ -26,10 +26,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # judge-harness:claude-code
-# Install Node 20 + Claude Code CLI for the workspace-agent judge (verifier phase).
+# Install Node 22 + Claude Code CLI for the workspace-agent judge (verifier phase).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && npm install -g @anthropic-ai/claude-code@latest \
     && command -v claude \
