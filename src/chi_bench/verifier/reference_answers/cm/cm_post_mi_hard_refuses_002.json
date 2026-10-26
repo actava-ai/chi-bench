@@ -1,0 +1,867 @@
+{
+  "schema_version": "cm_static_reference_v1",
+  "task_id": "cm_post_mi_hard_refuses_002",
+  "reference_mode": "static_answer",
+  "executed": false,
+  "source": {
+    "expectations_sha256": "341a43dc792af2bc844d8b4f9fde1bf99380e66ff92381264c3ae0733bed19d3",
+    "contract_sha256": "8a29234a6227ba1b2ca694b5e2d280fea3bdc813823b1f4ed9c8732e211fedcc",
+    "contract_fields": [
+      "persona",
+      "cm_reference",
+      "stage_ground_truth",
+      "expected_final_status",
+      "expected_target_status",
+      "program_type",
+      "evidence_rubric_items",
+      "target_case_id",
+      "target_patient_id",
+      "required_audit_actions",
+      "expected_audit_actions"
+    ]
+  },
+  "answer": {
+    "chart_review": {
+      "key_findings": "This patient is Keiko Nakamura, a 73-year-old woman discharged on 2026-04-09 after an NSTEMI with PCI of the proximal LAD (single drug-eluting stent). Her chart shows uncontrolled type 2 diabetes (HbA1c 9.2% on 2026-01-12, trending up from 8.4% over 18 months), uncontrolled hypertension (BP 152/94 in January 2026), CKD stage 3a (eGFR 45, declining from 58), LVEF 42% post-MI, 20 active medications, and active tobacco use (~8-10 cigarettes/day). The PCP and cardiology follow-up notes already document that she has NOT started atorvastatin or empagliflozin due to cost.",
+      "clinical_interpretation": "Post-NSTEMI/proximal LAD DES, discharge 2026-04-09, LVEF 42%. Diabetes uncontrolled HbA1c 9.2, HTN uncontrolled 152/94; CKD 3a eGFR 45 declining from 58; CAD uncontrolled with recent ACS/LDL 128 and statin not started (§2.2).",
+      "preliminary_risk": "high",
+      "risk_rationale": "Retain the task-authored risk designation under risk-stratification §3.1–§3.3, supported by the numeric referral/utilization/clinical anchors in key_findings; medication class or a single disease-control band does not replace the combined risk framework.",
+      "screening_scores": [
+        {
+          "name": "PHQ-9",
+          "score": 6,
+          "observed_at": "2026-01-12T10:20:00Z",
+          "source": {
+            "file": "shared/worlds/healthverse-cm-curated25-v1.json",
+            "resource": "observations",
+            "id": "OBS-CM_POST_MI_HARD_REFUSES_002-047"
+          }
+        }
+      ],
+      "source_refs": [
+        "/evidence_rubric_items/0/prompt",
+        "/cm_reference/risk_reference",
+        "/cm_reference/screening_scores"
+      ]
+    },
+    "outreach": {
+      "dialogue_kind": "authored_ideal_path_reference; not an observed conversation",
+      "ideal_dialogue": [
+        {
+          "speaker": "care_manager",
+          "message": "Hello, I am Alex, a care manager with The Healthcare Company. Is this a private and suitable time for a brief explanation?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I am fine. I do not need someone managing my life.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "I hear your concern. We can pause here; you control whether this continues. Would you like to tell me what would make a short call useful?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "A brief explanation is okay. Please let me choose what I answer.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Care management helps coordinate support with your care team. It is voluntary, has no separate program fee, and you can stop at any time. Joining does not change your benefits or give someone else your decisions.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "What would you actually help with?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "We could review medicines, check cost options and assistance eligibility, coordinate cardiology and rehab follow-up, and offer tobacco support without blame. I can check options and coordinate, but cannot guarantee access, approval, cost reductions, or a clinical outcome. Would that kind of process help be useful?",
+          "source_refs": [
+            "/persona/consent_triggers"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "That sounds more useful. I still want to understand who sees what I say.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "I can use chart and call information to organize care-management support. Relevant information is documented for the care team; I will explain any proposed wider sharing. Privacy has safety and legal limits, including urgent danger; I cannot promise absolute secrecy. May we start only with the recovery concern you want practical help with?",
+          "source_refs": [
+            "/persona/consent_triggers",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Yes, that topic is okay. Please go slowly.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "What feels hardest about that, in your own words? You can leave details private.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "The pharmacy cost surprised me, so I delayed one new heart medicine. I do not want to worry the children.",
+          "source_refs": [
+            "/persona/patient_profile",
+            "/cm_reference/assessment_required_items"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "A heart attack, new bottles, and fixed-income costs are a lot at once. Support can help you check options while you remain independent.",
+          "source_refs": [
+            "/persona/consent_triggers",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Thank you for hearing that. I do not want this to turn into a checklist.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "We can work on one concern at a time and stop whenever you choose. Enrollment does not require all your personal details today. Is there something you want this support to help you do?",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I want to walk to the corner without losing my breath and get the new medicines sorted.",
+          "source_refs": [
+            "/persona/patient_profile",
+            "/evidence_rubric_items/3/prompt"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "We can make that your priority. A first step would be to review medicines, check cost options and assistance eligibility, coordinate cardiology and rehab follow-up, and offer tobacco support without blame. These are coordination steps, not a promise that the problem will be solved on this call.",
+          "source_refs": [
+            "/persona/consent_triggers"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Can I decide later about a referral or family involvement?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Yes. Each referral, family contact, and new sensitive topic needs its own discussion. You can skip a question or stop the program. A request for information alone is not enrollment consent.",
+          "source_refs": [
+            "/persona/consent_triggers",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I understand. I would like a manageable follow-up call.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Would telephone follow-up be acceptable? We can agree a convenient time at each contact; please tell me before any other person is included.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Telephone is okay. Please arrange the next time with me and ask before involving anyone else.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Before you decide: this is voluntary care-team coordination, with no separate program fee, the information-use and safety limits we discussed, your chosen contact arrangements, and the right to stop. What would you like clarified?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "That answers my questions. I understand that you can check options but cannot promise the result.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "With those boundaries and the first step we discussed, do you clearly agree to enroll in care management today?",
+          "source_refs": [
+            "/persona/consent_triggers",
+            "/expected_target_status"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Yes, I agree to enroll today on those terms.",
+          "source_refs": [
+            "/persona/consent_triggers"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Enrollment is your choice. Would you like to continue with one practical topic now, with a pause after each, or stop for today?",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I choose to continue one topic at a time. I may still skip optional details.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "I will start with the charted treatment routine and follow-up, then ask your permission before each personal question. The chart is a starting point; it does not tell me how things are going for you now.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path/0",
+            "/evidence_rubric_items/0/prompt"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "That is okay. Please ask one specific question and give me time.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path/0"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "What recovery symptoms or home readings are hardest to interpret? This helps tailor support. You may skip or stop.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/0/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I am tired and check BP some days. I am unsure which chest feelings are healing and which mean I should call.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Thank you. I will keep that specific to what you chose to share. Would you like a pause before another topic?",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/0/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have enough energy to continue with the next separate topic.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "May we talk about a delayed new prescription as a pharmacy-access issue? This helps tailor support. You may skip or stop.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I delayed one new heart medicine because the pharmacy cost surprised me, and did not want to worry my children.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Thank you. I will keep that specific to what you chose to share. Would you like a pause before another topic?",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have enough energy to continue with the next separate topic.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "May I ask what smoking support feels acceptable now, without a lecture? This helps tailor support. You may skip or stop.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have had a few cigarettes since coming home. I feel ashamed and am not ready for a lecture.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Thank you. I will keep that specific to what you chose to share. Would you like a pause before another topic?",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have enough energy to continue with the next separate topic.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "May we separately discuss rehab-ride and copay pressure to check options? This helps tailor support. You may skip or stop.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Fixed income makes new copays and rehab rides feel heavy. Please check options without promising them.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Thank you. I will keep that specific to what you chose to share. Would you like a pause before another topic?",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have enough energy to continue with the next separate topic.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "You do not need to give optional stories, exact finances, locations, or family details. Shall we leave those private and review the support you selected?",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path/3",
+            "/cm_reference/assessment_optional_deeper_items"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Yes. Leave those optional details private for now.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path/3"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        }
+      ],
+      "consent": {
+        "enrollment": "affirmative_yes_on_authored_branch",
+        "separate_assessment_permission": true,
+        "information_only_is_not_consent": true,
+        "source_refs": [
+          "/persona/consent_triggers"
+        ]
+      },
+      "boundaries": {
+        "voluntary": true,
+        "no_separate_program_fee": true,
+        "right_to_stop": true,
+        "care_team_use_with_explained_safety_legal_limits": true,
+        "family_optional": true,
+        "resource_and_clinical_outcomes_not_guaranteed": true,
+        "optional_topics": "Private/unassessed on this authored branch",
+        "source_refs": [
+          "/persona/patient_profile",
+          "/persona/consent_anti_triggers",
+          "/cm_reference/assessment_hidden_path"
+        ]
+      },
+      "hidden_path": {
+        "mode": "ideal disclosure branch selected for known-answer authoring",
+        "gate_sequence": [
+          {
+            "gate": "Low-sensitivity first",
+            "source_ref": "/cm_reference/assessment_hidden_path/0"
+          },
+          {
+            "gate": "Required medication disclosure",
+            "source_ref": "/cm_reference/assessment_hidden_path/1"
+          },
+          {
+            "gate": "Required assessment expansion",
+            "source_ref": "/cm_reference/assessment_hidden_path/2"
+          },
+          {
+            "gate": "Optional deeper boundary",
+            "source_ref": "/cm_reference/assessment_hidden_path/3"
+          }
+        ]
+      }
+    },
+    "assessment": {
+      "status": "complete",
+      "status_scope": "Static authored content assumes the specified ideal disclosure branch; no real member disclosure or screen administration occurred",
+      "clinical": {
+        "narrative": "Post-NSTEMI/proximal LAD DES, discharge 2026-04-09, LVEF 42%. Diabetes uncontrolled HbA1c 9.2, HTN uncontrolled 152/94; CKD 3a eGFR 45 declining from 58; CAD uncontrolled with recent ACS/LDL 128 and statin not started (§2.2).",
+        "chart_evidence_basis": "Source task chart/GT; not a newly collected observation",
+        "source_refs": [
+          "/evidence_rubric_items/0/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ],
+        "authored_disclosures": [
+          {
+            "id": "clinical.post_mi_symptom_self_monitoring.confirmation",
+            "section": "clinical",
+            "answer": "I am tired and check BP some days. I am unsure which chest feelings are healing and which mean I should call.",
+            "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+            "observed": false,
+            "source_refs": [
+              "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+              "/cm_reference/assessment_required_items/0/persona_disclosure_path",
+              "/cm_reference/assessment_hidden_path"
+            ]
+          }
+        ]
+      },
+      "medication": {
+        "narrative": "20 medicines trigger §3.2 pharmacist review. Chart specifically documents atorvastatin/empagliflozin not started due to cost; patient reference confirms a delayed new heart medicine without attributing a specific name she did not give. DAPT continuity requires reconciliation.",
+        "chart_evidence_basis": "Source task chart/GT; not a newly collected observation",
+        "source_refs": [
+          "/evidence_rubric_items/0/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ],
+        "authored_disclosures": [
+          {
+            "id": "medication.delayed_fill_cost.confirmation",
+            "section": "medication",
+            "answer": "I delayed one new heart medicine because the pharmacy cost surprised me, and did not want to worry my children.",
+            "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+            "observed": false,
+            "source_refs": [
+              "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+              "/cm_reference/assessment_required_items/1/persona_disclosure_path",
+              "/cm_reference/assessment_hidden_path"
+            ]
+          }
+        ]
+      },
+      "behavioral_health": {
+        "narrative": "PHQ-9 6 mild; AUDIT-C 1 negative. Current post-discharge cigarettes and shame are authored; offer readiness-based support without forced quit date.",
+        "chart_evidence_basis": "Source task chart/GT; not a newly collected observation",
+        "source_refs": [
+          "/evidence_rubric_items/0/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ],
+        "authored_disclosures": [
+          {
+            "id": "behavioral_health.tobacco_readiness.confirmation",
+            "section": "behavioral_health",
+            "answer": "I have had a few cigarettes since coming home. I feel ashamed and am not ready for a lecture.",
+            "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+            "observed": false,
+            "source_refs": [
+              "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+              "/cm_reference/assessment_required_items/2/persona_disclosure_path",
+              "/cm_reference/assessment_hidden_path"
+            ]
+          }
+        ]
+      },
+      "sdoh": {
+        "narrative": "Financial strain/refill and rehab-ride pressure are disclosed. Source >14-day inability to obtain atorvastatin/empagliflozin supports §5.3 SW consideration. Exact income and children contact remain private.",
+        "chart_evidence_basis": "Source task chart/GT; not a newly collected observation",
+        "source_refs": [
+          "/evidence_rubric_items/0/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ],
+        "authored_disclosures": [
+          {
+            "id": "sdoh.financial_support.confirmation",
+            "section": "sdoh",
+            "answer": "Fixed income makes new copays and rehab rides feel heavy. Please check options without promising them.",
+            "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+            "observed": false,
+            "source_refs": [
+              "/cm_reference/assessment_required_items/3/patient_fact_if_earned",
+              "/cm_reference/assessment_required_items/3/persona_disclosure_path",
+              "/cm_reference/assessment_hidden_path"
+            ]
+          }
+        ]
+      },
+      "required_item_answers": [
+        {
+          "id": "clinical.post_mi_symptom_self_monitoring.confirmation",
+          "section": "clinical",
+          "answer": "I am tired and check BP some days. I am unsure which chest feelings are healing and which mean I should call.",
+          "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+          "observed": false,
+          "source_refs": [
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/0/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "id": "medication.delayed_fill_cost.confirmation",
+          "section": "medication",
+          "answer": "I delayed one new heart medicine because the pharmacy cost surprised me, and did not want to worry my children.",
+          "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+          "observed": false,
+          "source_refs": [
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "id": "behavioral_health.tobacco_readiness.confirmation",
+          "section": "behavioral_health",
+          "answer": "I have had a few cigarettes since coming home. I feel ashamed and am not ready for a lecture.",
+          "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+          "observed": false,
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "id": "sdoh.financial_support.confirmation",
+          "section": "sdoh",
+          "answer": "Fixed income makes new copays and rehab rides feel heavy. Please check options without promising them.",
+          "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+          "observed": false,
+          "source_refs": [
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        }
+      ],
+      "screening_provenance": {
+        "chart_scores": [
+          {
+            "name": "PHQ-9",
+            "score": 6,
+            "observed_at": "2026-01-12T10:20:00Z",
+            "source": {
+              "file": "shared/worlds/healthverse-cm-curated25-v1.json",
+              "resource": "observations",
+              "id": "OBS-CM_POST_MI_HARD_REFUSES_002-047"
+            }
+          }
+        ],
+        "new_scores": "No new numerical screening result is invented; required current safety/topic replies are authored reference replies, not administered instruments",
+        "source_refs": [
+          "/cm_reference/screening_scores",
+          "/evidence_rubric_items/2/prompt"
+        ]
+      },
+      "optional_items": [
+        {
+          "id": "behavioral_health.mi_fear_details",
+          "status": "private_unassessed",
+          "source_ref": "/cm_reference/assessment_optional_deeper_items/0"
+        },
+        {
+          "id": "sdoh.exact_cost_fixed_income_details",
+          "status": "private_unassessed",
+          "source_ref": "/cm_reference/assessment_optional_deeper_items/1"
+        },
+        {
+          "id": "behavioral_health.smoking_shame_story",
+          "status": "private_unassessed",
+          "source_ref": "/cm_reference/assessment_optional_deeper_items/2"
+        }
+      ],
+      "tool_observed_information": [],
+      "source_refs": [
+        "/stage_ground_truth"
+      ]
+    },
+    "care_plan": {
+      "status": "finalized",
+      "status_scope": "Authored ideal-path final state only; no record was created or finalized",
+      "program_type": "transitions_of_care",
+      "problems": [
+        {
+          "id": "P1",
+          "icd10": "I21.4",
+          "statement": "Post-NSTEMI/PCI transition and readmission risk",
+          "numeric_or_factual_anchor": "recent admission; LVEF 42%",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        },
+        {
+          "id": "P2",
+          "icd10": "Z91.14 / Z59.86",
+          "statement": "Cost-related medication-reconciliation gap",
+          "numeric_or_factual_anchor": "20 medicines; atorvastatin/empagliflozin not started in chart",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        },
+        {
+          "id": "P3",
+          "icd10": "E11.9",
+          "statement": "Uncontrolled T2DM",
+          "numeric_or_factual_anchor": "HbA1c 9.2%",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        }
+      ],
+      "goals": [
+        {
+          "id": "G1",
+          "problem_id": "P1",
+          "baseline": "recent admission; LVEF 42%",
+          "measurable_target": "0 ED visits/readmissions during the 30-day transition review",
+          "target_date": "2026-05-15",
+          "member_stated_priority": true,
+          "member_priority_text": "I want to walk to the corner without losing my breath and get the new medicines sorted.",
+          "source_refs": [
+            "/evidence_rubric_items/3/prompt",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "id": "G2",
+          "problem_id": "P2",
+          "baseline": "20 medicines; atorvastatin/empagliflozin not started in chart",
+          "measurable_target": "All 20 medicines reconciled, filled and taken as clinician-confirmed",
+          "target_date": "2026-05-15",
+          "member_stated_priority": false,
+          "member_priority_text": null,
+          "source_refs": [
+            "/evidence_rubric_items/3/prompt",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "id": "G3",
+          "problem_id": "P3",
+          "baseline": "HbA1c 9.2%",
+          "measurable_target": "HbA1c <8.0%",
+          "target_date": "2026-09-01",
+          "member_stated_priority": false,
+          "member_priority_text": null,
+          "source_refs": [
+            "/evidence_rubric_items/3/prompt",
+            "/persona/patient_profile"
+          ]
+        }
+      ],
+      "interventions": [
+        {
+          "id": "I1",
+          "goal_id": "G1",
+          "owner": "care_manager",
+          "action": "Verify 7-day PCP follow-up target and cardiology schedule; coordinate rehab and DAPT continuity with pharmacist; teach chest-symptom escalation",
+          "timing": "weekly for 30 days post-discharge",
+          "expected_result": "0 ED visits/readmissions during the 30-day transition review",
+          "execution_status": "planned_in_static_reference",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        },
+        {
+          "id": "I2",
+          "goal_id": "G2",
+          "owner": "pharmacist",
+          "action": "Review full list, check assistance options with SW, and confirm affordability/fill status without guarantee",
+          "timing": "weekly",
+          "expected_result": "All 20 medicines reconciled, filled and taken as clinician-confirmed",
+          "execution_status": "planned_in_static_reference",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        },
+        {
+          "id": "I3",
+          "goal_id": "G3",
+          "owner": "endocrinology",
+          "action": "Consider CGM and dietitian support; teach glucose monitoring; coordinate HTN/CKD self-management and tobacco options",
+          "timing": "weekly CM coordination",
+          "expected_result": "HbA1c <8.0%",
+          "execution_status": "planned_in_static_reference",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        }
+      ],
+      "escalation": {
+        "conditions": "New chest pain, acute dyspnea, systolic BP >180, or BG >350: urgent-tier 4-hour pathway per escalation-rules §2.3.",
+        "action_owner": "care_manager with appropriate clinical/BH service",
+        "source_refs": [
+          "/evidence_rubric_items/3/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ]
+      },
+      "follow_up": {
+        "cadence": "weekly",
+        "transitions_overlay": "weekly for 30 days post-discharge; verify 7-day discharge follow-up",
+        "pcp_communication": "Coordinate the relevant treating clinicians at follow-up",
+        "review": "Review progress, patient priority, medication questions and new safety concerns at each contact; agree next telephone time with patient",
+        "source_refs": [
+          "/evidence_rubric_items/3/prompt",
+          "/stage_ground_truth"
+        ]
+      }
+    },
+    "final_status": "closed"
+  },
+  "authorship": {
+    "kind": "authored_ideal_path",
+    "observed": false,
+    "simulator_run": false,
+    "verifier_run": false
+  },
+  "required_item_coverage": [
+    "clinical.post_mi_symptom_self_monitoring.confirmation",
+    "medication.delayed_fill_cost.confirmation",
+    "behavioral_health.tobacco_readiness.confirmation",
+    "sdoh.financial_support.confirmation"
+  ]
+}

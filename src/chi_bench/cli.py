@@ -155,14 +155,34 @@ app.add_typer(docker_app, name="docker")
 @docker_app.command("build")
 def docker_build(
     tag: str = typer.Option("chi-bench:latest", "--tag", "-t", help="Image tag."),
-    target: str = typer.Option("runtime", "--target", help="Build stage: runtime | ci-skeleton."),
+    target: str = typer.Option(
+        "runtime", "--target", help="Build stage: runtime | agent | ci-skeleton."
+    ),
 ) -> None:
-    """Build the chi-bench single-image container."""
+    """Build trusted runtime and clean agent images."""
     import subprocess
 
-    cmd = ["docker", "build", "-f", "docker/Dockerfile", "--target", target, "-t", tag, "."]
-    typer.echo(f"$ {' '.join(cmd)}")
-    raise typer.Exit(subprocess.call(cmd))
+    targets = [(target, tag)]
+    if target == "runtime":
+        targets.append(
+            ("agent", "chi-bench:agent" if tag == "chi-bench:latest" else tag + "-agent")
+        )
+    for stage, image_tag in targets:
+        cmd = [
+            "docker",
+            "build",
+            "-f",
+            "docker/Dockerfile",
+            "--target",
+            stage,
+            "-t",
+            image_tag,
+            ".",
+        ]
+        typer.echo(f"$ {' '.join(cmd)}")
+        result = subprocess.call(cmd)
+        if result:
+            raise typer.Exit(result)
 
 
 def _configure_logging(level: str) -> None:
@@ -394,15 +414,18 @@ def serve(
     from chi_bench.mcp.payer_server import build_payer_mcp  # noqa: E402
     from chi_bench.mcp.server import build_provider_mcp  # noqa: E402
 
+    from chi_bench.server.control import AgentRoleMiddleware
+
     mcp_servers = [
-        build_provider_mcp(host=host, port=8020, ctx=ctx),
-        build_payer_mcp(host=host, port=8100, ctx=ctx),
-        build_cm_mcp(host=host, port=CM_MCP_PORT, ctx=ctx),
+        ("provider", 8020, build_provider_mcp(host=host, port=8020, ctx=ctx)),
+        ("payer", 8100, build_payer_mcp(host=host, port=8100, ctx=ctx)),
+        ("cm", CM_MCP_PORT, build_cm_mcp(host=host, port=CM_MCP_PORT, ctx=ctx)),
     ]
-    for mcp_server in mcp_servers:
+    for role, mcp_port, mcp_server in mcp_servers:
         threading.Thread(
-            target=mcp_server.run,
-            kwargs={"transport": "streamable-http"},
+            target=uvicorn.run,
+            args=(AgentRoleMiddleware(mcp_server.streamable_http_app(), role),),
+            kwargs={"host": host, "port": mcp_port, "log_level": log_level.lower()},
             name=f"mcp-{mcp_server.name}",
             daemon=True,
         ).start()
@@ -486,6 +509,11 @@ def experiment_run(
     dataset: str | None = typer.Option(None, "--dataset", help="Path to dataset or registry ID."),
     agent: str = typer.Option("claude-code", "--agent", help="Agent identifier."),
     model: str | None = typer.Option(None, "--model", help="Model identifier."),
+    e2e_protocol: str | None = typer.Option(
+        None,
+        "--e2e-protocol",
+        help="E2E protocol: workflow_v2 (default and only supported version).",
+    ),
     n_concurrent: int = typer.Option(1, "-n", help="Number of concurrent trials."),
     trials_dir: str | None = typer.Option(
         None, "--trials-dir", help="Harbor trials output directory."
@@ -521,6 +549,14 @@ def experiment_run(
     """Run an experiment (Harbor trial or job)."""
     from chi_bench.experiment.runner import run_experiment
 
+    if e2e_protocol is not None:
+        from chi_bench.core.e2e_protocol import validate_e2e_protocol
+
+        try:
+            validate_e2e_protocol(e2e_protocol)
+        except ValueError as exc:
+            raise typer.BadParameter(str(exc), param_hint="--e2e-protocol") from exc
+
     if environment is not None and environment not in {"docker", "modal"}:
         raise typer.BadParameter(
             f"--environment must be 'docker' or 'modal' (got {environment!r})."
@@ -537,6 +573,7 @@ def experiment_run(
         modal_profile=modal_profile,
         modal_sandbox_timeout_secs=modal_sandbox_timeout_secs,
         modal_force_build=modal_force_build,
+        e2e_protocol=e2e_protocol,
     )
 
 
@@ -782,12 +819,14 @@ def submission_status_cmd(
     typer.echo(f"Started:    {status['started_at'] or '(not yet)'}")
     typer.echo(f"Finished:   {status['finished_at'] or '(in progress)'}")
     typer.echo("")
-    typer.echo(f"{'Domain':<14} {'Expected':>9} {'Trials':>7} {'Pass':>6} {'Fail':>6}  State")
+    typer.echo(
+        f"{'Domain':<14} {'Expected':>9} {'Trials':>7} {'Pass':>6} {'Fail':>6} {'Invalid':>7}  State"
+    )
     for d in status["domains"]:
         expected = d["expected_tasks"] or "?"
         typer.echo(
             f"{d['domain']:<14} {str(expected):>9} {d['n_trials']:>7} "
-            f"{d['n_passed']:>6} {d['n_failed']:>6}  {d['state']}"
+            f"{d['n_passed']:>6} {d['n_failed']:>6} {d['n_invalid']:>7}  {d['state']}"
         )
 
 

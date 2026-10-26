@@ -8,9 +8,9 @@ Lifecycle:
 3. Parse verdicts.json. Handle degradation on timeout / missing file / bad schema.
 
 Degradation contract:
-- Any verdicts the session wrote to disk before failing are preserved.
-- Rubrics without a usable verdict in the file are flagged in
-  ``degraded_rubric_ids`` and ``judge_unavailable_reason`` explains why.
+- A complete, schema-valid response written before runner failure is preserved.
+- Missing, malformed or incomplete responses make every requested rubric
+  unavailable; ``judge_unavailable_reason`` explains why.
 """
 
 from __future__ import annotations
@@ -39,6 +39,75 @@ logger = logging.getLogger(__name__)
 
 
 ALLOWED_TOOLS: tuple[str, ...] = ("Read", "Glob", "Grep", "Write", "Edit")
+
+
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"non-JSON numeric constant: {value}")
+
+
+def _evidence_strings(value: Any, *, field: str, allow_empty: bool = False) -> tuple[str, ...]:
+    if (
+        not isinstance(value, list)
+        or (not value and not allow_empty)
+        or any(not isinstance(item, str) or not item.strip() for item in value)
+    ):
+        raise ValueError(f"{field} must be a list of nonempty strings")
+    return tuple(value)
+
+
+def _validate_verdicts(raw: Any, rubric_ids: list[str]) -> dict[str, Verdict]:
+    if any(not isinstance(rid, str) or not rid.strip() for rid in rubric_ids):
+        raise ValueError("requested rubric IDs must be nonempty strings")
+    if len(set(rubric_ids)) != len(rubric_ids):
+        raise ValueError("duplicate requested rubric IDs")
+    if not isinstance(raw, dict):
+        raise ValueError("verdict response must be an object")
+    verdicts = raw.get("rubric_verdicts")
+    if not isinstance(verdicts, dict) or set(verdicts) != set(rubric_ids):
+        raise ValueError("rubric_verdicts must contain exactly the requested rubric IDs")
+    if "session_metadata" in raw and not isinstance(raw["session_metadata"], dict):
+        raise ValueError("session_metadata must be an object")
+
+    parsed: dict[str, Verdict] = {}
+    for rid, verdict in verdicts.items():
+        if not isinstance(verdict, dict) or type(verdict.get("pass")) is not bool:
+            raise ValueError(f"{rid}: pass must be a JSON boolean")
+        explanation = verdict.get("explanation")
+        if not isinstance(explanation, str) or not explanation.strip():
+            raise ValueError(f"{rid}: explanation must be a nonempty string")
+        evidence_refs = _evidence_strings(
+            verdict.get("evidence_refs"), field=f"{rid}.evidence_refs"
+        )
+        structured_raw = verdict.get("structured_evidence")
+        structured = None
+        if structured_raw is not None:
+            if not isinstance(structured_raw, dict):
+                raise ValueError(f"{rid}: structured_evidence must be an object or null")
+            structured = {
+                field: _evidence_strings(
+                    structured_raw.get(field, []), field=f"{rid}.{field}", allow_empty=True
+                )
+                for field in ("items_credited", "items_missing", "evidence_quotes")
+            }
+            if not any(structured.values()):
+                structured = None
+        parsed[rid] = Verdict(
+            rubric_id=rid,
+            passed=verdict["pass"],
+            explanation=explanation,
+            evidence_refs=evidence_refs,
+            structured_evidence=structured,
+        )
+    return parsed
 
 
 def _resolve_num_votes(num_votes: int | str | None) -> int:
@@ -132,8 +201,20 @@ class WorkspaceJudge:
         # policies/
         policies_dir = workspace_dir / "policies"
         policies_dir.mkdir(exist_ok=True)
+        policy_root = (
+            Path(os.path.commonpath([str(src.parent) for src in judge_input.policy_paths]))
+            if judge_input.policy_paths
+            else None
+        )
         for src in judge_input.policy_paths:
-            shutil.copy2(src, policies_dir / src.name)
+            relative = (
+                src.relative_to(policy_root)
+                if judge_input.contract == "e2e_workflow_v2" and policy_root
+                else Path(src.name)
+            )
+            destination = policies_dir / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, destination)
         # agent_outputs/
         outputs_dir = workspace_dir / "agent_outputs"
         outputs_dir.mkdir(exist_ok=True)
@@ -193,38 +274,12 @@ class WorkspaceJudge:
         }
         if verdicts_path.exists():
             try:
-                raw = json.loads(verdicts_path.read_text())
-                rubric_verdicts = raw.get("rubric_verdicts") or {}
-                for rid, v in rubric_verdicts.items():
-                    if not isinstance(v, dict) or "pass" not in v:
-                        continue
-
-                    structured_raw = v.get("structured_evidence")
-                    parsed_structured: dict[str, tuple[str, ...]] | None = None
-                    if isinstance(structured_raw, dict):
-
-                        def _clean_str_list(values: Any) -> tuple[str, ...]:
-                            if not isinstance(values, list):
-                                return ()
-                            return tuple(x for x in values if isinstance(x, str))
-
-                        candidate = {
-                            "items_credited": _clean_str_list(structured_raw.get("items_credited")),
-                            "items_missing": _clean_str_list(structured_raw.get("items_missing")),
-                            "evidence_quotes": _clean_str_list(
-                                structured_raw.get("evidence_quotes")
-                            ),
-                        }
-                        if any(candidate.values()):
-                            parsed_structured = candidate
-
-                    parsed[rid] = Verdict(
-                        rubric_id=rid,
-                        passed=bool(v.get("pass")),
-                        explanation=str(v.get("explanation", "")),
-                        evidence_refs=tuple(v.get("evidence_refs") or ()),
-                        structured_evidence=parsed_structured,
-                    )
+                raw = json.loads(
+                    verdicts_path.read_text(),
+                    object_pairs_hook=_unique_json_object,
+                    parse_constant=_reject_json_constant,
+                )
+                parsed = _validate_verdicts(raw, rubric_ids)
                 # Merge so runner-measured values (duration_s, prompt_version)
                 # win over any values the judge wrote into verdicts.json; the
                 # judge must not be able to masquerade as a different prompt
@@ -232,9 +287,9 @@ class WorkspaceJudge:
                 judge_metadata = dict(raw.get("session_metadata") or {})
                 judge_metadata.update(session_metadata)
                 session_metadata = judge_metadata
-            except (json.JSONDecodeError, TypeError) as e:
-                if unavailable_reason is None:
-                    unavailable_reason = f"VerdictsParseError: {e}"
+            except (OSError, ValueError, TypeError) as e:
+                parsed = {}
+                unavailable_reason = f"VerdictsParseError: {e}"
         else:
             if unavailable_reason is None:
                 unavailable_reason = "VerdictsFileNotFound: verdicts.json missing after session"
@@ -243,11 +298,9 @@ class WorkspaceJudge:
         if missing and unavailable_reason is None:
             unavailable_reason = f"IncompleteVerdicts: {len(missing)} rubric(s) missing"
 
-        # Policy on degraded rubrics: when the session failed or produced
-        # incomplete output, every rubric that lacks a parsed verdict is
-        # flagged as degraded so downstream checks fall back to
-        # `not_applicable`. When everything parsed cleanly we emit no
-        # degradations even if the file was written after a non-fatal issue.
+        # Invalid responses contribute no votes or agent failures. Downstream
+        # required checks become unavailable and invalidate scoring. A complete
+        # valid file may still survive a runner error after it was written.
         degraded_ids = missing if unavailable_reason is not None else ()
 
         return JudgeOutput(

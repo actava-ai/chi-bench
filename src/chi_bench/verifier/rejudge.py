@@ -19,10 +19,10 @@ Output per trial:
 - Original ``<trial>/verifier/`` directory is never modified.
 
 Supports CM contracts (``cm_v1`` / ``cm_v2`` / ``cm_v4``) and PA/UM
-contracts (``contract_v3`` / ``contract_v4`` / ``contract_v5``). The CM
-path uses the gate × rubric reward formula; the PA/UM path treats the
+contracts (``contract_v3`` / ``contract_v4`` / ``contract_v5``). Legacy CM
+uses the gate × rubric reward formula; CM v4 and PA/UM treat the
 original deterministic checks (everything outside the ``judge.*``
-namespace) as carryover and folds the rerun rubric verdicts back in via
+namespace) as carryover and fold the rerun rubric verdicts back in via
 ``build_scorecard`` so binary_reward = 1.0 iff all non-NA checks pass.
 """
 
@@ -37,6 +37,7 @@ from typing import Any
 from chi_bench.verifier.judge.cm_adapter import CmJudgeAdapter
 from chi_bench.verifier.judge.types import JudgeInput, JudgeOutput
 from chi_bench.verifier.judge.workspace_judge import WorkspaceJudge
+from chi_bench.verifier.validity import write_validity
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,8 @@ def rejudge_trial(
     Dispatches by ``expectations.verifier_contract`` to the contract-
     specific rejudge path:
 
-    - ``cm_v*`` -> :func:`_rejudge_cm_trial` (gate × rubric formula)
+    - Legacy ``cm_v*`` -> :func:`_rejudge_cm_trial` (gate × rubric formula)
+    - ``cm_v4`` -> CM adapter with deterministic-check carryover
     - ``contract_v3`` / ``contract_v4`` / ``contract_v5`` ->
       :func:`_rejudge_pa_um_trial` (deterministic-carryover + judge
       verdicts merged via ``build_scorecard``)
@@ -65,16 +67,62 @@ def rejudge_trial(
     trial_dir = Path(trial_dir)
     expectations_path = Path(expectations_path)
     out_dir = trial_dir / output_subdir
-    out_dir.mkdir(parents=True, exist_ok=True)
-
+    relative_output = Path(output_subdir)
+    resolved_output = out_dir.resolve()
+    if (
+        relative_output.is_absolute()
+        or ".." in relative_output.parts
+        or resolved_output == trial_dir.resolve()
+        or not resolved_output.is_relative_to(trial_dir.resolve())
+        or resolved_output.is_relative_to((trial_dir / "verifier").resolve())
+    ):
+        raise ValueError("rejudge output must be a side-by-side directory outside verifier/")
     verifier_dir = trial_dir / "verifier"
     exported = json.loads((verifier_dir / "exported_state.json").read_text())
     old_scorecard = json.loads((verifier_dir / "scorecard.json").read_text())
-    expectations = json.loads(expectations_path.read_text())
+    from chi_bench.verifier.task_runtime import load_expectations
+    from chi_bench.core.e2e_protocol import e2e_score_metadata
+
+    expectations = load_expectations(expectations_path)
+    # Reject old/unversioned E2E inputs without creating output or relabeling
+    # original artifacts under the current process's execution default.
+    protocol_metadata = e2e_score_metadata(exported, expectations)
+    if protocol_metadata and any(
+        old_scorecard.get(key) != value for key, value in protocol_metadata.items()
+    ):
+        raise ValueError(
+            "E2E scorecard must record workflow_v2 from trusted_runtime_export before deterministic checks can be reused."
+        )
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for filename in (
+        "scorecard.json",
+        "validity.json",
+        "verdicts.json",
+        "judge_session_metadata.json",
+    ):
+        output_path = out_dir / filename
+        if output_path.is_symlink() or (output_path.exists() and output_path.stat().st_nlink > 1):
+            raise ValueError("rejudge output files must not be symlinks or hardlinks")
 
     contract = str(expectations.get("verifier_contract") or "cm_v1")
 
-    if contract in _PA_UM_CONTRACTS:
+    from chi_bench.core.e2e_protocol import is_workflow_v2
+
+    if (
+        contract in _PA_UM_CONTRACTS
+        or contract == "cm_v4"
+        or is_workflow_v2(exported, expectations)
+    ):
+        judge_input = (
+            CmJudgeAdapter(
+                expectations,
+                exported,
+                world=_load_optional_world(expectations_path),
+                instruction_text=_load_instruction_text(expectations_path),
+            ).build()
+            if contract == "cm_v4"
+            else None
+        )
         _rejudge_pa_um_trial(
             out_dir=out_dir,
             trial_dir=trial_dir,
@@ -83,6 +131,7 @@ def rejudge_trial(
             old_scorecard=old_scorecard,
             runner=runner,
             judge_timeout_s=judge_timeout_s,
+            judge_input=judge_input,
         )
         return
 
@@ -140,14 +189,9 @@ def _rejudge_cm_trial(
         )
         return
 
-    contract = str(expectations.get("verifier_contract") or "cm_v1")
-    world = _load_optional_world(expectations_path) if contract == "cm_v4" else None
-    instruction_text = _load_instruction_text(expectations_path) if contract == "cm_v4" else None
     judge_input = CmJudgeAdapter(
         expectations=expectations,
         exported=exported,
-        world=world,
-        instruction_text=instruction_text,
     ).build()
 
     judge_output = _run_judge_session(
@@ -175,8 +219,9 @@ def _rejudge_pa_um_trial(
     old_scorecard: dict,
     runner: Any | None,
     judge_timeout_s: int,
+    judge_input: JudgeInput | None = None,
 ) -> None:
-    """PA/UM contracts (``contract_v3`` / ``contract_v4`` / ``contract_v5``).
+    """Stage-scored PA/UM and CM v4 contracts.
 
     Deterministic checks are taken verbatim from the original scorecard --
     rerunning them on the same exported state would produce identical
@@ -192,9 +237,11 @@ def _rejudge_pa_um_trial(
        :func:`task_runtime.build_scorecard` so the formula matches what
        ``run_verifier`` would have produced live.
     """
+    from chi_bench.verifier.judge.judge import should_run_workspace_judge
     from chi_bench.verifier.judge.pa_um_adapter import PaUmJudgeAdapter
-    from chi_bench.verifier.stages._base import NOT_APPLICABLE
-    from chi_bench.verifier.task_runtime import build_scorecard
+    from chi_bench.verifier.stages._base import NOT_APPLICABLE, UNAVAILABLE
+    from chi_bench.verifier.task_runtime import _is_pa_um_judge_eligible, build_scorecard
+    from chi_bench.core.e2e_protocol import e2e_score_metadata, is_workflow_v2
 
     # Carry over deterministic checks (everything not in the judge.* namespace).
     original_checks = old_scorecard.get("checks") or {}
@@ -202,34 +249,70 @@ def _rejudge_pa_um_trial(
         cid: status for cid, status in original_checks.items() if not cid.startswith("judge.")
     }
 
-    judge_input = PaUmJudgeAdapter(expectations, exported).build()
-    rubrics = list(judge_input.rubrics or ())
+    if judge_input is None and (
+        _is_pa_um_judge_eligible(expectations) or is_workflow_v2(exported, expectations)
+    ):
+        adapter = PaUmJudgeAdapter(expectations, exported)
+        judge_input = adapter.build()
+        waived = adapter.not_applicable_rubrics
+        unavailable = adapter.unavailable_rubrics
+        for rid in waived:
+            merged_checks[f"judge.{rid}"] = NOT_APPLICABLE
+    else:
+        waived = {}
+        unavailable = {}
+
+    rubrics = list(judge_input.rubrics or ()) if judge_input is not None else []
 
     if not rubrics:
         # Fully-deterministic PA/UM contract -- nothing for the judge to
         # rescore. Just rewrite the scorecard with the deterministic
         # checks (preserves binary_reward / fractional_reward exactly).
         scorecard = build_scorecard(merged_checks)
+        scorecard.update(e2e_score_metadata(exported, expectations))
+        scorecard["not_applicable_rubrics"] = waived
         scorecard["verifier_contract"] = expectations.get("verifier_contract")
-        scorecard["judge_unavailable_reason"] = "no_rubrics_in_contract"
+        scorecard["judge_unavailable_reason"] = (
+            "no_rubrics_in_contract"
+            if judge_input is not None
+            else "judge_not_eligible_for_contract"
+        )
         scorecard["rubric_items"] = []
         _write_pa_um_outputs(out_dir, scorecard, JudgeOutput(verdicts={}, session_metadata={}))
         return
 
-    judge_output = _run_judge_session(
-        judge_input=judge_input,
-        trial_dir=trial_dir,
-        runner=runner,
-        timeout_seconds=judge_timeout_s,
-    )
+    if not should_run_workspace_judge(expectations, exported):
+        for rubric in rubrics:
+            merged_checks[f"judge.{rubric['rubric_id']}"] = NOT_APPLICABLE
+        judge_output = JudgeOutput(
+            verdicts={},
+            session_metadata={"skipped": "no_submit_e2e_path"},
+            judge_unavailable_reason="agent took no_submit path on provider_to_payer_e2e",
+        )
+    else:
+        judge_output = _run_judge_session(
+            judge_input=judge_input,
+            trial_dir=trial_dir,
+            runner=runner,
+            timeout_seconds=judge_timeout_s,
+        )
 
-    # Merge rubric verdicts into the check map (mirrors task_runtime behaviour).
-    for rid, verdict in judge_output.verdicts.items():
-        merged_checks[f"judge.{rid}"] = bool(verdict.passed)
-    for rid in judge_output.degraded_rubric_ids:
-        merged_checks[f"judge.{rid}"] = NOT_APPLICABLE
+        # Missing required judgements invalidate scoring, as in task_runtime.
+        for rid, verdict in judge_output.verdicts.items():
+            merged_checks[f"judge.{rid}"] = bool(verdict.passed)
+        for rid in judge_output.degraded_rubric_ids:
+            merged_checks[f"judge.{rid}"] = UNAVAILABLE
+        for rubric in rubrics:
+            rid = rubric["rubric_id"]
+            if rid not in judge_output.verdicts:
+                merged_checks[f"judge.{rid}"] = UNAVAILABLE
 
+    for rid in unavailable:
+        merged_checks[f"judge.{rid}"] = UNAVAILABLE
     scorecard = build_scorecard(merged_checks)
+    scorecard.update(e2e_score_metadata(exported, expectations))
+    scorecard["not_applicable_rubrics"] = waived
+    scorecard["unavailable_rubrics"] = unavailable
     scorecard["verifier_contract"] = expectations.get("verifier_contract")
     scorecard["rubric_items"] = [
         {
@@ -252,6 +335,7 @@ def _write_pa_um_outputs(
     judge_output: JudgeOutput,
 ) -> None:
     (out_dir / "scorecard.json").write_text(json.dumps(scorecard, indent=2))
+    write_validity(scorecard, out_dir / "validity.json")
     (out_dir / "verdicts.json").write_text(
         json.dumps(
             {
@@ -272,8 +356,9 @@ def _write_pa_um_outputs(
 
 
 def _load_optional_world(expectations_path: Path) -> dict[str, Any] | None:
-    world_path = expectations_path.with_name("world.json")
-    return json.loads(world_path.read_text()) if world_path.is_file() else None
+    from chi_bench.verifier.task_runtime import _load_optional_world as load_world
+
+    return load_world(expectations_path)
 
 
 def _load_instruction_text(expectations_path: Path) -> str:
@@ -335,15 +420,25 @@ def _write_cm_scorecard(
 ) -> None:
     """Minimal CM scorecard writer -- thin slice of ``task_runtime._run_cm_verifier``.
 
-    Intentionally narrower than the production scorecard (no ``checks``
-    namespace, no ``failed_checks`` list) because the rejudge flow only
-    needs the fields a delta-report consumer cares about: reward, gate
-    pass/fail, rubric aggregates, per-rubric verdicts, judge provenance.
+    Required missing verdicts use the live verifier's unavailable status;
+    an intentional gate-failed skip remains a valid scored failure.
     """
     from chi_bench.verifier.stages.cm_rubric import compute_cm_reward
+    from chi_bench.verifier.stages._base import UNAVAILABLE
 
     rubric_total = _rubric_total(expectations)
-    yes_count = sum(1 for v in judge_output.verdicts.values() if v.passed)
+    rubric_ids = expectations.get("rubric_prompts") or {}
+    checks = {}
+    if gate_pass:
+        for rid in rubric_ids:
+            verdict = judge_output.verdicts.get(rid)
+            checks[f"cm_rubric.{rid}"] = (
+                UNAVAILABLE
+                if verdict is None or rid in judge_output.degraded_rubric_ids
+                else bool(verdict.passed)
+            )
+    invalid_checks = [name for name, status in checks.items() if status == UNAVAILABLE]
+    yes_count = sum(status is True for status in checks.values())
     reward = compute_cm_reward(
         gate_pass=gate_pass,
         rubric_yes_count=yes_count,
@@ -366,9 +461,13 @@ def _write_cm_scorecard(
 
     scorecard = {
         "verifier_contract": expectations.get("verifier_contract", "cm_v1"),
-        "reward": reward.binary,
-        "binary_reward": reward.binary,
-        "fractional_reward": reward.fractional,
+        "reward": 0.0 if invalid_checks else reward.binary,
+        "binary_reward": 0.0 if invalid_checks else reward.binary,
+        "fractional_reward": None if invalid_checks else reward.fractional,
+        "scoring_status": "invalid" if invalid_checks else "valid",
+        "invalid_checks": invalid_checks,
+        "checks": checks,
+        "failed_checks": [name for name, status in checks.items() if status is False],
         "gate_pass": gate_pass,
         "gate_results": gate_results,
         "rubric_yes_count": yes_count,
@@ -378,24 +477,7 @@ def _write_cm_scorecard(
         "judge_unavailable_reason": judge_output.judge_unavailable_reason,
     }
 
-    (out_dir / "scorecard.json").write_text(json.dumps(scorecard, indent=2))
-    (out_dir / "verdicts.json").write_text(
-        json.dumps(
-            {
-                rid: {
-                    "pass": v.passed,
-                    "explanation": v.explanation,
-                    "evidence_refs": list(v.evidence_refs),
-                    "structured_evidence": v.structured_evidence,
-                }
-                for rid, v in judge_output.verdicts.items()
-            },
-            indent=2,
-        )
-    )
-    (out_dir / "judge_session_metadata.json").write_text(
-        json.dumps(judge_output.session_metadata, indent=2)
-    )
+    _write_pa_um_outputs(out_dir, scorecard, judge_output)
 
 
 def _rubric_total(expectations: dict) -> int:

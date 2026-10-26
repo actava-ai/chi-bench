@@ -73,8 +73,8 @@ def agent_path_for_e2e(
     """Compute the dual-viewpoint agent_path for an e2e task, used by stage NA gates.
 
     Returns one of:
-    - "submit": agent finalized submit_pa AND submission_packet exists
-    - "no_submit": agent finalized do_not_submit or gather_more_evidence
+    - "submit": physical target submission_packet exists, regardless of disposition
+    - "no_submit": no target packet; finalized do_not_submit or gather_more_evidence
     - "submit_incomplete": finalized submit_pa, no packet (defensive)
     - "no_decision": no determination at all (defensive)
     - "not_e2e": task_kind is not provider_to_payer_e2e
@@ -281,6 +281,13 @@ def resolved_target_case_id(
             case_id = normalized_str(exported_target_case.get("id"))
             if case_id:
                 return case_id
+
+        from chi_bench.core.e2e_protocol import is_workflow_v2
+
+        if is_workflow_v2(exported, expectations):
+            # An ambiguous or missing request target cannot be resolved by
+            # choosing whichever physical packet happens to be last.
+            return resolve_provider_new_referral_targets(exported, expectations).case_id or ""
 
         submissions = exported.get("submission_packets")
         if isinstance(submissions, list):

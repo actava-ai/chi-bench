@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from chi_bench.core.e2e_protocol import is_workflow_v2
+
 from ._base import CheckStatus, StageResult, StageVerifier, mark_not_applicable
 from ._helpers import filter_by_case_id, has_audit_action
 from ._provider_actions import NON_SUBMIT_PROVIDER_ACTIONS, expected_provider_final_action
@@ -65,6 +67,7 @@ class ProviderPreSubmissionVerifier(StageVerifier):
         checks: dict[str, CheckStatus] = {}
         expected_final_action = expected_provider_final_action(self.expectations)
         is_expected_non_submit = expected_final_action in NON_SUBMIT_PROVIDER_ACTIONS
+        workflow_v2 = is_workflow_v2(self.exported, self.expectations)
 
         if is_expected_non_submit:
             latest_determination = _latest_provider_determination(provider_determinations)
@@ -105,7 +108,7 @@ class ProviderPreSubmissionVerifier(StageVerifier):
             for document in documents
             if str(document.get("kind") or "").strip()
         }
-        if is_expected_non_submit:
+        if is_expected_non_submit and not workflow_v2:
             mark_not_applicable(checks, "provider_pre_submission.required_documents_present")
         elif required_document_kinds:
             checks["provider_pre_submission.required_documents_present"] = set(

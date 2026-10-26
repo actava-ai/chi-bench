@@ -276,7 +276,7 @@ def test_aggregate_keeps_reward_when_harbor_020_agent_result_is_null(tmp_path):
     assert rows[0]["agent"] == "openai-agents"
     assert rows[0]["n_tasks"] == 1
     assert rows[0]["pass_at_1"] == 1.0
-    assert rows[0]["mean_cost_usd"] == 0.0
+    assert rows[0]["mean_cost_usd"] is None
     assert rows[0]["mean_walltime_s"] == 0.0
 
 

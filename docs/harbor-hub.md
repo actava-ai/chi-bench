@@ -1,111 +1,125 @@
-# Publishing chi-Bench to the Harbor hub
+# chi-Bench Harbor exports
 
-chi-Bench is listed on the [Harbor hub](https://hub.harborframework.com/datasets/actava-ai/chi-bench)
-as `actava-ai/chi-bench` so Harbor users can discover and run it with
-`harbor run -d actava-ai/chi-bench@<tag>`.
+New exports from this checkout use Harbor 0.20.0's native separate-verifier flow.
+The exporter creates a clean agent image, a trusted simulator sidecar, and a
+separate verifier image. Generated tasks use schema version 1.2 and preserve the
+source domain and agent and verifier timeout values.
 
-## How hub tasks run (fetch-at-build, no hosted image)
+An existing published Hub archive retains the build definitions included in
+that release. Updating this exporter does not replace a published task archive.
+Use a newly exported package to obtain this layout; do not infer that an older
+`actava-ai/chi-bench@<tag>` archive has these isolation properties.
 
-The hub does **not** host a chi-Bench image and chi-Bench does **not** push one
-to any registry. Instead, each exported task ships a self-contained
-`environment/Dockerfile` (`docker/Dockerfile.harbor`):
+## Runtime flow
 
-**At build time** (Harbor builds the image on `harbor run`, secret-free):
-1. `git clone`s the `chi_bench` package from this public GitHub repo;
-2. `hf download`s the task fixtures/worlds from the public dataset
-   (`actava/chi-bench`);
-3. arranges them into the `/opt/chi-bench` layout the server expects.
+1. Harbor builds the `agent` and `simulator` targets in
+   `environment/Dockerfile`. The trusted targets fetch chi-Bench source and the
+   dataset at build time. The agent target starts from the shared toolchain
+   base and copies only its runner modules and dependencies. Claude Code
+   defaults to version `2.1.219` through `CLAUDE_CODE_VERSION`.
+2. The simulator downloads the gated handbook with `HF_TOKEN`, starts the HTTP
+   and MCP servers, and publishes regular copies of the public instructions,
+   tool reference, and handbook. Its health check requires the public-assets
+   ready marker. Main starts after the simulator becomes healthy.
+3. Main shares the simulator's network namespace and the workflow workspace at
+   `/logs/artifacts/workspaces`. Public assets are mounted read-only. The raw
+   artifact mount exposes only `/srv/chi-bench/raw/artifacts` at
+   `/agent-raw/artifacts:ro`; the raw chart database remains in the simulator.
+   New-referral provider tasks omit the agent's raw-artifact mount.
+4. In separate-verifier mode, Harbor requests that main stop before running simulator collection hooks. The trusted simulator alone has a Docker socket mount for checking its own Compose project's main-container status. The collector requires exactly one stopped main, closes tool admission, waits for already admitted work to finish, and snapshots authenticated `/export` into `/logs/artifacts/final-state.json`. It checks main's stopped state again before accepting the snapshot.
+5. Harbor collects the frozen state, workspaces, and public handbook from the
+   simulator. These entries have distinct host destinations under `trusted/`.
+   The main publish-directory entry excludes the workspace and frozen-state
+   names. The control token is outside every artifact and shared mount.
+6. Harbor builds a separate container from `tests/Dockerfile`, using the trusted
+   `verifier` target with an empty entrypoint. It restores collected files at
+   their original source paths, including `/logs/artifacts/workspaces`, and
+   runs `/tests/test.sh`. This container does not bootstrap a simulator.
+   Standard and Marathon verifiers both require `--exported-state-input`.
+   A missing, empty, invalid, or unconfirmed frozen-state file prevents scoring. The verifier requires the collector's stopped-main proof.
 
-**At container start** (wrapper entrypoint, `harbor-entrypoint.sh`):
-4. downloads the **gated** managed-care handbook
-   (`actava/managed-care-operations-handbook`) into
-   `/workspace/skills/` using `HF_TOKEN` from the container env, then hands off
-   to the real chi-Bench entrypoint.
+Harbor 0.20.0 treats stop and collect-hook failures as warnings. The trusted collector therefore checks Docker's actual container state independently. A running main, unavailable Docker status, ambiguous container identity, or unfinished admitted call leaves no accepted snapshot. An older snapshot is removed before collection starts. The generated verifier requires the stopped-main proof and cannot fall back to an agent-written file or live unauthenticated export.
 
-The trial is selected by `CHI_BENCH_TASK_ID` (set in
-`task.toml [environment.env]`), so the Dockerfile is **identical across all
-tasks**.
+The trusted simulator's socket bind defaults to `/var/run/docker.sock`. Set `CHI_BENCH_DOCKER_SOCKET` when the daemon uses another Unix socket path. The agent never receives this bind. The collector issues only status queries; a read-only socket bind does not itself restrict Docker API operations. This requirement applies to native Hub exports. The source Docker/Modal runner checks its own stop operation through its existing host-side transport.
 
-> **Why the handbook is fetched at runtime, not build time.** Harbor's docker
-> environment builds from a compose file with only `build: context` — it passes
-> **no build secrets**. The handbook is `gated: manual` on HF, so a build-time
-> `hf download` would 401 with no way to inject a token. Fetching it in the
-> entrypoint lets Harbor forward an approved `HF_TOKEN` as a normal runtime env
-> var instead.
->
-> **Running therefore requires handbook access.** Harbor resolves `${HF_TOKEN}`
-> (declared in each task's `task.toml [environment.env]`) from your shell or
-> `--env-file` and injects it into the container via the task's
-> `environment/docker-compose.yaml`. `-y` auto-confirms the "load from env"
-> prompt; `-i` selects one task (omit to run all 78):
-> ```bash
-> HF_TOKEN=<your-approved-hf-token> harbor run \
->     -d actava-ai/chi-bench@<tag> \
->     -i actava-ai/pa_t016_t016_o001_p01_p2p_payer \
->     -a <agent> -m <model> -y
-> ```
-> Note: the run flag is **not** `-e` (that is the environment *type*) and
-> `--ae`/`--ek` do **not** reach the entrypoint — the `${HF_TOKEN}` template +
-> compose `environment:` block is the only path that delivers it to PID1.
->
-> For `-a claude-code`, pass the **bare** Anthropic model id (e.g.
-> `claude-opus-4-7`, `claude-sonnet-4-6`) — the `anthropic/` prefix 404s because
-> `harbor run` forwards the model verbatim to the native CLI. The `vendor/`
-> prefix form is only for OpenRouter-routed agents (codex / openai-agents).
-> Without an approved token the container exits early (code 78). The public
-> dataset (`actava/chi-bench`) needs no token.
+Compose injects its resolved project name into the trusted simulator as `CHI_BENCH_COMPOSE_PROJECT`. The collector uses that exact project and the `main` service label to find the agent. It does not infer container identity from a hostname, which can refer to the host under host networking. A missing project identity prevents collection.
 
-## What ships in a hub task (and what does not)
+## Credentials and files
 
-Each task archive contains only `task.toml`, `instruction.md`,
-`environment/Dockerfile`, `tests/test.sh`, and `README.md`. It carries **no
-`solution/`, no `fixtures/`, no expectations** — the scoring contract is baked
-into the image at build time and the entrypoint deliberately withholds it from
-the agent (no `/fixtures` symlink).
+Set `HF_TOKEN` and simulator/judge provider credentials in the runner's host
+environment. Compose forwards them to the simulator. The separate verifier
+receives its credentials during the verifier phase. It normally receives the
+collected public handbook; `HF_TOKEN` allows a handbook download if that
+artifact is unavailable. Agent credentials follow the selected Harbor harness's
+own configuration.
 
-The verifier runs in the same container during Harbor's verifier phase:
+The task's `[environment.env]` contains public task and tool configuration.
+Do not put simulator or judge secrets there: Harbor 0.20.0 copies those entries
+into main's startup environment. The generated `[verifier.env]` is separate.
+The control token is generated inside the simulator and never enters main.
 
-- standard tasks: `python -m chi_bench.verifier.task_runtime verify --expectations-path /opt/chi-bench/tasks/$CHI_BENCH_TASK_ID/fixtures/expectations.json`
-- marathon sessions: `python -m chi_bench.verifier.session_verifier --fixtures-dir … --output-dir /logs/verifier` (their `CHI_BENCH_TASK_ID` is the slash path `marathon/<domain>`).
+A generated task archive contains:
 
-Both write the binary reward to `/logs/verifier/reward.json`.
+```text
+task.toml
+instruction.md
+README.md
+environment/
+  Dockerfile
+  docker-compose.yaml
+tests/
+  Dockerfile
+  test.sh
+```
 
-## Regenerating + publishing
+The archive carries no fixture, expectation, solution, or private token files.
+Trusted image stages fetch the scoring materials. The agent image does not
+inherit those stages. Both verifier launchers write their reward into
+`/logs/verifier/reward.json`; Marathon also writes its session scorecard.
+
+## Export and check locally
+
+Use an empty output location:
 
 ```bash
-# 1. Export the 78 self-contained Harbor task dirs from the dataset tree
-#    (75 single-domain + 3 marathon; prior_auth_e2e is intentionally excluded)
 uv run python scripts/export_harbor_tasks.py \
-    --data-root data --out logs/harbor_export --org actava-ai
+    --data-root data --out logs/harbor_export --org actava-ai \
+    --source-revision "$SOURCE_COMMIT" \
+    --dataset-revision "$DATASET_COMMIT" \
+    --handbook-revision "$HANDBOOK_COMMIT"
 
-# 2. Build the dataset manifest + publish (tasks first, then the dataset)
-cd logs/harbor_export
-uvx harbor auth login                       # one-time, GitHub flow
-uvx harbor init "actava-ai/chi-bench" --dataset --description "…" --author "actava-ai"
-uvx harbor add tasks --scan
-uvx harbor publish tasks --private          # publish the 78 task packages
-uvx harbor publish . -t v1.0.0 --private --no-tasks   # publish the dataset
-# verify the listing, then flip to public:
-#   uvx harbor dataset visibility actava-ai/chi-bench --public
+uv run pytest tests/unit/test_export_harbor_tasks.py
 ```
 
-`--data-root` can point at a local HF clone of `actava/chi-bench`; it reads the
-`prior_auth_um/`, `prior_auth_provider/`, `care_management/`, and `marathon/`
-families (plus the optional `tasks.jsonl` metadata sidecar). Per-task timeouts
-are copied from each source `task.toml`, so marathon sessions keep their long
-`agent=36000s` / `verifier=18000s` budgets.
+`--data-root` accepts the downloaded dataset tree. The exporter reads
+`prior_auth_um`, `prior_auth_provider`, `care_management`, and the three Marathon
+session directories. A complete tree produces 75 single-domain tasks and three
+Marathon tasks. Optional `tasks.jsonl` supplies viewer metadata; Marathon rows
+are matched by their dataset path, independently of their session IDs.
 
-## E2E is not exported to the hub
+All three revisions must be full immutable 40-character commit SHAs.
+`CHI_BENCH_REF`, `CHI_BENCH_DATASET_REV`, and `CHI_BENCH_HANDBOOK_REV` carry them
+through the generated builds. There is no moving `main`, tag, or unversioned
+handbook fallback. The export CLI refuses dirty, nonmatching or unpublished
+source checkouts. Source-runner experiments can still test local changes;
+they do not establish acceptance of a published Hub package.
 
-`prior_auth_e2e` (23 provider↔payer arena tasks) is deliberately **excluded**
-from the hub export. The arena needs the two-agent `dual-pa-e2e` harness
-(`chi_bench.experiment.agents.dual_pa_e2e_harness:DualPaE2EHarness`) which
-sequences a provider phase → relay → payer phase in one trial — a stock
-single-agent `harbor run` cannot drive it. Run E2E from this repo / the HF
-dataset instead:
+For a compatible newly exported Hub package:
 
 ```bash
-cb experiment run --dataset data/prior_auth_e2e/tasks/<id> \
-    --agent dual-pa-e2e --provider-model <m> --payer-model <m>
-# or the full arena: ./scripts/run_table.sh table2   (configs/experiments/table2_e2e_arena.yaml)
+HF_TOKEN=<approved-token> harbor run \
+    -d actava-ai/chi-bench@<tag> \
+    -i actava-ai/<task> \
+    -a <agent> -m <model> -y
 ```
+
+With the stock `claude-code` harness, use the bare native model ID. Credential
+and environment flags follow Harbor's selected harness. Exporting and testing
+locally do not publish or replace a Hub release. Publish a new task and dataset
+version only through the organizer's release workflow.
+
+## E2E
+
+The exporter excludes `prior_auth_e2e`. Those tasks require the source runner's
+`dual-pa-e2e` orchestrator to sequence the provider and payer phases. Run them
+through the source workflow described in [the CLI reference](cli.md).

@@ -34,10 +34,10 @@ comparisons are honest.
 
 from __future__ import annotations
 
-_JUDGE_PROMPT_VERSION_PA_PROVIDER = "2026-04-28-pa-provider-v3"
-_JUDGE_PROMPT_VERSION_UM_PAYER = "2026-04-28-um-payer-v3"
-_JUDGE_PROMPT_VERSION_CM = "2026-04-28-cm-v4"
-_JUDGE_PROMPT_VERSION_CM_V4 = "2026-04-28-cm-v4-v3"
+_JUDGE_PROMPT_VERSION_PA_PROVIDER = "2026-10-24-pa-provider-v4-strict-schema"
+_JUDGE_PROMPT_VERSION_UM_PAYER = "2026-10-24-um-payer-v4-strict-schema"
+_JUDGE_PROMPT_VERSION_CM = "2026-10-24-cm-v5-strict-schema"
+_JUDGE_PROMPT_VERSION_CM_V4 = "2026-10-24-cm-v4-v4-strict-schema"
 
 # Backward-compat alias. New code should call ``get_judge_prompt_version(contract)``.
 _JUDGE_PROMPT_VERSION = _JUDGE_PROMPT_VERSION_PA_PROVIDER
@@ -65,8 +65,15 @@ _CITATION_AND_OUTPUT = """\
 Citation discipline: in each verdict's explanation, cite the specific file
 path and line range (e.g., "policies/06__bariatric-surgery.md §4.3",
 "agent_outputs/stage_md_review.json: decision=approve", or
-"agent_outputs/stage_chart_review.json:9-16"). Verdicts without citations
-are lower-quality and may be rejected downstream.
+"agent_outputs/stage_chart_review.json:9-16"). Each verdict must have a
+nonempty explanation and evidence_refs must be a nonempty list of nonempty strings.
+For an absent required action or record, cite the relevant inspected stage file
+and identify the missing item. Do not invent a source to satisfy this requirement.
+
+Return exactly the rubric IDs listed in rubrics.json, each once. Do not omit or
+add IDs. Use JSON true or false for pass; strings, numbers and null are invalid.
+Do not repeat JSON keys anywhere. An incomplete or malformed response invalidates
+the evaluation rather than awarding the agent a pass or a failure.
 
 Output schema (verdicts.json):
 {
@@ -554,7 +561,41 @@ Grading boundaries:
 # Dispatch
 # ---------------------------------------------------------------------------
 
+E2E_WORKFLOW_SYSTEM_PROMPT = f"""\
+You audit a provider-to-payer prior-authorization workflow under protocol workflow_v2.
+Grade the two role scopes separately using each rubric's stated evidence boundary.
+
+For Provider source-fidelity rubrics, compare the actual request in
+agent_outputs/stage_provider_submission.json against original chart evidence in
+provider_source_context/. Its request_contract.json supplies the accepted request
+identity fields. Grade accurate representation and source fidelity. Do not grade
+the Provider's standalone submit/no-submit choice or approval likelihood. The
+workflow requires handoff even when standalone Provider advice says not to submit.
+
+For payer rubrics, inspect only actual submitted documents in source_context/,
+the payer stage outputs, and governing policies. Provider-only chart documents
+must not supply missing evidence to the payer. Preserve uncertainty and distinguish
+pending requests for information from final approved/denied determinations.
+Follow each rubric's grading scope and evidence requirements. The adapter has
+removed nurse/MD rubrics only when a source-authorized approval route is evidenced.
+
+{_WORKSPACE_CONTENTS}
+
+Read rubrics.json first. Investigate each applicable rubric and cite the specific
+source documents and agent records used. Do not award source fidelity when no
+source evidence is available. Write verdicts.json after evaluating all rubrics.
+
+{_VERDICT_DISCIPLINE}
+
+{_CITATION_AND_OUTPUT}
+"""
+
+
 _CONTRACT_TO_PROMPT: dict[str, tuple[str, str]] = {
+    "e2e_workflow_v2": (
+        E2E_WORKFLOW_SYSTEM_PROMPT,
+        "2026-10-24-e2e-workflow-v3-strict-schema",
+    ),
     "contract_v3": (UM_PAYER_SYSTEM_PROMPT, _JUDGE_PROMPT_VERSION_UM_PAYER),
     "contract_v4": (PA_PROVIDER_SYSTEM_PROMPT, _JUDGE_PROMPT_VERSION_PA_PROVIDER),
     "contract_v5": (PA_PROVIDER_SYSTEM_PROMPT, _JUDGE_PROMPT_VERSION_PA_PROVIDER),

@@ -130,7 +130,7 @@ class CMOutreachService:
             self._persona_resolved = True
         return self._persona_contract
 
-    def _resolve_persona_contract(self):
+    def _resolve_persona_contract(self, case_id: str | None = None):
         """Load the PatientPersonaContract from the task manifest.
 
         Returns None when the manifest is absent or does not carry
@@ -139,7 +139,11 @@ class CMOutreachService:
         crash on malformed persona data — the downstream simulator
         simply behaves as pre-bug cooperative default in that case.
         """
-        manifest = getattr(self.ctx, "_manifest", None)
+        manifest = (
+            self.ctx.cm_manifest_for_case(case_id)
+            if case_id is not None
+            else getattr(self.ctx, "_manifest", None)
+        )
         if manifest is None:
             return None
         persona_payload = getattr(manifest, "persona_contract", None)
@@ -422,7 +426,7 @@ class CMOutreachService:
         if simulator is None:
             from chi_bench.conversation.patient_simulator import PatientSimulator
 
-            persona_contract = self.persona_contract  # lazy-resolved
+            persona_contract = self._resolve_persona_contract(session.case_id)
             simulator = PatientSimulator(
                 scenario=scenario,
                 clinical_context=clinical_context,

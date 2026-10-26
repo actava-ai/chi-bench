@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
+from chi_bench.server.workspace_response import workspace_file_response
 
 from chi_bench.server.routers.models import (
     ArtifactIdBody,
@@ -52,13 +53,8 @@ def create_workspace_router(service) -> APIRouter:
         )
 
     @router.get("/artifacts/{artifact_id}/content", include_in_schema=False)
-    def artifact_content(artifact_id: str) -> FileResponse:
+    def artifact_content(artifact_id: str) -> StreamingResponse:
         artifact, path = ctx.workspace.get_workspace_artifact_file(artifact_id)
-        return FileResponse(
-            path,
-            media_type=artifact.mime_type,
-            filename=artifact.filename,
-            content_disposition_type="inline",
-        )
+        return workspace_file_response(ctx.workspace_root, path, artifact)
 
     return router

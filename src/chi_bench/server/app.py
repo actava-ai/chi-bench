@@ -15,6 +15,7 @@ from chi_bench.server.routers.common import create_common_router, register_excep
 from chi_bench.server.routers.cm import create_cm_router
 from chi_bench.server.routers.payer import create_payer_router
 from chi_bench.server.routers.provider import create_provider_router
+from chi_bench.server.role_gate import BusinessRoleMiddleware
 
 
 def create_unified_app(service: WorldService | None = None) -> FastAPI:
@@ -27,6 +28,7 @@ def create_unified_app(service: WorldService | None = None) -> FastAPI:
         service.close()
 
     app = FastAPI(title="ChiBench Unified Server", lifespan=lifespan)
+    app.add_middleware(BusinessRoleMiddleware)
 
     register_exception_handlers(app)
 

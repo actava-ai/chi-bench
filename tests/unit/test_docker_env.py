@@ -1,4 +1,4 @@
-import logging
+from harbor.models.trial.paths import TrialPaths
 
 import pytest
 from harbor.models.task.config import TaskConfig
@@ -70,6 +70,7 @@ def test_build_docker_run_argv_no_internet_adds_network_none():
 )
 async def test_start_uses_harbor_migrated_network_policy(
     monkeypatch,
+    tmp_path,
     allow_internet,
     expected_network_none,
 ):
@@ -77,21 +78,19 @@ async def test_start_uses_harbor_migrated_network_policy(
         task_config = TaskConfig.model_validate({"environment": {"allow_internet": allow_internet}})
     assert task_config.environment.allow_internet is None
 
-    environment = object.__new__(ChiBenchDockerEnvironment)
-    environment._image = "chi-bench:test"
-    environment._force_build_default = False
-    environment._host_env = {}
-    environment._container_name = None
-    environment._network_policy = task_config.environment.resolve_baseline()
-    environment._persistent_env = {}
-    environment.environment_name = "task"
-    environment.session_id = "task__trial__env"
-    environment.task_env_config = task_config.environment
-    environment.logger = logging.getLogger(__name__)
+    environment = ChiBenchDockerEnvironment(
+        environment_dir=tmp_path / "environment",
+        environment_name="task",
+        session_id="task__trial__env",
+        trial_paths=TrialPaths(tmp_path / "trial"),
+        task_env_config=task_config.environment,
+        network_policy=task_config.environment.resolve_baseline(),
+        host_env={},
+    )
 
     commands: list[list[str]] = []
 
-    async def fake_run_subprocess(argv, timeout_sec=None):
+    async def fake_run_subprocess(argv, timeout_sec=None, env=None):
         commands.append(argv)
         return ExecResult(stdout="", stderr="", return_code=0)
 
@@ -109,7 +108,8 @@ async def test_start_uses_harbor_migrated_network_policy(
     await environment.start(force_build=False)
 
     assert commands
-    has_network_none = ("--network", "none") in zip(commands[0], commands[0][1:])
+    create = next(a for a in commands if a[:2] == ["docker", "create"])
+    has_network_none = ("--network", "none") in zip(create, create[1:])
     assert has_network_none is expected_network_none
 
 

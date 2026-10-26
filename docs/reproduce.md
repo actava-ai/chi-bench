@@ -27,6 +27,11 @@ python scripts/aggregate.py \
 
 ## E2E arena — paper Table 3
 
+The commands below now use the current `workflow_v2` verifier and execution
+protocol. They evaluate the original tasks under the current contract; they do
+not reproduce the historical E2E paper scores. Old results remain read-only and
+cannot be mixed into current aggregates.
+
 ```bash
 ./scripts/run_table.sh table2
 python scripts/aggregate.py --trials-dir logs/experiments/table2_e2e_arena --out-csv logs/table2.csv

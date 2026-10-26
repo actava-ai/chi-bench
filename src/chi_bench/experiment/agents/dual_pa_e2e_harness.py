@@ -41,6 +41,8 @@ from chi_bench.experiment.agents.dual_pa_e2e_state import (
     target_case_status,
 )
 from chi_bench.experiment.agents.openai_agents_harness import OpenAIAgentsHarness
+from chi_bench.core.e2e_protocol import e2e_protocol
+from chi_bench.core.p2p_evidence import RelayP2PEvidence
 from chi_bench.core.p2p_session import (
     DIRECT_P2P_SESSION_AUDIT_ACTIONS as _DIRECT_P2P_SESSION_AUDIT_ACTIONS,
     session_has_direct_usage as _session_has_direct_usage,
@@ -150,6 +152,17 @@ def _phase_instruction(
             "evidence when needed, and respond using auth.respond_to_pend."
         ),
     }
+    if e2e_protocol(dict(exported)) == "workflow_v2" and phase == "provider_submit":
+        objectives[phase] = (
+            "Protocol workflow_v2: handoff is mandatory. Create or adopt the target order, "
+            "assemble a truthful request from available chart evidence, identify gaps, and "
+            "call auth.submit_authorization with the best available packet even when the "
+            "standalone task asks you to decide whether to submit. This workflow objective "
+            "takes precedence over standalone submit/no-submit instructions. Do not invent "
+            "evidence or claim clinical eligibility. Record your Provider assessment with "
+            "auth.finalize_provider_determination when appropriate; payer handoff does not "
+            "depend on a submit_pa disposition. The separate payer agent reviews the actual packet."
+        )
     objective = objectives.get(phase)
     if objective is None:
         raise ValueError(f"Unsupported E2E state-machine phase: {phase!r}")
@@ -386,18 +399,12 @@ class DualPaE2EHarness(BaseInstalledAgent):
         return env
 
     async def _agent_get_json(self, environment: BaseEnvironment, url: str) -> dict[str, Any]:
-        result = await self.exec_as_agent(
-            environment,
-            command=(
-                "python -c "
-                + shlex.quote(
-                    "import urllib.request\n"
-                    f"with urllib.request.urlopen({url!r}, timeout=30) as response:\n"
-                    "    print(response.read().decode())"
-                )
-            ),
-        )
-        return _json_from_stdout(result)
+        """Read management state through the trusted host transport."""
+        if not hasattr(environment, "control_request"):
+            raise RuntimeError(
+                "E2E requires an isolated environment with trusted control transport"
+            )
+        return await environment.control_request(urlparse(url).path)
 
     async def _agent_post_json(
         self,
@@ -405,27 +412,11 @@ class DualPaE2EHarness(BaseInstalledAgent):
         url: str,
         payload: Mapping[str, Any],
     ) -> dict[str, Any]:
-        result = await self.exec_as_agent(
-            environment,
-            command=(
-                "python -c "
-                + shlex.quote(
-                    "import os\n"
-                    "import urllib.request\n"
-                    "body = os.environ['E2E_HTTP_BODY'].encode()\n"
-                    "request = urllib.request.Request(\n"
-                    f"    {url!r},\n"
-                    "    data=body,\n"
-                    "    headers={'Content-Type': 'application/json'},\n"
-                    "    method='POST',\n"
-                    ")\n"
-                    "with urllib.request.urlopen(request, timeout=30) as response:\n"
-                    "    print(response.read().decode())"
-                )
-            ),
-            env={"E2E_HTTP_BODY": json.dumps(payload)},
-        )
-        return _json_from_stdout(result)
+        if not hasattr(environment, "control_request"):
+            raise RuntimeError(
+                "E2E requires an isolated environment with trusted control transport"
+            )
+        return await environment.control_request(urlparse(url).path, dict(payload))
 
     async def _export_state(self, environment: BaseEnvironment, http_base: str) -> dict[str, Any]:
         exported = await self._agent_get_json(environment, f"{http_base}/export")
@@ -440,7 +431,7 @@ class DualPaE2EHarness(BaseInstalledAgent):
     ) -> dict[str, Any]:
         return await self._agent_post_json(
             environment,
-            f"{http_base}/payer/workspace/write_artifact",
+            f"{http_base}/_admin/p2p_relay_transcript",
             payload,
         )
 
@@ -494,6 +485,7 @@ class DualPaE2EHarness(BaseInstalledAgent):
         mcp_url: str,
         model_name: str | None,
     ) -> None:
+        await environment.control_request("/_admin/agent_role", {"role": role})
         marker_phase = logical_phase(role_phase)
         http_base = _http_base_from_mcp_url(mcp_url)
         case_id = self._target_case_id_or_empty()
@@ -897,11 +889,9 @@ class DualPaE2EHarness(BaseInstalledAgent):
                 output_path=container_output_path,
                 repair_error=repair_error,
             )
-            # The relay output path is encoded inside ``relay_instruction``
-            # (built by ``build_relay_instruction``); the agent's FS tool
-            # writes the JSON itself, then ``load_relay_turn`` reads the
-            # host-side mirror. _run_role_phase has no other use for the
-            # path, so we don't pass it through the dispatch signature.
+            # The agent writes inside its container. Harbor's final artifact
+            # collection has not run yet, so explicitly transfer this turn
+            # before parsing it on the host.
             await self._run_role_phase(
                 environment=environment,
                 role=role,
@@ -911,6 +901,14 @@ class DualPaE2EHarness(BaseInstalledAgent):
                 model_name=model_name,
             )
             try:
+                exists = await self.exec_as_agent(
+                    environment, command=f"test -f {shlex.quote(container_output_path)}"
+                )
+                if exists.return_code == 1:
+                    raise RelayOutputError("relay output file missing in agent environment")
+                if exists.return_code:
+                    raise RuntimeError("Cannot inspect the agent's relay output file")
+                await environment.download_file(container_output_path, host_output_path)
                 return load_relay_turn(host_output_path, expected_actor=role)  # type: ignore[arg-type]
             except RelayOutputError as exc:
                 if attempt + 1 >= attempts:
@@ -926,12 +924,17 @@ class DualPaE2EHarness(BaseInstalledAgent):
         http_base: str,
         transcript: RelayTranscript,
     ) -> None:
+        # Validate the complete host-collected scoring receipt before sending
+        # it to trusted storage; no position may be recovered from shared files.
+        receipt = RelayP2PEvidence.model_validate(transcript.to_payload())
+        payload = workspace_transcript_payload(transcript)
+        payload["content"] = receipt.model_dump_json(indent=2)
         path = self.logs_dir / "e2e_relay" / transcript.request_id / "transcript.json"
         transcript.write(path)
         await self._write_workspace_transcript(
             environment,
             http_base,
-            workspace_transcript_payload(transcript),
+            payload,
         )
 
     def _verify_no_p2p_bypass_after_relay_turn(
@@ -1045,8 +1048,9 @@ class DualPaE2EHarness(BaseInstalledAgent):
         http_base = _http_base_from_mcp_url(provider_mcp_url)
         exported = await self._export_state(environment, http_base)
 
-        # Checkpoint 1: provider made any final_action decision yet?
-        if not _has_provider_decision(exported):
+        # Read protocol only from trusted server export, never model-controlled env.
+        protocol = e2e_protocol(exported)
+        if not _has_provider_decision(exported) and not has_provider_submission(exported):
             await self._run_role_phase(
                 environment=environment,
                 role="provider",
@@ -1058,54 +1062,21 @@ class DualPaE2EHarness(BaseInstalledAgent):
                 model_name=self.provider_model,
             )
             exported = await self._export_state(environment, http_base)
-            if not _has_provider_decision(exported):
-                # Agent skipped auth.finalize_provider_determination entirely.
-                # If a submission_packet exists, treat it as an implicit submit_pa
-                # and continue to the payer phase — the tool docstring does not
-                # require finalize to precede submit, so penalising via early-exit
-                # is too strict for the E2E harness.
-                # judgment_path will still fail in the verifier (no determination
-                # record), so the score accurately reflects the missing step.
-                if not has_provider_submission(exported):
-                    # Truly-empty agent path: no determination, no submission.
-                    no_action_case_id = target_case_id(exported)
-                    if no_action_case_id:
-                        await self._write_early_exit_marker(
-                            environment,
-                            http_base,
-                            no_action_case_id,
-                            {"final_action": "no_action"},
-                        )
-                    return
-                # Truly-empty agent path: no determination, no submission.
-                # Treat as graceful early-exit so the verifier always runs
-                # and scores the trial (agent_path = no_decision, judgment_path
-                # fails). Some trials may have a target_case_id (agent created
-                # a case but did nothing else); others may not — write the
-                # marker only when we have a case_id to attach it to.
-                no_action_case_id = target_case_id(exported)
-                if no_action_case_id:
+
+        # A physical target packet always proceeds to the separate payer agent,
+        # including historical mode with a missing or contradictory disposition.
+        if not has_provider_submission(exported):
+            decision = _provider_determination(exported)
+            if decision is None or decision.get("final_action") in {
+                "do_not_submit",
+                "gather_more_evidence",
+            }:
+                case_id = target_case_id(exported)
+                if case_id:
                     await self._write_early_exit_marker(
-                        environment,
-                        http_base,
-                        no_action_case_id,
-                        {"final_action": "no_action"},
+                        environment, http_base, case_id, decision or {"final_action": "no_action"}
                     )
                 return
-
-        # Checkpoint 2: dual-viewpoint early exit on do_not_submit / gather_more_evidence
-        decision = _provider_determination(exported)
-        if decision is not None and decision.get("final_action") in {
-            "do_not_submit",
-            "gather_more_evidence",
-        }:
-            case_id = target_case_id(exported)
-            if case_id:
-                await self._write_early_exit_marker(environment, http_base, case_id, decision)
-            return
-
-        # Checkpoint 3: submit_pa decided but submit_authorization not yet called
-        if not has_provider_submission(exported):
             await self._run_role_phase(
                 environment=environment,
                 role="provider",
@@ -1118,16 +1089,12 @@ class DualPaE2EHarness(BaseInstalledAgent):
             )
             exported = await self._export_state(environment, http_base)
             if not has_provider_submission(exported):
-                # Agent declared submit_pa via auth.finalize_provider_determination
-                # but never followed up with auth.submit_authorization. Write a
-                # graceful early-exit marker so the verifier can score
-                # agent_path=submit_incomplete (judgment_path fails, payer-side NA).
-                submit_incomplete_case_id = target_case_id(exported)
-                if submit_incomplete_case_id:
+                case_id = target_case_id(exported)
+                if case_id:
                     await self._write_early_exit_marker(
                         environment,
                         http_base,
-                        submit_incomplete_case_id,
+                        case_id,
                         {"final_action": "submit_pa_no_authorization"},
                     )
                 return
@@ -1135,6 +1102,12 @@ class DualPaE2EHarness(BaseInstalledAgent):
         max_cycles = int(self._resolved_flags.get("max_cycles", 6))
         for _ in range(max_cycles):
             status = target_case_status(exported)
+            if (
+                protocol == "workflow_v2"
+                and status == "pended_action_required"
+                and exported.get("e2e_episode_target_status") == status
+            ):
+                return
             if is_terminal_case_status(status):
                 return
 
@@ -1241,7 +1214,16 @@ class DualPaE2EHarness(BaseInstalledAgent):
                 result = self._parse_phase_result(current_phase_dir, phase_slug)
             except Exception as exc:
                 logger.debug("failed to parse dual-pa-e2e phase %s: %s", phase_slug, exc)
-                continue
+                role = self._role_from_phase_slug(phase_slug)
+                result = PhaseResult(
+                    phase_slug=phase_slug,
+                    role=role,
+                    runner=self.role_runner,
+                    model_name=self._model_for_role(role) or "",
+                    context=AgentContext(),
+                    trajectory_path=self._phase_trajectory_path(current_phase_dir, phase_slug),
+                    metrics_unavailable=True,
+                )
             results.append(result)
         self._phase_results = results
         return results

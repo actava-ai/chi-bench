@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import concurrent.futures
+import json
 import logging
 import os
 import re
@@ -72,6 +73,66 @@ def _forward_agent_keys(env: Mapping[str, str]) -> list[str]:
         if value:
             flags += ["--ae", f"{key}={value}"]
     return flags
+
+
+def _selected_agent_env(cfg: ExperimentConfig, env: Mapping[str, str]) -> dict[str, str]:
+    """Forward credentials for selected routes, plus explicit agent_env overrides."""
+    models = [(cfg.agent, cfg.model)]
+    if cfg.agent == "dual-pa-e2e":
+        models = [
+            (cfg.provider_agent or "claude-code", cfg.provider_model),
+            (cfg.payer_agent or "claude-code", cfg.payer_model),
+        ]
+    selected = {"GEMINI_CLI_TRUST_WORKSPACE"}
+    for agent, model in models:
+        vendor = (
+            model or ("openai/" if agent in ("openai-agents", "codex") else "anthropic/")
+        ).partition("/")[0]
+        if agent == "claude-code":
+            selected.update(("ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN"))
+        elif agent == "openai-agents":
+            if cfg.agent_kwargs.get("provider_route") == "tinker" or vendor == "thinkingmachines":
+                selected.add("TINKER_API_KEY")
+            elif env.get("OPENAI_BASE_URL") or vendor == "openai" or (model and "/" not in model):
+                selected.update(("OPENAI_API_KEY", "OPENAI_BASE_URL"))
+            else:
+                selected.add("OPENROUTER_API_KEY")
+        elif agent == "gemini-cli":
+            selected.update(("GOOGLE_API_KEY", "GEMINI_API_KEY"))
+        elif agent == "codex" or vendor in ("openai", "azure"):
+            selected.update(
+                (
+                    "OPENAI_API_KEY",
+                    "OPENAI_BASE_URL",
+                    "AZURE_OPENAI_API_KEY",
+                    "AZURE_OPENAI_ENDPOINT",
+                )
+            )
+        elif vendor == "anthropic":
+            selected.update(("ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN"))
+        elif vendor in ("google", "gemini"):
+            selected.update(("GOOGLE_API_KEY", "GEMINI_API_KEY"))
+        else:
+            prefix = {
+                "xai": "XAI",
+                "groq": "GROQ",
+                "deepseek": "DEEPSEEK",
+                "mistral": "MISTRAL",
+                "together": "TOGETHER",
+                "cohere": "COHERE",
+                "fireworks": "FIREWORKS",
+                "openrouter": "OPENROUTER",
+                "nvidia": "NVIDIA",
+            }.get(vendor)
+            if prefix:
+                selected.add(prefix + "_API_KEY")
+    # Explicit templates can refer to a gateway credential without copying
+    # unrelated host provider keys into the model's environment.
+    import re
+
+    for value in cfg.agent_env.values():
+        selected.update(re.findall(r"\$\{([A-Z][A-Z0-9_]*)", value))
+    return {key: value for key, value in env.items() if key in selected}
 
 
 class ModalPreflightError(RuntimeError):
@@ -159,38 +220,33 @@ def _inject_modal_task_id(text: str, task_id: str) -> str:
 
 
 def _mirror_task_for_modal(src_task_dir: Path, dst_task_dir: Path) -> None:
-    """Materialize a task directory into ``dst_task_dir``, rewriting task.toml.
+    """Materialize a task directory without changing task content.
 
-    File entries other than ``task.toml`` are symlinked to the original, but
-    directory entries are copied. Modal ``Image.add_local_dir`` does not walk
-    symlinked directories, and the sandbox entrypoint must see the custom
-    task's ``fixtures/`` at container startup.
+    Copy regular file contents rather than creating links into the host
+    checkout. The mirror is transferred to another filesystem, where those
+    host links cannot resolve and the public-asset publisher rejects them.
     """
     dst_task_dir.mkdir(parents=True, exist_ok=True)
-    task_id = src_task_dir.name
     for entry in src_task_dir.iterdir():
         dst_entry = dst_task_dir / entry.name
-        if entry.name == "task.toml":
-            dst_entry.write_text(_inject_modal_task_id(entry.read_text(), task_id))
-        elif entry.is_dir():
+        if entry.is_dir():
             shutil.copytree(entry, dst_entry, symlinks=False)
         else:
-            dst_entry.symlink_to(entry.resolve())
+            shutil.copy2(entry, dst_entry)
     # Harbor's TaskPaths.is_valid() requires an environment/ subdir to consider
     # a task discoverable. Chi-bench tasks are packaged for HF without one (the
-    # custom ChiBenchModalEnvironment builds from docker/Dockerfile.modal), so
+    # custom ChiBenchModalEnvironment builds from docker/Dockerfile), so
     # materialize an empty stub when the source lacks it.
     (dst_task_dir / "environment").mkdir(exist_ok=True)
 
 
 @contextmanager
 def _prepare_modal_dataset(dataset_path: str) -> Iterator[str]:
-    """Yield a dataset path with ``CHI_BENCH_TASK_ID`` injected into every task.toml.
+    """Yield a dataset path with environment stubs and unchanged task files.
 
     Accepts either a single-task directory (has ``task.toml``) or a parent
     directory containing multiple task subdirs. The returned path is a temp
-    tree of symlinks + rewritten task.toml files; the temp dir is removed on
-    exit.
+    tree of byte-preserved file copies; the temp dir is removed on exit.
     """
     src = Path(dataset_path).resolve(strict=True)
     tmp_root = Path(tempfile.mkdtemp(prefix="chi_bench-modal-"))
@@ -263,6 +319,7 @@ def run_experiment(
     modal_profile: str | None = None,
     modal_sandbox_timeout_secs: int | None = None,
     modal_force_build: bool | None = None,
+    e2e_protocol: str | None = None,
 ) -> None:
     """Run an experiment by shelling out to the Harbor CLI."""
     if config:
@@ -292,6 +349,11 @@ def run_experiment(
             ),
         )
 
+    if e2e_protocol is not None:
+        from chi_bench.core.e2e_protocol import validate_e2e_protocol
+
+        cfg.e2e_protocol = validate_e2e_protocol(e2e_protocol)
+
     if cfg.environment != "modal":
         modal_flags_set = (
             modal_profile is not None
@@ -302,6 +364,22 @@ def run_experiment(
             logger.warning("Modal-specific flags set but -e docker is active; ignoring.")
 
     _load_env(cfg.env_file)
+    # Reject unsupported protocol settings before backend preflight, dataset
+    # preparation, or trial-directory creation can cause side effects.
+    child_env = _build_child_env(cfg)
+    if cfg.dataset_content_sha256 is not None:
+        from chi_bench.experiment.content_identity import require_dataset_identity
+
+        if cfg.data_root is None:
+            raise ValueError("An accepted dataset identity requires data_root")
+        require_dataset_identity(cfg.data_root, cfg.dataset_domains, cfg.dataset_content_sha256)
+
+    # Preserve the real source root before Modal mirrors the selected tasks.
+    # Direct experiments remain usable without a submission identity.
+    if cfg.data_root is None:
+        from chi_bench.experiment.runtime_materials import infer_data_root
+
+        cfg.data_root = infer_data_root(Path(cfg.dataset))
 
     dataset_ctx: AbstractContextManager[str]
     if cfg.environment == "modal":
@@ -313,7 +391,6 @@ def run_experiment(
     with dataset_ctx as prepared_dataset:
         cfg.dataset = prepared_dataset
         _prepare_trials_dir(cfg.trials_dir)
-        child_env = _build_child_env(cfg)
         cmd = _build_harbor_command(cfg, env=child_env)
         redacted = _redact_command_for_log(cmd)
         print(f"Running: {redacted}")
@@ -346,6 +423,13 @@ def _build_child_env(cfg: ExperimentConfig) -> dict[str, str]:
     parser rejects dotted category paths, so we can't suppress them here.
     """
     child_env: dict[str, str] = dict(os.environ)
+    from chi_bench.core.e2e_protocol import validate_e2e_protocol
+
+    child_env["CHI_BENCH_E2E_PROTOCOL"] = validate_e2e_protocol(
+        cfg.e2e_protocol
+        if cfg.e2e_protocol is not None
+        else child_env.get("CHI_BENCH_E2E_PROTOCOL")
+    )
     # Belt-and-braces: cli.py already sets this at import time, but harbor is
     # spawned as a bare python subprocess (not via the chi_bench entry
     # point), so force the var into its env explicitly too. Prevents the
@@ -522,7 +606,16 @@ def _build_harbor_command(
         cmd += ["--environment-kwarg", f"sandbox_timeout_secs={cfg.modal.sandbox_timeout_secs}"]
 
     if env is not None:
-        cmd += _forward_agent_keys(env)
+        cmd += _forward_agent_keys(_selected_agent_env(cfg, env))
+
+    if cfg.data_root is not None:
+        cmd += ["--environment-kwarg", "data_root=" + str(cfg.data_root.resolve())]
+    if cfg.dataset_content_sha256 is not None:
+        cmd += [
+            "--environment-kwarg",
+            "dataset_content_sha256=" + json.dumps(cfg.dataset_content_sha256),
+        ]
+        cmd += ["--environment-kwarg", "dataset_domains=" + json.dumps(cfg.dataset_domains)]
 
     for key, value in sorted(cfg.verifier_env.items()):
         cmd += ["--verifier-env", f"{key}={value}"]

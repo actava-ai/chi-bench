@@ -18,6 +18,7 @@ the gate can be imported and tested in isolation without dragging the
 from __future__ import annotations
 
 from typing import Any
+from chi_bench.core.e2e_protocol import is_workflow_v2
 
 
 def should_run_workspace_judge(
@@ -54,6 +55,8 @@ def should_run_workspace_judge(
         is_provider_to_payer_e2e_task,
     )
 
-    if not is_provider_to_payer_e2e_task(expectations):
+    if not is_provider_to_payer_e2e_task(expectations) or is_workflow_v2(
+        expected_state, expectations
+    ):
         return True
     return agent_path_for_e2e(expectations, expected_state) != "no_submit"

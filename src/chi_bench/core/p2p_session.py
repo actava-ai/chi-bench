@@ -2,7 +2,8 @@
 
 Both the dual-viewpoint E2E harness (trial time) and the e2e_consistency
 verifier (score time) inspect the audit log + payer_p2p_session_records
-to detect direct calls to the deprecated ``p2p_session.*`` MCP tools.
+to detect calls that mutate the simulated ``p2p_session.*`` conversation.
+Reading context does not generate a counterpart turn or complete a session.
 The two callers must agree on:
 
 - the allow-list of audit action names emitted by the server
@@ -30,7 +31,6 @@ from typing import Any
 
 DIRECT_P2P_SESSION_AUDIT_ACTIONS: frozenset[str] = frozenset(
     {
-        "get_p2p_session_context",
         "p2p_session_turn",
         "submit_p2p_summary",
     }
@@ -67,7 +67,7 @@ def session_has_direct_usage(record: Mapping[str, Any]) -> bool:
     Three independent signals trigger the True branch:
 
     1. ``agent_turns_used > 0`` — server-side counter incremented when the
-       agent invokes any ``p2p_session.*`` MCP tool.
+       agent invokes the simulated conversation's turn tool.
     2. Submission state — ``submitted_summary`` / ``submitted_result`` /
        ``finalized`` are only populated by direct agent calls.
     3. Transcript actor inspection — any turn whose actor key is in

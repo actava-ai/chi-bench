@@ -8,10 +8,19 @@ from chi_bench.core.agent_path import (
     compute_agent_path as _compute_agent_path,
     latest_provider_determination as _provider_determination_for_check,
 )
+from chi_bench.core.e2e_protocol import (
+    SOURCE_OUTCOME_NA,
+    STANDALONE_DECISION_NA,
+    actual_p2p_branch,
+    is_workflow_v2,
+    pending_evidence_stage,
+    pending_episode_expected,
+)
 from chi_bench.core.p2p_session import (
     DIRECT_P2P_SESSION_AUDIT_ACTIONS as _DIRECT_P2P_SESSION_AUDIT_ACTIONS,
     session_has_direct_usage as _p2p_session_has_direct_usage,
 )
+from chi_bench.core.p2p_evidence import RelayP2PEvidence
 
 from ._base import CheckStatus, StageResult, StageVerifier, check_not_applicable
 from ._provider_new_referral_targets import (
@@ -289,6 +298,23 @@ def _p2p_transcript_artifact(exported: dict[str, Any], case_id: str) -> dict[str
     if not completed_request_ids:
         return None
 
+    trusted_transcripts = []
+    for record in exported.get("payer_p2p_relay_evidence", []):
+        if (
+            record.get("case_id") != case_id
+            or record.get("request_id") not in completed_request_ids
+        ):
+            continue
+        try:
+            trusted_transcripts.append(RelayP2PEvidence.model_validate(record))
+        except ValueError:
+            # This is unavailable trusted scoring material, not evidence that
+            # the agent failed. Retained receipts must not be reconstructed.
+            raise ValueError(
+                "Current workflow_v2 trusted relay receipt is incomplete or invalid; rerun required. "
+                "Missing proof cannot be recovered from writable workspace artifacts."
+            ) from None
+
     for item in exported.get("workspace_artifacts", []):
         if item.get("case_id") != case_id:
             continue
@@ -296,13 +322,37 @@ def _p2p_transcript_artifact(exported: dict[str, Any], case_id: str) -> dict[str
             continue
         if item.get("artifact_type") != "peer_to_peer_transcript":
             continue
-        if item.get("linked_resource_type") != "peer_to_peer_request":
+        payload = _artifact_content_payload(item)
+        if payload is None:
             continue
-        if normalized_str(item.get("linked_resource_id")) not in completed_request_ids:
+        try:
+            transcript = RelayP2PEvidence.model_validate(payload)
+        except ValueError:
             continue
-        if _artifact_content_payload(item) is None:
+        if (
+            transcript.case_id != case_id
+            or transcript.request_id not in completed_request_ids
+            or not {"provider", "payer"}.issubset(turn.actor for turn in transcript.turns)
+        ):
             continue
-        return item
+        # Both an explicit link and a recovered link require the same complete
+        # private receipt. A writable link is not proof of collected positions.
+        if item.get("linked_resource_type") or item.get("linked_resource_id"):
+            if (
+                item.get("linked_resource_type") != "peer_to_peer_request"
+                or normalized_str(item.get("linked_resource_id")) != transcript.request_id
+            ):
+                continue
+        for trusted in trusted_transcripts:
+            if trusted == transcript:
+                return {
+                    **item,
+                    "linked_resource_type": "peer_to_peer_request",
+                    "linked_resource_id": transcript.request_id,
+                    # Scoring consumes authenticated fields after the entire
+                    # transcript, including positions and readiness, matches.
+                    "content": trusted.model_dump_json(),
+                }
     return None
 
 
@@ -422,6 +472,7 @@ class E2EConsistencyVerifier(StageVerifier):
         # contract_e2e_v1` without the new `task_kind`) keep their old
         # output schema unchanged.
         is_e2e_task = is_provider_to_payer_e2e_task(self.expectations)
+        workflow_v2 = is_workflow_v2(self.exported, self.expectations)
         if is_e2e_task:
             agent_path = _compute_agent_path(self.exported)
             expected_action = str(
@@ -429,8 +480,19 @@ class E2EConsistencyVerifier(StageVerifier):
             ).strip()
             judgment = _check_provider_judgment_path(expected_action, agent_path)
             match_exact = _check_provider_action_match_exact(expected_action, self.exported)
+            if workflow_v2:
+                judgment = _make_check_na(
+                    name=judgment.name,
+                    message=STANDALONE_DECISION_NA,
+                    details={**judgment.details, "message": STANDALONE_DECISION_NA},
+                )
+                match_exact = _make_check_na(
+                    name=match_exact.name,
+                    message=STANDALONE_DECISION_NA,
+                    details={**match_exact.details, "message": STANDALONE_DECISION_NA},
+                )
 
-            if agent_path == "no_submit":
+            if agent_path == "no_submit" and not workflow_v2:
                 checks: dict[str, CheckStatus] = {}
                 details: dict[str, Any] = {"case_id": self.case_id}
                 _project_check_result(checks=checks, details=details, check=judgment)
@@ -442,6 +504,11 @@ class E2EConsistencyVerifier(StageVerifier):
 
         case_id = self.case_id
         expected = self.expectations.get("expected_e2e") or {}
+        pending_episode = workflow_v2 and pending_episode_expected(self.expectations)
+        actual_pending_stage = (
+            pending_evidence_stage(self.exported, case_id) if workflow_v2 else None
+        )
+        expected_decision = "" if pending_episode else expected.get("final_decision")
         checks: dict[str, CheckStatus] = {}
         details: dict[str, Any] = {"case_id": case_id}
 
@@ -483,7 +550,7 @@ class E2EConsistencyVerifier(StageVerifier):
         )
         checks["e2e.determination_linked_to_intake"] = (
             check_not_applicable()
-            if not determination and not expected.get("final_decision")
+            if actual_pending_stage or (not determination and not expected_decision)
             else bool(
                 determination
                 and linked_intake_id
@@ -496,7 +563,7 @@ class E2EConsistencyVerifier(StageVerifier):
         checks["e2e.determination_after_submission"] = (
             check_not_applicable()
             if not determination
-            or not expected.get("final_decision")
+            or not expected_decision
             or not packet_submitted_at
             or not determination_created_at
             else packet_submitted_at <= determination_created_at
@@ -555,13 +622,40 @@ class E2EConsistencyVerifier(StageVerifier):
         )
 
         final_decision = str((determination or {}).get("final_decision") or "").strip()
-        expected_final = str(expected.get("final_decision") or "").strip()
+        expected_final = str(expected_decision or "").strip()
         checks["e2e.final_decision_matches"] = (
-            check_not_applicable() if not expected_final else final_decision == expected_final
+            check_not_applicable()
+            if workflow_v2 or not expected_final
+            else final_decision == expected_final
         )
+        if workflow_v2:
+            details["source_outcome_observation"] = {
+                "expected": expected.get("final_decision"),
+                "actual_status": (case or {}).get("status"),
+                "actual_final_decision": final_decision or None,
+                "reason": SOURCE_OUTCOME_NA,
+            }
+            from .outcome import OutcomeVerifier
+
+            actual_outcome = OutcomeVerifier(self.exported, self.expectations, []).verify()
+            checks["e2e.downstream_handling_complete"] = bool(
+                actual_pending_stage
+                or actual_outcome.checks.get("outcome.clean_determination") is True
+            )
+            details["downstream_handling"] = {
+                "pending_stage": actual_pending_stage,
+                "clean_determination": actual_outcome.checks.get("outcome.clean_determination"),
+            }
+        if pending_episode:
+            checks["e2e.episode_status_matches"] = check_not_applicable()
+            details["episode_status"] = {
+                "expected": expected.get("final_decision"),
+                "actual": (case or {}).get("status"),
+                "reason": "Authored pending episode status is not a DeterminationDecision.",
+            }
 
         provider_position = str(expected.get("provider_final_position") or "").strip()
-        if provider_position:
+        if provider_position and not pending_episode and not workflow_v2:
             checks["e2e.role_agreement"] = provider_position == final_decision
             details["agreement"] = {
                 "provider_position": provider_position,
@@ -576,7 +670,24 @@ class E2EConsistencyVerifier(StageVerifier):
             "e2e.pend_requeued_for_review",
             "e2e.pend_chronology_valid",
         )
-        if expected.get("require_pend_resolution"):
+        actual_audit_actions = _audit_actions(self.exported, case_id)
+        actual_pend_response = "respond_to_pend" in actual_audit_actions
+        actual_requeue = any(
+            to_status == "resubmitted" for _, to_status in _transition_pairs(self.exported, case_id)
+        )
+        require_pend_resolution = (
+            (
+                actual_pend_response
+                or actual_requeue
+                or (
+                    "request_missing_information" in actual_audit_actions
+                    and (case or {}).get("status") != "pended_action_required"
+                )
+            )
+            if workflow_v2
+            else bool(expected.get("require_pend_resolution"))
+        )
+        if require_pend_resolution:
             audit_actions = _audit_actions(self.exported, case_id)
             pend_request_times = _audit_action_times(
                 self.exported, case_id, "request_missing_information"
@@ -616,13 +727,16 @@ class E2EConsistencyVerifier(StageVerifier):
                 "resubmitted",
             ) in transition_pairs and ("resubmitted", "under_review") in transition_pairs
             checks["e2e.pend_chronology_valid"] = (
-                check_not_applicable()
+                (False if workflow_v2 else check_not_applicable())
                 if not chronology_has_required_timestamps
                 else request_before_response and response_before_determination
             )
         else:
             for name in pend_check_names:
                 checks[name] = check_not_applicable()
+            if workflow_v2 and (case or {}).get("status") == "pended_action_required":
+                checks["e2e.pend_requested"] = bool(actual_pending_stage)
+                checks["e2e.pend_chronology_valid"] = bool(actual_pending_stage)
 
         p2p_check_names = (
             "e2e.p2p_completed",
@@ -639,17 +753,65 @@ class E2EConsistencyVerifier(StageVerifier):
             "e2e.p2p_outcome_matches_transcript",
             "e2e.p2p_record_outcome_phase_legal",
         )
-        if expected.get("require_p2p_resolution"):
+        require_p2p_resolution = (
+            actual_p2p_branch(self.exported, case_id)
+            if workflow_v2
+            else bool(expected.get("require_p2p_resolution"))
+        )
+        if workflow_v2:
+            details["source_branch_observations"] = {
+                "require_p2p_resolution": expected.get("require_p2p_resolution"),
+                "require_pend_resolution": expected.get("require_pend_resolution"),
+                "actual_p2p_branch": require_p2p_resolution,
+                "actual_pend_resolution": require_pend_resolution,
+                "reason": SOURCE_OUTCOME_NA,
+            }
+        p2p_exported = self.exported
+        external_results = []
+        if workflow_v2:
+            from .p2p import P2PVerifier
+
+            requests = _case_items(self.exported, "payer_peer_to_peer_requests", case_id)
+            external_requests = [r for r in requests if r.get("outcome_source") == "external"]
+            if external_requests:
+                external_results = [
+                    P2PVerifier(
+                        {**self.exported, "payer_peer_to_peer_requests": [request]},
+                        self.expectations,
+                        [],
+                    ).verify()
+                    for request in external_requests
+                ]
+                checks["e2e.p2p_external_evidence_valid"] = all(
+                    result.passed for result in external_results
+                )
+                details["external_p2p"] = [result.details for result in external_results]
+                relay_requests = [r for r in requests if r.get("outcome_source") != "external"]
+                relay_ids = {r.get("id") for r in relay_requests}
+                p2p_exported = {
+                    **self.exported,
+                    "payer_peer_to_peer_requests": relay_requests,
+                    "audit_logs": [
+                        row
+                        for row in self.exported.get("audit_logs", [])
+                        if row.get("action") != "record_p2p_outcome"
+                        or (row.get("details") or {}).get("request_id") in relay_ids
+                    ],
+                }
+        external_only = bool(external_results) and not _case_items(
+            p2p_exported, "payer_peer_to_peer_requests", case_id
+        )
+        if require_p2p_resolution and not external_only:
             completed_p2p_requests = [
                 item
-                for item in _case_items(self.exported, "payer_peer_to_peer_requests", case_id)
+                for item in _case_items(p2p_exported, "payer_peer_to_peer_requests", case_id)
                 if normalized_str(item.get("status")) == "completed"
             ]
             completed_outcome_requests = [
                 item for item in completed_p2p_requests if normalized_str(item.get("outcome"))
             ]
-            transcript_artifact = _p2p_transcript_artifact(self.exported, case_id)
-            transcript_payload = _p2p_transcript_payload(self.exported, case_id)
+            transcript_artifact = _p2p_transcript_artifact(p2p_exported, case_id)
+            transcript_payload = _p2p_transcript_payload(p2p_exported, case_id)
             p2p_actors = _p2p_actors(transcript_payload)
             provider_final_position = _p2p_final_position(transcript_payload, "provider")
             payer_final_position = _p2p_final_position(transcript_payload, "payer")
@@ -693,7 +855,7 @@ class E2EConsistencyVerifier(StageVerifier):
             direct_session_records = _direct_p2p_session_records(
                 self.exported, case_id, completed_request_ids
             )
-            outcome_times = _audit_action_times(self.exported, case_id, "record_p2p_outcome")
+            outcome_times = _audit_action_times(p2p_exported, case_id, "record_p2p_outcome")
             relay_windows = _phase_marker_windows(
                 self.exported,
                 case_id=case_id,
@@ -788,6 +950,19 @@ class E2EConsistencyVerifier(StageVerifier):
         else:
             for name in p2p_check_names:
                 checks[name] = check_not_applicable()
+            if external_only:
+                checks["e2e.p2p_completed"] = all(
+                    result.checks.get("p2p.result_recorded") is True for result in external_results
+                )
+                checks["e2e.p2p_outcome_recorded"] = checks["e2e.p2p_completed"]
+                checks["e2e.p2p_no_direct_session_tools"] = not any(
+                    item.get("case_id") == case_id
+                    and item.get("action") in _DIRECT_P2P_SESSION_AUDIT_ACTIONS
+                    for item in self.exported.get("audit_logs", [])
+                )
+                checks["e2e.p2p_no_direct_session_transcript"] = not (
+                    _direct_p2p_session_records(self.exported, case_id, set())
+                )
 
         # Merge dual-viewpoint provider checks into the legacy-body result.
         # The submit / submit_incomplete / no_decision branch keeps the full

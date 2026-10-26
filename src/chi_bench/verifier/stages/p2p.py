@@ -5,7 +5,11 @@ import re
 from datetime import datetime
 from typing import Any
 
+from chi_bench.core.e2e_protocol import SOURCE_OUTCOME_NA, actual_p2p_branch, is_workflow_v2
+from chi_bench.core.enums import PeerToPeerOutcome
+
 from chi_bench.verifier.stage_scope import stage_in_scope
+from chi_bench.core.p2p_evidence import consultation_evidence, utc_time
 
 from ._base import (
     CheckStatus,
@@ -183,6 +187,198 @@ def _artifact_sequence_ordered(
 class P2PVerifier(StageVerifier):
     stage_name = "p2p"
 
+    def _verify_workflow(self) -> StageResult:
+        """Score the real two-role or imported meeting, independently of source GT."""
+        requests = filter_by_case_id(
+            self.exported.get("payer_peer_to_peer_requests", []), self.case_id
+        )
+        request = requests[-1] if requests else {}
+        request_id = request.get("id")
+        source = request.get("outcome_source")
+        evidence_id = request.get("outcome_evidence_id")
+        evidence = consultation_evidence(
+            request,
+            sessions=[],  # Single-role simulator turns cannot stand in for the E2E roles.
+            external=[
+                row
+                for row in self.exported.get("payer_p2p_external_evidence", [])
+                if source == "external" and row.get("id") == evidence_id
+            ],
+            relays=[
+                row
+                for row in self.exported.get("payer_p2p_relay_evidence", [])
+                if source == "e2e_relay" and row.get("request_id") == evidence_id
+            ],
+        )
+        evidence_bound = bool(
+            evidence
+            and request.get("outcome_source") == evidence[0]
+            and request.get("outcome_evidence_id") == evidence[1]
+        )
+        checks: dict[str, CheckStatus] = {
+            "p2p.request_exists": bool(request_id),
+            "p2p.consultation_evidence": evidence_bound,
+            "p2p.result_recorded": bool(
+                request.get("status") == "completed"
+                and request.get("outcome") in {outcome.value for outcome in PeerToPeerOutcome}
+                and evidence_bound
+            ),
+        }
+        workflow = self.expectations.get("expected_p2p_workflow") or {}
+        details: dict[str, Any] = {
+            "request_id": request_id,
+            "consultation_source": evidence[0] if evidence else None,
+            "source_comparison_observations": {
+                "fixed_result": workflow.get("fixed_result"),
+                "actual_result": request.get("outcome"),
+                "coordination_contract": workflow.get("coordination_contract"),
+                "determination_contract": workflow.get("determination_contract"),
+                "reason": SOURCE_OUTCOME_NA,
+            },
+            "not_applicable_reasons": {},
+        }
+
+        def waive(names: tuple[str, ...], reason: str) -> None:
+            mark_not_applicable(checks, *names)
+            details["not_applicable_reasons"].update(dict.fromkeys(names, reason))
+
+        waive(
+            (
+                "p2p.offer_slots_match_contract",
+                "p2p.offer_artifact_slots_match_contract",
+                "p2p.selected_slot_matches_rule",
+                "p2p.determination_matches_contract",
+                "p2p.outcome_matches",
+            ),
+            SOURCE_OUTCOME_NA,
+        )
+
+        def timestamp(row: dict[str, Any]) -> datetime | None:
+            parsed = _parse_created_at(row.get("created_at"))
+            return utc_time(parsed) if parsed is not None else None
+
+        def audit(action: str) -> dict[str, Any]:
+            rows = [
+                row
+                for row in self.exported.get("audit_logs", [])
+                if row.get("case_id") == self.case_id
+                and row.get("action") == action
+                and (row.get("details") or {}).get("request_id") == request_id
+                and request_id
+            ]
+            return rows[-1] if rows else {}
+
+        outcome_audit = audit("record_p2p_outcome")
+        outcome_time = timestamp(outcome_audit)
+        if evidence_bound and evidence and evidence[0] == "external":
+            external = next(
+                row
+                for row in self.exported.get("payer_p2p_external_evidence", [])
+                if row.get("id") == evidence[1]
+                and row.get("request_id") == request_id
+                and row.get("case_id") == self.case_id
+            )
+            occurred = _parse_created_at(external.get("occurred_at"))
+            imported = audit("import_external_p2p_evidence")
+            imported_time = timestamp(imported)
+            checks["p2p.audit"] = bool(imported and outcome_audit)
+            checks["p2p.audit_chronology"] = bool(
+                occurred
+                and imported_time
+                and outcome_time
+                and utc_time(occurred) <= imported_time <= outcome_time
+                and (imported.get("details") or {}).get("evidence_id") == evidence[1]
+            )
+            checks["p2p.event_opened"] = checks["p2p.audit_chronology"]
+            waive(
+                (
+                    "p2p.session_exists",
+                    "p2p.turns_recorded",
+                    "p2p.summary_written",
+                    "p2p.offer_written",
+                    "p2p.slot_response_written",
+                    "p2p.confirmation_written",
+                    "p2p.selected_slot_present",
+                    "p2p.selected_slot_in_offered_slots",
+                    "p2p.confirmation_matches_selected_slot",
+                    "p2p.required_file_sequence_present",
+                    "p2p.required_file_sequence_ordered",
+                    "p2p.thread_state_consistent",
+                ),
+                "A bound trusted external meeting record replaces internal simulator and scheduling artifacts.",
+            )
+            return StageResult(stage="p2p", checks=checks, details=details)
+
+        artifacts = [
+            row
+            for row in self.exported.get("workspace_artifacts", [])
+            if row.get("case_id") == self.case_id
+            and row.get("channel") == "peer_to_peer"
+            and row.get("linked_resource_type") in {None, "peer_to_peer_request"}
+            and row.get("linked_resource_id") in {None, request_id}
+            and (row.get("details") or {}).get("p2p_request_id") == request_id
+            and request_id
+        ]
+
+        def artifact(suffix: str) -> dict[str, Any]:
+            rows = [row for row in artifacts if _artifact_matches_suffix(row, suffix)]
+            return (
+                max(rows, key=lambda row: timestamp(row) or utc_time(datetime.min)) if rows else {}
+            )
+
+        offer = artifact("coordination/01_offer.eml")
+        response = artifact("coordination/02_slot_response.eml")
+        confirmation = artifact("coordination/03_confirmation.eml")
+        outcome = artifact("event/outcome.md")
+        offered = request.get("offered_slots") or []
+        selected = request.get("provider_selected_slot")
+        scheduled = request.get("scheduled_at")
+        checks.update(
+            {
+                "p2p.offer_written": bool(
+                    offer and offered and _extract_offer_slots(offer) == offered
+                ),
+                "p2p.slot_response_written": bool(response),
+                "p2p.confirmation_written": bool(confirmation),
+                "p2p.event_opened": request.get("status") in {"event_open", "completed"},
+                "p2p.turns_recorded": bool(
+                    evidence_bound and evidence and evidence[0] == "e2e_relay"
+                ),
+                "p2p.selected_slot_present": bool(
+                    selected and selected == _extract_selected_slot(response)
+                ),
+                "p2p.selected_slot_in_offered_slots": bool(selected and selected in offered),
+                "p2p.confirmation_matches_selected_slot": bool(
+                    scheduled and scheduled == selected == _extract_scheduled_at(confirmation)
+                ),
+                "p2p.required_file_sequence_present": all((offer, response, confirmation, outcome)),
+            }
+        )
+        artifact_times = [timestamp(row) for row in (offer, response, confirmation, outcome)]
+        checks["p2p.required_file_sequence_ordered"] = bool(
+            all(artifact_times)
+            and all(left <= right for left, right in zip(artifact_times, artifact_times[1:]))
+        )
+        actions = ("offer_slots", "respond_to_peer_to_peer", "schedule_p2p", "record_p2p_outcome")
+        audit_rows = [audit(action) for action in actions]
+        audit_times = [timestamp(row) for row in audit_rows]
+        checks["p2p.audit"] = all(audit_rows)
+        checks["p2p.audit_chronology"] = bool(
+            all(audit_times)
+            and all(left <= right for left, right in zip(audit_times, audit_times[1:]))
+        )
+        thread_state = _extract_thread_state(artifact("thread_state.json"))
+        checks["p2p.thread_state_consistent"] = bool(
+            thread_state.get("request_id") == request_id
+            and request_id
+            and thread_state.get("request_status") == request.get("status")
+        )
+        waive(
+            ("p2p.session_exists", "p2p.summary_written"),
+            "workflow_v2 uses trusted two-role relay evidence instead of single-role simulator files; consultation evidence remains required.",
+        )
+        return StageResult(stage="p2p", checks=checks, details=details)
+
     def verify(self) -> StageResult:
         # E2E dual-viewpoint NA gate: when the agent never submitted, the
         # payer-side p2p flow had nothing to enter, so every p2p.* axis is
@@ -192,7 +388,12 @@ class P2PVerifier(StageVerifier):
         # / nurse_review.py / md_review.py.
         if is_provider_to_payer_e2e_task(self.expectations):
             agent_path = agent_path_for_e2e(self.expectations, self.exported)
-            if agent_path != "submit":
+            unentered_branch = is_workflow_v2(
+                self.exported, self.expectations
+            ) and not actual_p2p_branch(self.exported, self.case_id)
+            if unentered_branch or (
+                agent_path != "submit" and not is_workflow_v2(self.exported, self.expectations)
+            ):
                 checks: dict[str, CheckStatus] = {}
                 mark_not_applicable(
                     checks,
@@ -222,7 +423,18 @@ class P2PVerifier(StageVerifier):
                     "p2p.scheduled",
                     "p2p.outcome_recorded",
                 )
-                return StageResult(stage="p2p", checks=checks)
+                return StageResult(
+                    stage="p2p",
+                    checks=checks,
+                    details={
+                        "not_applicable_reason": "P2P applicability follows actual requests and decisions in workflow_v2; the required actual-packet policy rubric assesses whether P2P was needed."
+                    }
+                    if unentered_branch
+                    else {},
+                )
+
+        if is_workflow_v2(self.exported, self.expectations):
+            return self._verify_workflow()
 
         p2p_requests = filter_by_case_id(
             self.exported.get("payer_peer_to_peer_requests", []),
@@ -238,6 +450,16 @@ class P2PVerifier(StageVerifier):
 
         checks: dict[str, CheckStatus] = {}
         has_request = len(p2p_requests) > 0
+        if latest.get("status") == "completed":
+            checks["p2p.consultation_evidence"] = (
+                consultation_evidence(
+                    latest,
+                    sessions=sessions,
+                    external=self.exported.get("payer_p2p_external_evidence", []),
+                    relays=self.exported.get("payer_p2p_relay_evidence", []),
+                )
+                is not None
+            )
         has_session = bool(latest_session)
         known_contract = is_known_contract(self.expectations)
         # When there is no P2P workflow contract and no request was made, the

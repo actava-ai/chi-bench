@@ -9,9 +9,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from chi_bench.core.e2e_protocol import e2e_score_metadata, is_workflow_v2
+
 from chi_bench.verifier.judge.prompts import get_judge_prompt_version
 from chi_bench.verifier.stages._base import (
     CheckStatus,
+    UNAVAILABLE,
     is_check_fail,
     is_check_not_applicable,
     is_check_pass,
@@ -88,7 +91,10 @@ def load_expectations(expectations_path: Path = DEFAULT_EXPECTATIONS_PATH) -> di
 
 
 def fetch_json(url: str, timeout: float = 5.0) -> dict[str, Any]:
-    with urllib.request.urlopen(url, timeout=timeout) as response:
+    from chi_bench.server.control import control_headers
+
+    request = urllib.request.Request(url, headers=control_headers())
+    with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -693,7 +699,11 @@ def _should_merge_legacy(expectations: dict[str, Any]) -> bool:
 def collect_verifier_checks_legacy(
     exported: dict[str, Any], expectations: dict[str, Any]
 ) -> dict[str, bool]:
-    """Legacy flat verifier — kept for backward compat with canonical tasks."""
+    """Legacy flat verifier for standalone canonical tasks only."""
+    if e2e_score_metadata(exported, expectations):
+        raise ValueError(
+            "E2E requires the current workflow_v2 stage verifier; legacy scoring is unsupported."
+        )
     checks: dict[str, bool] = {}
 
     checks["target_status"] = (
@@ -906,7 +916,7 @@ def collect_verifier_checks(
     exported: dict[str, Any], expectations: dict[str, Any]
 ) -> dict[str, CheckStatus]:
     """Stage-based verifier. Falls back to legacy for tasks without stage_ground_truth."""
-    if _should_run_stage_verifier(expectations):
+    if _should_run_stage_verifier(expectations) or is_workflow_v2(exported, expectations):
         from chi_bench.verifier.stages import collect_stage_checks
 
         flat_checks, _ = collect_stage_checks(exported, expectations)
@@ -962,7 +972,7 @@ def collect_all_verifier_checks(
     world: dict[str, Any] | None = None,
     instruction_text: str | None = None,
 ) -> tuple[dict[str, CheckStatus], list[Any], dict[str, Any]]:
-    if _should_run_stage_verifier(expectations):
+    if _should_run_stage_verifier(expectations) or is_workflow_v2(exported, expectations):
         from chi_bench.verifier.stages import collect_stage_checks
 
         flat_checks, stage_results = collect_stage_checks(exported, expectations)
@@ -988,7 +998,7 @@ def collect_all_verifier_checks(
         rubric_map: dict[str, Any] = {}
 
         adapter: Any | None = None
-        if _is_pa_um_judge_eligible(expectations):
+        if _is_pa_um_judge_eligible(expectations) or is_workflow_v2(exported, expectations):
             adapter = PaUmJudgeAdapter(expectations, exported)
         elif _is_cm_judge_eligible(expectations):
             adapter = CmJudgeAdapter(
@@ -1000,6 +1010,11 @@ def collect_all_verifier_checks(
 
         if adapter is not None:
             judge_input = adapter.build()
+            waived = getattr(adapter, "not_applicable_rubrics", {})
+            for rid in waived:
+                merged_checks[f"judge.{rid}"] = NOT_APPLICABLE
+            if waived:
+                rubric_map["not_applicable_rubrics"] = waived
             if judge_input.rubrics:
                 # E2E gate: when the agent took the no_submit path on a
                 # provider_to_payer_e2e task, payer-side rubrics have nothing
@@ -1016,6 +1031,7 @@ def collect_all_verifier_checks(
                         if rid:
                             merged_checks[f"judge.{rid}"] = NOT_APPLICABLE
                     rubric_map = {
+                        **rubric_map,
                         "rubrics": list(judge_input.rubrics),
                         "session_metadata": {"skipped": "no_submit_e2e_path"},
                         "judge_unavailable_reason": skip_reason,
@@ -1052,17 +1068,26 @@ def collect_all_verifier_checks(
                     for rid, verdict in judge_output.verdicts.items():
                         merged_checks[f"judge.{rid}"] = bool(verdict.passed)
 
-                    # Mark degraded rubrics as not_applicable so scoring treats them
-                    # as neither pass nor fail. NOT_APPLICABLE is the string sentinel
-                    # defined in stages/_base.py (CheckStatus = bool | Literal["not_applicable"]).
+                    # Missing required verdicts invalidate scoring. They are
+                    # distinct from both agent failures and legitimate N/A.
                     for rid in judge_output.degraded_rubric_ids:
-                        merged_checks[f"judge.{rid}"] = NOT_APPLICABLE
+                        merged_checks[f"judge.{rid}"] = UNAVAILABLE
+                    for rubric in judge_input.rubrics:
+                        rid = rubric["rubric_id"]
+                        if rid not in judge_output.verdicts:
+                            merged_checks[f"judge.{rid}"] = UNAVAILABLE
 
                     rubric_map = {
+                        **rubric_map,
                         "rubrics": list(judge_input.rubrics),
                         "session_metadata": judge_output.session_metadata,
                         "judge_unavailable_reason": judge_output.judge_unavailable_reason,
                     }
+            unavailable = getattr(adapter, "unavailable_rubrics", {})
+            if unavailable:
+                for rid in unavailable:
+                    merged_checks[f"judge.{rid}"] = UNAVAILABLE
+                rubric_map["unavailable_rubrics"] = unavailable
 
         if _should_merge_legacy(expectations):
             legacy_checks = collect_verifier_checks_legacy(exported, expectations)
@@ -1230,23 +1255,15 @@ def _run_cm_verifier(
     will now fail at ``run_session`` time — tests must migrate to runner
     mocks or patch ``WorkspaceJudge.judge`` at its module path.
 
-    Degradation policy: when ``WorkspaceJudge`` reports a
-    ``judge_unavailable_reason`` (timeout / crash / malformed verdicts),
-    rubrics missing a parsed verdict are counted as *not passing* — i.e.
-    they contribute 0 to ``yes_count`` but remain in the denominator. Any
-    degraded or failed rubric collapses binary ``reward`` to 0 on gate-pass
-    runs while lowering ``fractional_reward`` to ``verdicts_passed /
-    rubric_total``. A total judge outage therefore yields binary ``reward = 0``
-    even on gate-pass runs, which is the correct signal that the run needs
-    manual attention.
-    The per-rubric check status is preserved via the ``cm_rubric.`` namespace
-    (NOT_APPLICABLE for degraded rubrics) so scoring/debug reports can tell
-    "judge said no" from "judge never answered".
+    Missing required verdicts invalidate the trial. Its numeric Harbor reward
+    is a zero transport placeholder and its fractional reward is null; result
+    consumers must rejudge or rerun it before reporting model performance.
+    The ``unavailable`` check status distinguishes missing judgement from an
+    agent failure and from an intentional not-applicable check.
     """
     from chi_bench.core.contracts import CMExportContract, PatientPersonaContract
     from chi_bench.verifier.judge.cm_adapter import CmJudgeAdapter
     from chi_bench.verifier.judge.workspace_judge import WorkspaceJudge
-    from chi_bench.verifier.stages._base import NOT_APPLICABLE
     from chi_bench.verifier.stages.cm_rubric import compute_cm_reward
     from chi_bench.verifier.stages.cm_workflow import (
         collect_cm_gate_results,
@@ -1353,23 +1370,21 @@ def _run_cm_verifier(
         judge_session_metadata = dict(judge_output.session_metadata)
         judge_unavailable_reason = judge_output.judge_unavailable_reason
 
-        # Degraded rubrics (timeout / parse error / missing entries in
-        # verdicts.json) get NOT_APPLICABLE so scorecard/debug can tell
-        # them apart from "judge said no". Non-degraded rubrics that parsed
+        # Missing required verdicts are unavailable, rather than N/A.
+        # Non-degraded rubrics that parsed
         # a verdict become pass/fail booleans under the ``cm_rubric.`` key
         # (keeping the historical check namespace for back-compat with
         # downstream scorecard consumers).
         degraded_set = set(judge_output.degraded_rubric_ids)
         for rid in contract.rubric_prompts.keys():
             if rid in degraded_set:
-                checks[f"cm_rubric.{rid}"] = NOT_APPLICABLE
+                checks[f"cm_rubric.{rid}"] = UNAVAILABLE
                 continue
             verdict = judge_output.verdicts.get(rid)
             if verdict is None:
                 # Defensive: rubric neither in verdicts nor marked degraded.
-                # Treat as not-applicable rather than fail — parser bug, not
-                # an agent-visible failure.
-                checks[f"cm_rubric.{rid}"] = NOT_APPLICABLE
+                # This invalidates scoring rather than blaming the agent.
+                checks[f"cm_rubric.{rid}"] = UNAVAILABLE
                 continue
             passed = bool(verdict.passed)
             checks[f"cm_rubric.{rid}"] = passed
@@ -1422,6 +1437,14 @@ def _run_cm_verifier(
         "judge_session_metadata": judge_session_metadata,
         "judge_unavailable_reason": judge_unavailable_reason,
     }
+    invalid_checks = [name for name, value in checks.items() if value == UNAVAILABLE]
+    scorecard.update(
+        scoring_status="invalid" if invalid_checks else "valid", invalid_checks=invalid_checks
+    )
+    if invalid_checks:
+        scorecard.update(reward=0.0, binary_reward=0.0, fractional_reward=None)
+        for name in invalid_checks:
+            scorecard["check_scores"][name] = None
 
     rubric_payload = {
         "cm_rubric": rubric_items_snapshot,
@@ -1433,7 +1456,7 @@ def _run_cm_verifier(
         # VerifyResult.reward is the binary axis (Harbor pass-rate semantic).
         # Fractional axis lives on scorecard["fractional_reward"] for callers
         # that want partial-credit / progress-tracking signal.
-        reward=reward.binary,
+        reward=scorecard["binary_reward"],
         scorecard=scorecard,
         stage_results=[],
         rubric=rubric_payload,
@@ -1462,6 +1485,7 @@ def verify_task(
     ground truth (audit Finding #5). ``instruction_text`` is used by
     cm_v4 judge workspaces to populate ``task_instruction.md``.
     """
+    protocol_metadata = e2e_score_metadata(exported, expectations)
     if _is_cm_v1(expectations) or _is_cm_v2(expectations) or _is_cm_v3(expectations):
         return _run_cm_verifier(exported, expectations, judge=judge, world=world)
 
@@ -1473,6 +1497,7 @@ def verify_task(
         instruction_text=instruction_text,
     )
     scorecard = build_scorecard(flat_checks, stage_results=stage_results or None)
+    scorecard.update(protocol_metadata)
     return VerifyResult(
         reward=float(scorecard["binary_reward"]),
         scorecard=scorecard,
@@ -1490,16 +1515,21 @@ def build_scorecard(
     not_applicable_checks = [
         name for name, status in checks.items() if is_check_not_applicable(status)
     ]
-    binary_reward = 1.0 if not failed_checks and total_checks > 0 else 0.0
+    invalid_checks = [name for name, status in checks.items() if status == UNAVAILABLE]
+    binary_reward = 1.0 if not failed_checks and not invalid_checks and total_checks > 0 else 0.0
     fractional_reward = passed_checks / total_checks if total_checks else 0.0
     scorecard = {
         "binary_reward": binary_reward,
-        "fractional_reward": fractional_reward,
+        "fractional_reward": None if invalid_checks else fractional_reward,
+        "scoring_status": "invalid" if invalid_checks else "valid",
+        "invalid_checks": invalid_checks,
         "passed_checks": passed_checks,
         "total_checks": total_checks,
         "check_scores": {
             name: (
-                None if is_check_not_applicable(status) else (1.0 if is_check_pass(status) else 0.0)
+                None
+                if is_check_not_applicable(status) or status == UNAVAILABLE
+                else (1.0 if is_check_pass(status) else 0.0)
             )
             for name, status in checks.items()
         },
@@ -1533,12 +1563,16 @@ def write_verifier_outputs(
     exported_state_path: Path = DEFAULT_EXPORTED_STATE_PATH,
     verifier_context_path: Path = DEFAULT_VERIFIER_CONTEXT_PATH,
 ) -> None:
+    scorecard.update(e2e_score_metadata(exported, expectations))
     reward_path.parent.mkdir(parents=True, exist_ok=True)
     scorecard_path.parent.mkdir(parents=True, exist_ok=True)
     exported_state_path.parent.mkdir(parents=True, exist_ok=True)
     verifier_context_path.parent.mkdir(parents=True, exist_ok=True)
     reward_path.write_text(json.dumps({"reward": scorecard["binary_reward"]}))
     scorecard_path.write_text(json.dumps(scorecard, indent=2))
+    from chi_bench.verifier.validity import write_validity
+
+    write_validity(scorecard, scorecard_path.with_name("validity.json"))
     exported_state_path.write_text(json.dumps(exported, indent=2))
     verifier_context_path.write_text(
         json.dumps(
@@ -1574,7 +1608,9 @@ def write_verifier_outputs(
                 # even if env vars change before the scorecard is consumed.
                 "judge_model": os.environ.get("CHI_BENCH_JUDGE_MODEL", "claude-opus-4-7"),
                 "judge_prompt_version": get_judge_prompt_version(
-                    expectations.get("verifier_contract")
+                    "e2e_workflow_v2"
+                    if is_workflow_v2(exported, expectations)
+                    else expectations.get("verifier_contract")
                 ),
                 "judge_session_metadata": (semantic_judge_rubric or {}).get("session_metadata")
                 or {},
@@ -1646,10 +1682,15 @@ def run_verifier(
     verifier_context_path: Path = DEFAULT_VERIFIER_CONTEXT_PATH,
     verifier_host: str = "chi-bench-server",
     verifier_port: int | None = None,
+    exported_state_input: Path | None = None,
 ) -> int:
     expectations = load_expectations(expectations_path)
     port = verifier_port or export_port(expectations)
-    exported = fetch_json(f"http://{verifier_host}:{port}/export")
+    exported = (
+        json.loads(exported_state_input.read_text())
+        if exported_state_input is not None
+        else fetch_json(f"http://{verifier_host}:{port}/export")
+    )
 
     # CM contracts expose strict binary reward plus diagnostic fractional
     # reward, so we take the CM dispatch here and write both axes via a
@@ -1668,6 +1709,9 @@ def run_verifier(
         verifier_context_path.parent.mkdir(parents=True, exist_ok=True)
         reward_path.write_text(json.dumps({"reward": verify_result.reward}))
         scorecard_path.write_text(json.dumps(verify_result.scorecard, indent=2))
+        from chi_bench.verifier.validity import write_validity
+
+        write_validity(verify_result.scorecard, scorecard_path.with_name("validity.json"))
         exported_state_path.write_text(json.dumps(exported, indent=2))
         verifier_context_path.write_text(
             json.dumps(
@@ -1699,6 +1743,8 @@ def run_verifier(
         )
         # Harbor reads the scalar reward — any non-1.0 value surfaces as a
         # failing exit code so run logs are noisy on regressions.
+        if verify_result.scorecard.get("scoring_status") == "invalid":
+            return 2
         if verify_result.reward < 1.0:
             print(json.dumps(verify_result.scorecard, indent=2))
             return 1
@@ -1725,6 +1771,8 @@ def run_verifier(
         exported_state_path=exported_state_path,
         verifier_context_path=verifier_context_path,
     )
+    if scorecard.get("scoring_status") == "invalid":
+        return 2
     if scorecard["binary_reward"] != 1.0:
         print(json.dumps(scorecard, indent=2))
         return 1
@@ -1738,9 +1786,12 @@ def run_oracle(
 ) -> int:
     expectations = load_expectations(expectations_path)
     port = agent_port or export_port(expectations)
+    from chi_bench.server.control import control_headers
+
     request = urllib.request.Request(
         f"http://{agent_host}:{port}/_oracle/solve",
         method="POST",
+        headers=control_headers(),
     )
     with urllib.request.urlopen(request) as response:
         print(response.read().decode("utf-8"))
@@ -1768,6 +1819,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--verifier-context-path", type=Path, default=DEFAULT_VERIFIER_CONTEXT_PATH
     )
     verify_parser.add_argument("--verifier-port", type=int, default=None)
+    verify_parser.add_argument("--exported-state-input", type=Path, default=None)
 
     solve_parser = subparsers.add_parser("solve")
     solve_parser.add_argument("--expectations-path", type=Path, default=DEFAULT_EXPECTATIONS_PATH)
@@ -1792,6 +1844,7 @@ def main(argv: list[str] | None = None) -> int:
             verifier_context_path=args.verifier_context_path,
             verifier_host=args.verifier_host,
             verifier_port=args.verifier_port,
+            exported_state_input=args.exported_state_input,
         )
     if args.command == "solve":
         return run_oracle(

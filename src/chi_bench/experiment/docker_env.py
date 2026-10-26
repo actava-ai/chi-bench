@@ -1,19 +1,14 @@
-"""Local-Docker Harbor Environment for the chi-Bench single-image layout.
+"""Isolated agent and trusted simulator/verifier Docker lifecycle.
 
-One ``chi-bench:latest`` container per trial: the image is pre-built once via
-``cb docker build`` (or rebuilt here when ``force_build=True``) and the
-per-task fixtures are selected by ``CHI_BENCH_TASK_ID``. The in-container
-``docker/entrypoint.sh`` boots the chi-Bench HTTP server + three MCP session
-managers as PID 1, then ``exec``s ``sleep infinity`` so harbor's lifecycle
-operates against a long-lived container via ``docker exec`` / ``docker cp``.
-
-Register with the harbor CLI:
-    --environment-import-path chi_bench.experiment.docker_env:ChiBenchDockerEnvironment
+The agent receives public assets and a shared workspace only. Harbor's /tests
+upload freezes the agent and begins trusted verification.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
+import secrets
 import atexit
 import logging
 import os
@@ -21,6 +16,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import tempfile
 import threading
 from collections.abc import Mapping
 from pathlib import Path
@@ -38,6 +34,7 @@ logger = logging.getLogger(__name__)
 # expose the same provider/judge/MCP toggles to the in-container chi-bench
 # server + agent. Only keys with non-empty host values are forwarded.
 FORWARDED_ENV_KEYS: tuple[str, ...] = (
+    "CHI_BENCH_E2E_PROTOCOL",
     "CLAUDE_CODE_OAUTH_TOKEN",
     "OPENAI_API_KEY",
     "OPENAI_BASE_URL",
@@ -203,274 +200,514 @@ def _terminate_tracked_containers() -> None:
 
 
 class ChiBenchDockerEnvironment(BaseEnvironment):
-    """Single-image local-Docker harbor environment for chi-Bench trials.
+    """Two-container trial: a clean agent and a trusted simulator/verifier.
 
-    Runtime shape:
-
-      ``start``:    ``docker run -d --name <session_id> -e CHI_BENCH_TASK_ID=… image``
-      ``exec``:     ``docker exec [-w cwd] [-e …] [-u user] <name> sh -c "<cmd>"``
-      ``upload``:   ``docker cp <src> <name>:<dst>``
-      ``download``: ``docker cp <name>:<src> <dst>``
-      ``stop``:     ``docker rm -f <name>``
-
-    The image must be pre-built (``cb docker build``) unless
-    ``force_build=True`` is passed at construction, in which case ``start``
-    rebuilds it from ``docker/Dockerfile`` with repo root as context.
+    The host-side upload of Harbor's reserved /tests directory begins the
+    verifier phase. It stops the entire agent container, closes tool admission,
+    and drains admitted work before any verifier inputs are installed.
     """
+
+    _uses_host_network = False
 
     def __init__(
         self,
         *args,
-        image: str = DEFAULT_IMAGE,
-        force_build: bool | None = None,
-        host_env: Mapping[str, str] | None = None,
+        image=DEFAULT_IMAGE,
+        agent_image=None,
+        force_build=None,
+        host_env=None,
+        data_root=None,
+        dataset_content_sha256=None,
+        dataset_domains=None,
         **kwargs,
-    ) -> None:
+    ):
         self._image = image
-        self._force_build_default = bool(force_build) if force_build is not None else False
-        # Snapshot at construction so later mutations of ``os.environ`` from
-        # the parent process can't change which credentials get forwarded.
-        self._host_env: dict[str, str] = (
-            dict(host_env) if host_env is not None else dict(os.environ)
+        self._agent_image = agent_image or (
+            "chi-bench:agent" if image == DEFAULT_IMAGE else image + "-agent"
         )
-        self._container_name: str | None = None
+        self._force_build_default = bool(force_build)
+        self._host_env = dict(host_env) if host_env is not None else dict(os.environ)
+        self._data_root = Path(data_root) if data_root is not None else None
+        self._dataset_content_sha256 = dataset_content_sha256
+        self._dataset_domains = dataset_domains or []
+        self._container_name = None
+        self._control_token = secrets.token_urlsafe(32)
+        self._verifying = False
+        self._agent_created = False
+        self._server_created = False
+        self._owned_volumes = []
+        self._network_created = False
+        self._resource_prefix = "chi-" + secrets.token_hex(8)
         super().__init__(*args, **kwargs)
 
-    # ----- harbor protocol metadata ----------------------------------------
-
     @staticmethod
-    def type() -> str:
+    def type():
         return EnvironmentType.DOCKER
 
     @property
-    def capabilities(self) -> EnvironmentCapabilities:
+    def capabilities(self):
         return EnvironmentCapabilities(
-            gpus=False,
-            disable_internet=True,
-            windows=False,
-            mounted=False,
+            gpus=False, disable_internet=True, windows=False, mounted=False
         )
 
     @property
-    def env_paths(self) -> EnvironmentPaths:
-        # In-container POSIX paths regardless of host OS.
+    def env_paths(self):
         return EnvironmentPaths.for_os(self.task_env_config.os)
 
-    def _validate_definition(self) -> None:
-        # Single-image design: no per-task ``environment/`` files required.
-        # The image is the contract; ``start()`` surfaces missing-image errors.
+    def _validate_definition(self):
         return
 
     @classmethod
-    def preflight(cls) -> None:
+    def preflight(cls):
         if shutil.which("docker") is None:
             raise SystemExit(
-                "docker CLI not found on PATH — install Docker Desktop or "
-                "the docker engine before running cb experiment run "
-                "with --environment docker."
+                "Docker CLI not found; install Docker before using the Docker backend."
             )
 
-    # ----- task identity ---------------------------------------------------
+    @property
+    def task_id(self):
+        task_dir = self.environment_dir.parent
+        explicit = self._persistent_env.get("CHI_BENCH_TASK_ID")
+        if explicit:
+            value = explicit
+        elif (task_dir / "fixtures" / "session_manifest.json").is_file():
+            value = "marathon/" + task_dir.name
+        else:
+            value = self.environment_name.rsplit("/", 1)[-1]
+        parts = Path(value).parts
+        if not parts or Path(value).is_absolute() or any(p in (".", "..") for p in parts):
+            raise ValueError("Invalid runtime task identity")
+        return value
 
     @property
-    def task_id(self) -> str:
-        """The per-trial task id forwarded to the in-container entrypoint."""
-        return self.environment_name
-
-    @property
-    def container_name(self) -> str:
+    def container_name(self):
         if self._container_name is None:
             self._container_name = sanitize_container_name(self.session_id)
         return self._container_name
 
-    # ----- lifecycle -------------------------------------------------------
+    @property
+    def server_container_name(self):
+        return self.container_name[:54] + "-server"
 
-    async def start(self, force_build: bool) -> None:
-        if force_build or self._force_build_default:
-            await self._build_image()
+    @property
+    def _target_container(self):
+        return self.server_container_name if self._verifying else self.container_name
 
-        argv = build_docker_run_argv(
-            image=self._image,
-            container_name=self.container_name,
-            task_id=self.task_id,
-            host_env=self._host_env,
-            allow_internet=self._network_is_public,
-            extra_env=self._persistent_env,
-        )
-        self.logger.info("starting container %s from %s", self.container_name, self._image)
-        result = await _run_subprocess(argv)
+    def _initial_role(self):
+        urls = [s.url or "" for s in self.task_env_config.mcp_servers]
+        if (
+            any(":8200/" in u for u in urls)
+            or self.task_id.startswith("cm_")
+            or "care_management" in self.task_id
+        ):
+            return "cm"
+        if (
+            any(":8020/" in u for u in urls)
+            or self.task_id.endswith(("_provider", "_e2e"))
+            or "prior_auth_provider" in self.task_id
+        ):
+            return "provider"
+        return "payer"
+
+    def _agent_env(self):
+        keys = ("CHI_BENCH_TOOL_MODE", "CHI_BENCH_MCP_TOOL_SEP")
+        merged = {**self._host_env, **self._persistent_env}
+        return {k: merged[k] for k in keys if merged.get(k)}
+
+    async def _run(self, argv, *, timeout_sec=None, env=None):
+        return await _run_subprocess(argv, timeout_sec=timeout_sec, env=env)
+
+    async def _checked(self, argv, *, timeout_sec=None, env=None):
+        result = await self._run(argv, timeout_sec=timeout_sec, env=env)
         if result.return_code != 0:
+            detail = str(result.stderr or result.stdout or "command failed")
+            for key, value in (env or {}).items():
+                if value and any(word in key.upper() for word in ("KEY", "TOKEN", "SECRET")):
+                    detail = detail.replace(value, "[redacted]")
             raise RuntimeError(
-                f"docker run failed (rc={result.return_code}): {result.stderr or result.stdout}"
+                f"Runtime operation failed (exit {result.return_code}): {detail[:2000]}"
             )
-        _register_container(self.container_name)
+        return result
 
-        # Provision harbor's expected log dirs and make them world-writable so
-        # the in-container agent user (often non-root) can write trajectories.
-        agent_dir = str(self.env_paths.agent_dir)
-        verifier_dir = str(self.env_paths.verifier_dir)
-        mkdir_cmd = f"mkdir -p {shlex.quote(agent_dir)} {shlex.quote(verifier_dir)} && chmod 777 {shlex.quote(agent_dir)} {shlex.quote(verifier_dir)}"
-        provision = await self.exec(mkdir_cmd, user="root")
-        if provision.return_code != 0:
-            raise RuntimeError(
-                f"failed to provision /logs dirs in {self.container_name}: "
-                f"{provision.stderr or provision.stdout}"
+    async def start(self, force_build):
+        try:
+            runtime_manifest = self._runtime_material_manifest()
+            if force_build or self._force_build_default:
+                await self._build_image()
+            volumes = {
+                name: self._resource_prefix + "-" + name for name in ("workspace", "assets", "raw")
+            }
+            for volume in volumes.values():
+                await self._checked(["docker", "volume", "create", volume])
+                self._owned_volumes.append(volume)
+            if self._network_is_public and not self._uses_host_network:
+                await self._checked(["docker", "network", "create", self._resource_prefix])
+                self._network_created = True
+            network = (
+                ("host" if self._uses_host_network else self._resource_prefix)
+                if self._network_is_public
+                else "none"
             )
-
-        await self._wait_for_server_ready()
-
-    async def stop(self, delete: bool) -> None:
-        if self._container_name is None:
-            return
-        argv = ["docker", "rm", "-f", self._container_name]
-        result = await _run_subprocess(argv)
-        if result.return_code != 0:
-            self.logger.warning(
-                "docker rm -f %s exited %d: %s",
-                self._container_name,
-                result.return_code,
-                result.stderr or result.stdout,
+            server_env = {k: self._host_env[k] for k in FORWARDED_ENV_KEYS if self._host_env.get(k)}
+            server_env.update(self._persistent_env)
+            server_env.update(
+                {
+                    "CHI_BENCH_TASK_ID": self.task_id,
+                    "CHI_BENCH_CONTROL_TOKEN": self._control_token,
+                    "CHI_BENCH_AGENT_ROLE": self._initial_role(),
+                    "CHI_BENCH_PUBLISH_AGENT_ASSETS": "1",
+                }
             )
-        _unregister_container(self._container_name)
-
-    # ----- exec / file I/O -------------------------------------------------
-
-    async def exec(
-        self,
-        command: str,
-        cwd: str | None = None,
-        env: dict[str, str] | None = None,
-        timeout_sec: int | None = None,
-        user: str | int | None = None,
-    ) -> ExecResult:
-        user = self._resolve_user(user)
-        merged_env = self._merge_env(env)
-        effective_cwd = cwd or self.task_env_config.workdir
-
-        argv = build_docker_exec_argv(
-            container_name=self.container_name,
-            command=command,
-            cwd=effective_cwd,
-            env=merged_env,
-            user=user,
-        )
-        return await _run_subprocess(argv, timeout_sec=timeout_sec)
-
-    async def upload_file(self, source_path: Path | str, target_path: str) -> None:
-        argv = ["docker", "cp", str(source_path), f"{self.container_name}:{target_path}"]
-        result = await _run_subprocess(argv)
-        if result.return_code != 0:
-            raise RuntimeError(f"docker cp upload failed: {result.stderr or result.stdout}")
-
-    async def upload_dir(self, source_dir: Path | str, target_dir: str) -> None:
-        # ``docker cp <src>/. <name>:<dst>`` copies contents of src into dst,
-        # matching the semantics harbor callers expect (overwrite, not nest).
-        await self.exec(f"mkdir -p {shlex.quote(target_dir)}", user="root")
-        src = str(source_dir).rstrip("/") + "/."
-        argv = ["docker", "cp", src, f"{self.container_name}:{target_dir}"]
-        result = await _run_subprocess(argv)
-        if result.return_code != 0:
-            raise RuntimeError(f"docker cp upload_dir failed: {result.stderr or result.stdout}")
-
-    async def download_file(self, source_path: str, target_path: Path | str) -> None:
-        target = Path(target_path)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        argv = [
-            "docker",
-            "cp",
-            f"{self.container_name}:{source_path}",
-            str(target),
-        ]
-        result = await _run_subprocess(argv)
-        if result.return_code != 0:
-            raise RuntimeError(f"docker cp download failed: {result.stderr or result.stdout}")
-
-    async def download_dir(self, source_dir: str, target_dir: Path | str) -> None:
-        target = Path(target_dir)
-        target.mkdir(parents=True, exist_ok=True)
-        argv = [
-            "docker",
-            "cp",
-            f"{self.container_name}:{source_dir.rstrip('/')}/.",
-            str(target),
-        ]
-        result = await _run_subprocess(argv)
-        if result.return_code != 0:
-            raise RuntimeError(f"docker cp download_dir failed: {result.stderr or result.stdout}")
-
-    # ----- internal helpers -----------------------------------------------
-
-    async def _build_image(self) -> None:
-        repo_root = _resolve_repo_root()
-        if repo_root is None:
-            raise RuntimeError(
-                "force_build=True but chi_bench is not installed from a source "
-                "checkout (no docker/Dockerfile found above the package). "
-                "Build the image manually with `cb docker build`."
-            )
-        dockerfile = repo_root / "docker" / "Dockerfile"
-        self.logger.info(
-            "building image %s from %s (context=%s)", self._image, dockerfile, repo_root
-        )
-        argv = [
-            "docker",
-            "build",
-            "-f",
-            str(dockerfile),
-            "-t",
-            self._image,
-            str(repo_root),
-        ]
-        result = await _run_subprocess(argv)
-        if result.return_code != 0:
-            raise RuntimeError(
-                f"docker build failed (rc={result.return_code}): {result.stderr or result.stdout}"
-            )
-
-    async def _wait_for_server_ready(
-        self,
-        *,
-        attempts: int = 120,
-        poll_interval_s: float = 1.0,
-    ) -> None:
-        """Block until the in-container chi-bench server answers ``/health``.
-
-        ``docker/entrypoint.sh`` runs as PID 1 and serially: boots the server,
-        then probes :8023/health and the three MCP ports before ``exec``ing
-        ``sleep infinity``. Once the entrypoint reaches the long-running CMD,
-        all MCP session managers are wired up. We probe ``/health`` from
-        the host via ``docker exec`` because harbor will start scheduling
-        ``exec`` calls (agent install, agent run) as soon as ``start`` returns.
-        """
-        probe = (
-            "import sys, urllib.request\n"
-            "try:\n"
-            "    urllib.request.urlopen('http://localhost:8023/health', timeout=3)\n"
-            "    sys.exit(0)\n"
-            "except Exception:\n"
-            "    sys.exit(1)\n"
-        )
-        for attempt in range(attempts):
-            result = await self.exec(f"python -c {shlex.quote(probe)}", timeout_sec=10, user="root")
-            if result.return_code == 0:
-                self.logger.debug(
-                    "chi-bench server ready in %s after %d attempts",
-                    self.container_name,
-                    attempt + 1,
+            if runtime_manifest is not None:
+                # Pin the same roots the guard checks, including with older
+                # images whose inherited environment selected other paths.
+                server_env["CHI_BENCH_TASKS_ROOT"] = self._runtime_tasks_root()
+                server_env["CHI_BENCH_WORLDS_DIR"] = self._runtime_worlds_root()
+            server = [
+                "docker",
+                "create",
+                "--name",
+                self.server_container_name,
+                "--network",
+                network,
+                "--add-host",
+                "chi-bench-server:127.0.0.1",
+                "--log-opt",
+                "max-size=10m",
+                "--log-opt",
+                "max-file=3",
+                "-v",
+                volumes["workspace"] + ":/logs/artifacts/workspaces",
+                "-v",
+                volumes["assets"] + ":/agent-assets",
+                "-v",
+                volumes["raw"] + ":/srv/chi-bench/raw/artifacts",
+            ]
+            for key in sorted(server_env):
+                server += ["-e", key]
+            if runtime_manifest is not None:
+                server += ["--entrypoint", "/bin/sh"]
+            server += [self._image]
+            if runtime_manifest is not None:
+                server += [
+                    "-c",
+                    "python /tmp/chi-bench-material-guard.py /tmp/chi-bench-materials.json"
+                    " && exec /usr/bin/tini -- /usr/local/bin/entrypoint.sh sleep infinity",
+                ]
+            await self._checked(server, env=server_env)
+            self._server_created = True
+            if not self._uses_host_network:
+                _register_container(self.server_container_name)
+            source = self.environment_dir.parent
+            if (source / "fixtures").is_dir():
+                destination = self._runtime_tasks_root() + "/" + self.task_id
+                await self._copy_to_container(
+                    source, self.server_container_name, destination, directory=True
                 )
-                return
-            await asyncio.sleep(poll_interval_s)
-        raise RuntimeError(
-            f"chi-bench server in {self.container_name} did not answer "
-            f"/health within {attempts * poll_interval_s:.0f}s — check "
-            f"container logs with `docker logs {self.container_name}`."
+            if runtime_manifest is not None:
+                from chi_bench.experiment import runtime_materials
+
+                await self._copy_to_container(
+                    Path(runtime_materials.__file__),
+                    self.server_container_name,
+                    "/tmp/chi-bench-material-guard.py",
+                )
+                with tempfile.TemporaryDirectory(prefix="chi-bench-materials-") as temporary:
+                    manifest_path = Path(temporary) / "manifest.json"
+                    manifest_path.write_text(json.dumps(runtime_manifest))
+                    await self._copy_to_container(
+                        manifest_path, self.server_container_name, "/tmp/chi-bench-materials.json"
+                    )
+            await self._checked(["docker", "start", self.server_container_name])
+            await self._wait_for_server_ready()
+            # Task env is simulator configuration. Agent credentials arrive only
+            # through Harbor's explicit agent-scoped per-exec environment.
+            # Package installation needs normal UID/ownership capabilities;
+            # raw sockets are excluded from the shared control network.
+            agent_env = self._agent_env()
+            agent = [
+                "docker",
+                "create",
+                "--name",
+                self.container_name,
+                "--network",
+                "container:" + self.server_container_name,
+                "--cap-drop",
+                "NET_RAW",
+                "--security-opt",
+                "no-new-privileges",
+                "--log-opt",
+                "max-size=10m",
+                "--log-opt",
+                "max-file=3",
+                "-v",
+                volumes["workspace"] + ":/logs/artifacts/workspaces",
+                "-v",
+                volumes["assets"] + ":/agent-assets:ro",
+            ]
+            if not self.task_id.endswith("_new_referral_provider"):
+                agent += ["-v", volumes["raw"] + ":/agent-raw/artifacts:ro"]
+            for key in sorted(agent_env):
+                agent += ["-e", key]
+            agent += [self._agent_image]
+            await self._checked(agent, env=agent_env)
+            self._agent_created = True
+            if not self._uses_host_network:
+                _register_container(self.container_name)
+            await self._checked(["docker", "start", self.container_name])
+            await self.exec(
+                "mkdir -p /logs/agent /logs/artifacts /logs/verifier && chmod 777 /logs/agent /logs/artifacts /logs/verifier",
+                user="root",
+            )
+        except BaseException:
+            await asyncio.shield(self._save_startup_diagnostics())
+            await asyncio.shield(self.stop(delete=True))
+            raise
+
+    def _runtime_material_manifest(self):
+        from chi_bench.experiment.content_identity import DOMAIN_ROOTS, require_dataset_identity
+        from chi_bench.experiment.runtime_materials import (
+            build_runtime_material_manifest,
+            infer_data_root,
+            source_task_path,
         )
+
+        source = self.environment_dir.parent
+        data_root = self._data_root or infer_data_root(source)
+        if self._dataset_content_sha256 is not None:
+            if data_root is None:
+                raise ValueError("An accepted dataset identity requires data_root")
+            identity = require_dataset_identity(
+                data_root, self._dataset_domains, self._dataset_content_sha256
+            )
+            source = source_task_path(data_root, self.task_id)
+            if source.relative_to(data_root).parts[0] not in {
+                DOMAIN_ROOTS[domain] for domain in identity.domains
+            }:
+                raise ValueError("Selected task is outside the accepted dataset domain scope")
+        if data_root is None:
+            return None  # Source-less development/synthetic environments.
+        return build_runtime_material_manifest(
+            data_root,
+            source,
+            self.task_id,
+            worlds_root=self._runtime_worlds_root(),
+            tasks_root=self._runtime_tasks_root(),
+        )
+
+    def _runtime_tasks_root(self):
+        return self._persistent_env.get("CHI_BENCH_TASKS_ROOT") or "/opt/chi-bench/tasks"
+
+    def _runtime_worlds_root(self):
+        return self._persistent_env.get("CHI_BENCH_WORLDS_DIR") or "/opt/chi-bench/worlds"
+
+    async def _save_startup_diagnostics(self):
+        if not self._server_created:
+            return
+        try:
+            result = await self._run(
+                ["docker", "logs", "--tail", "120", self.server_container_name], timeout_sec=10
+            )
+            content = (result.stdout or "") + (result.stderr or "")
+            for key, value in self._host_env.items():
+                if value and any(word in key.upper() for word in ("KEY", "TOKEN", "SECRET")):
+                    content = content.replace(value, "[redacted]")
+            content = content.replace(self._control_token, "[redacted]")
+            path = self.trial_paths.trial_dir / "environment-startup.log"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(descriptor, "w") as stream:
+                stream.write(content)
+        except Exception:
+            self.logger.warning("Could not save trusted simulator startup diagnostics")
+
+    async def stop(self, delete):
+        del delete
+        for name, created in (
+            (self.container_name, self._agent_created),
+            (self.server_container_name, self._server_created),
+        ):
+            if created:
+                await self._run(["docker", "rm", "-f", name], timeout_sec=30)
+                _unregister_container(name)
+        self._agent_created = self._server_created = False
+        for volume in self._owned_volumes:
+            await self._run(["docker", "volume", "rm", volume], timeout_sec=30)
+        self._owned_volumes.clear()
+        if self._network_created:
+            await self._run(["docker", "network", "rm", self._resource_prefix], timeout_sec=30)
+            self._network_created = False
+
+    async def _exec_in(
+        self, container, command, *, cwd=None, env=None, timeout_sec=None, user=None
+    ):
+        argv = ["docker", "exec"]
+        if cwd:
+            argv += ["-w", cwd]
+        if user is not None:
+            argv += ["-u", str(user)]
+        for key in sorted(env or {}):
+            argv += ["-e", key]
+        argv += [container, "bash", "-c", command]
+        return await self._run(argv, env=env, timeout_sec=timeout_sec)
+
+    async def _server_exec(self, command, *, env=None, timeout_sec=None):
+        return await self._exec_in(
+            self.server_container_name, command, env=env, timeout_sec=timeout_sec, user="root"
+        )
+
+    async def exec_control(self, command, env=None, timeout_sec=None):
+        """Host-only control operation. Never executes in the model container."""
+        return await self._server_exec(command, env=env, timeout_sec=timeout_sec)
+
+    async def control_request(self, path, payload=None):
+        if not path.startswith("/") or path.startswith("//"):
+            raise ValueError("Control path must be relative to the simulator")
+        script = (
+            "import json,os,urllib.request\n"
+            "from chi_bench.server.control import control_headers\n"
+            "body=json.loads(os.environ['CHI_CONTROL_BODY'])\n"
+            f"req=urllib.request.Request('http://localhost:8023'+{path!r},"
+            "data=None if body is None else json.dumps(body).encode(),"
+            "headers={**control_headers(),'Content-Type':'application/json'})\n"
+            "with urllib.request.urlopen(req,timeout=135) as r: print(r.read().decode())\n"
+        )
+        result = await self.exec_control(
+            "python -c " + shlex.quote(script),
+            env={"CHI_CONTROL_BODY": json.dumps(payload)},
+            timeout_sec=150,
+        )
+        if result.return_code:
+            raise RuntimeError(
+                "Trusted simulator request failed: " + str(result.stderr or result.stdout)[:1500]
+            )
+        return json.loads(result.stdout or "{}")
+
+    async def begin_verification(self):
+        if self._verifying:
+            return
+        if self._agent_created:
+            await self._checked(["docker", "stop", "-t", "5", self.container_name], timeout_sec=20)
+        await self.control_request("/_admin/agent_role", {"role": "closed"})
+        result = await self._server_exec("mkdir -p /logs/verifier")
+        if result.return_code:
+            raise RuntimeError("Cannot prepare the trusted verifier output directory")
+        self._verifying = True
+
+    async def exec(self, command, cwd=None, env=None, timeout_sec=None, user=None):
+        if self._verifying:
+            return await self._server_exec(command, env=env, timeout_sec=timeout_sec)
+        merged = {**self._agent_env(), **(env or {})}
+        for scoped in self._exec_env_overlays.get():
+            merged.update(scoped)
+        merged = {
+            k: v
+            for k, v in merged.items()
+            if k != "CHI_BENCH_CONTROL_TOKEN" and not k.startswith("CHI_BENCH_JUDGE_")
+        }
+        return await self._exec_in(
+            self.container_name,
+            command,
+            cwd=cwd or self.task_env_config.workdir,
+            env=merged,
+            timeout_sec=timeout_sec,
+            user=self._resolve_user(user),
+        )
+
+    async def _copy_to_container(self, source, container, target, *, directory=False):
+        source_arg = str(source.resolve()).rstrip("/") + ("/." if directory else "")
+        await self._checked(["docker", "cp", source_arg, f"{container}:{target}"])
+
+    async def _copy_from_container(self, container, source, target, *, directory=False):
+        target = Path(target)
+        (target if directory else target.parent).mkdir(parents=True, exist_ok=True)
+        source_arg = source.rstrip("/") + ("/." if directory else "")
+        await self._checked(["docker", "cp", f"{container}:{source_arg}", str(target)])
+
+    async def upload_file(self, source_path, target_path):
+        if str(target_path) == "/tests" or str(target_path).startswith("/tests/"):
+            await self.begin_verification()
+        await self._copy_to_container(Path(source_path), self._target_container, target_path)
+
+    async def upload_dir(self, source_dir, target_dir):
+        if str(target_dir).rstrip("/") == "/tests":
+            await self.begin_verification()
+        result = await self.exec("mkdir -p " + shlex.quote(str(target_dir)), user="root")
+        if result.return_code:
+            raise RuntimeError("Cannot create upload directory")
+        await self._copy_to_container(
+            Path(source_dir), self._target_container, target_dir, directory=True
+        )
+
+    def _download_container(self, source):
+        value = str(source).rstrip("/")
+        if value == "/logs/agent" or value.startswith("/logs/agent/"):
+            return self.container_name
+        if (
+            value == "/logs/verifier"
+            or value.startswith("/logs/verifier/")
+            or value == "/logs/artifacts"
+        ):
+            return self.server_container_name
+        return self._target_container
+
+    async def download_file(self, source_path, target_path):
+        await self._copy_from_container(
+            self._download_container(source_path), source_path, Path(target_path)
+        )
+
+    async def download_dir(self, source_dir, target_dir):
+        await self._copy_from_container(
+            self._download_container(source_dir), source_dir, Path(target_dir), directory=True
+        )
+
+    async def _engine_build_context(self):
+        root = _resolve_repo_root()
+        if root is None:
+            raise RuntimeError("Building the runtime requires a source checkout")
+        return str(root)
+
+    async def _build_image(self):
+        context = await self._engine_build_context()
+        for target, tag in (("runtime", self._image), ("agent", self._agent_image)):
+            await self._checked(
+                [
+                    "docker",
+                    "build",
+                    *(["--network", "host"] if self._uses_host_network else []),
+                    "-f",
+                    context + "/docker/Dockerfile",
+                    "--target",
+                    target,
+                    "-t",
+                    tag,
+                    context,
+                ],
+                timeout_sec=round(self.task_env_config.build_timeout_sec),
+            )
+
+    async def _wait_for_server_ready(self, *, attempts=600, poll_interval_s=1.0):
+        script = "from pathlib import Path; import urllib.request; urllib.request.urlopen('http://localhost:8023/health',timeout=3); assert Path('/agent-assets/.ready').is_file()"
+        for _ in range(attempts):
+            result = await self._server_exec("python -c " + shlex.quote(script), timeout_sec=10)
+            if result.return_code == 0:
+                return
+            state = await self._run(
+                ["docker", "inspect", "--format", "{{.State.Status}}", self.server_container_name],
+                timeout_sec=10,
+            )
+            if state.return_code == 0 and (state.stdout or "").strip() in ("exited", "dead"):
+                raise RuntimeError("Trusted simulator exited during startup")
+            await asyncio.sleep(poll_interval_s)
+        raise RuntimeError("Simulator failed readiness checks; inspect trusted container logs")
 
 
 # ----- subprocess helper ---------------------------------------------------
 
 
-async def _run_subprocess(argv: list[str], *, timeout_sec: int | None = None) -> ExecResult:
+async def _run_subprocess(
+    argv: list[str], *, timeout_sec: int | None = None, env: Mapping[str, str] | None = None
+) -> ExecResult:
     """Run ``argv`` and return harbor's ``ExecResult``.
 
     Captures stdout/stderr as decoded strings; surfaces timeouts as a
@@ -481,6 +718,7 @@ async def _run_subprocess(argv: list[str], *, timeout_sec: int | None = None) ->
         *argv,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        env={**os.environ, **env} if env else None,
     )
     try:
         if timeout_sec is not None:

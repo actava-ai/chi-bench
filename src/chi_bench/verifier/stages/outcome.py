@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from typing import Any
+from chi_bench.core.e2e_protocol import is_workflow_v2
+from chi_bench.core.p2p_evidence import consultation_evidence
 
 from ._base import CheckStatus, StageResult, StageVerifier, mark_not_applicable
 from ._helpers import filter_by_case_id, has_audit_action
@@ -49,6 +51,8 @@ def _terminal_determination_expected(
     exported: dict[str, Any],  # noqa: ARG001 — reserved for future dynamic rules
 ) -> bool:
     """True when a clean determination must pass."""
+    if is_workflow_v2(exported, expectations):
+        return (exported.get("target_case") or {}).get("status") in _TERMINAL_STATUSES
     expected_status = normalized_str(expectations.get("expected_target_status"))
     if expected_status in _TERMINAL_STATUSES:
         return True
@@ -233,7 +237,7 @@ class OutcomeVerifier(StageVerifier):
         # On the submit path we fall through to the original logic.
         if is_provider_to_payer_e2e_task(self.expectations):
             agent_path = agent_path_for_e2e(self.expectations, exported)
-            if agent_path != "submit":
+            if agent_path != "submit" and not is_workflow_v2(exported, self.expectations):
                 mark_not_applicable(
                     checks,
                     "outcome.target_status",
@@ -250,7 +254,11 @@ class OutcomeVerifier(StageVerifier):
                 )
                 return StageResult(stage="outcome", checks=checks)
 
-        checks["outcome.target_status"] = actual_status == expected_status
+        checks["outcome.target_status"] = (
+            "not_applicable"
+            if is_workflow_v2(exported, self.expectations)
+            else actual_status == expected_status
+        )
 
         expected_letters = self.expectations.get("expected_letter_types", [])
         if expected_letters:
@@ -259,6 +267,25 @@ class OutcomeVerifier(StageVerifier):
                 for letter in filter_by_case_id(exported.get("letters", []), resolved_case_id)
             }
             checks["outcome.letter_types"] = set(expected_letters).issubset(actual_letters)
+
+        completed_p2p = [
+            request
+            for request in filter_by_case_id(
+                exported.get("payer_peer_to_peer_requests", []), resolved_case_id
+            )
+            if request.get("status") == "completed"
+        ]
+        if completed_p2p:
+            checks["outcome.p2p_consultation_evidence"] = all(
+                consultation_evidence(
+                    request,
+                    sessions=exported.get("payer_p2p_session_records", []),
+                    external=exported.get("payer_p2p_external_evidence", []),
+                    relays=exported.get("payer_p2p_relay_evidence", []),
+                )
+                is not None
+                for request in completed_p2p
+            )
 
         if _terminal_determination_expected(self.expectations, exported):
             self._emit_clean_determination_checks(checks, resolved_case_id, actual_status)
@@ -365,6 +392,8 @@ class OutcomeVerifier(StageVerifier):
         ]
         if actual_status in {"approved", "partially_approved"}:
             required_keys.append("outcome.authorization_number")
+        if "outcome.p2p_consultation_evidence" in checks:
+            required_keys.append("outcome.p2p_consultation_evidence")
         checks["outcome.clean_determination"] = all(
             checks.get(key) is True for key in required_keys
         )

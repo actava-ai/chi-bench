@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 import random
 from collections import defaultdict
 from collections.abc import Sequence
@@ -67,10 +68,11 @@ class Trial:
     agent: str
     model: str
     reward: float
-    input_tokens: int
-    output_tokens: int
-    cache_tokens: int
+    input_tokens: int | None
+    output_tokens: int | None
+    cache_tokens: int | None
     wall_clock_seconds: float
+    e2e_protocol: str | None = None
 
 
 def is_per_trial_result(path: Path) -> bool:
@@ -94,6 +96,9 @@ def _parse_trial(result_path: Path) -> Trial | None:
     vr = data.get("verifier_result")
     if not isinstance(vr, dict):
         return None
+    from chi_bench.verifier.validity import require_valid_trial
+
+    require_valid_trial(result_path)
     rb = vr.get("rewards")
     reward_value = rb.get("reward") if isinstance(rb, dict) else vr.get("reward")
     try:
@@ -127,12 +132,11 @@ def _parse_trial(result_path: Path) -> Trial | None:
     task_identity = data.get("task_name") or task.get("path") or ""
     task_name = Path(str(task_identity)).name or result_path.parent.name.split("__", 1)[0]
 
-    def usage(field: str, legacy_field: str) -> int:
+    protocol = _current_e2e_protocol(result_path, data, task_name, str(agent))
+
+    def usage(field: str, legacy_field: str) -> int | None:
         value = ar.get(field) if field in ar else ar.get(legacy_field)
-        try:
-            return int(value or 0)
-        except (TypeError, ValueError):
-            return 0
+        return value if type(value) is int and value >= 0 else None
 
     wall_clock_seconds: float | None = None
     execution = data.get("agent_execution")
@@ -157,14 +161,48 @@ def _parse_trial(result_path: Path) -> Trial | None:
         agent=agent,
         model=model,
         reward=reward,
-        # `or 0` (not a get-default) so an explicit null value — emitted by the
-        # openai-agents/OpenRouter path, which leaves cost/token fields None —
-        # coerces to 0 instead of crashing int(None)/float(None).
         input_tokens=usage("n_input_tokens", "input_tokens"),
         output_tokens=usage("n_output_tokens", "output_tokens"),
         cache_tokens=usage("n_cache_tokens", "cache_tokens"),
         wall_clock_seconds=wall_clock_seconds,
+        e2e_protocol=protocol,
     )
+
+
+def _current_e2e_protocol(result_path: Path, data: dict, task_name: str, agent: str) -> str | None:
+    """Require current trusted score provenance; never relabel historical E2E runs."""
+    records = {}
+    for name in ("scorecard.json", "exported_state.json"):
+        path = result_path.parent / "verifier" / name
+        if path.exists():
+            try:
+                record = json.loads(path.read_text())
+            except (OSError, json.JSONDecodeError) as exc:
+                raise ValueError(f"Unreadable verifier provenance: {path}") from exc
+            if not isinstance(record, dict):
+                raise ValueError(f"Invalid verifier provenance: {path}")
+            records[name] = record
+    score = records.get("scorecard.json", {})
+    exported = records.get("exported_state.json", {})
+    is_e2e = (
+        task_name.endswith("_e2e")
+        or agent == "dual-pa-e2e"
+        or data.get("task_kind") == "provider_to_payer_e2e"
+        or exported.get("task_kind") == "provider_to_payer_e2e"
+        or "e2e_protocol" in score
+    )
+    if not is_e2e:
+        return None
+    if (
+        score.get("e2e_protocol") != "workflow_v2"
+        or score.get("e2e_protocol_source") != "trusted_runtime_export"
+        or ("exported_state.json" in records and exported.get("e2e_protocol") != "workflow_v2")
+    ):
+        raise ValueError(
+            f"E2E aggregation requires current workflow_v2 verifier provenance: {result_path}. "
+            "Historical or unversioned results cannot be included in current scores."
+        )
+    return "workflow_v2"
 
 
 def _load_prices(path: Path | None) -> dict[str, dict[str, float]]:
@@ -173,11 +211,24 @@ def _load_prices(path: Path | None) -> dict[str, dict[str, float]]:
     return yaml.safe_load(path.read_text()).get("prices", {})
 
 
-def _cost(trial: Trial, prices: dict[str, dict[str, float]]) -> float:
-    p = prices.get(trial.model) or {}
-    inp = p.get("input", 0.0)
-    out = p.get("output", 0.0)
+def _cost(trial: Trial, prices: dict[str, dict[str, float]]) -> float | None:
+    if any(
+        value is None for value in (trial.input_tokens, trial.output_tokens, trial.cache_tokens)
+    ):
+        return None
+    p = prices.get(trial.model)
+    if not isinstance(p, dict):
+        return None
+    inp = p.get("input")
+    out = p.get("output")
+    if any(
+        type(value) not in (int, float) or not math.isfinite(value) or value < 0
+        for value in (inp, out)
+    ):
+        return None
     cache = p.get("cache", inp * 0.1)
+    if type(cache) not in (int, float) or not math.isfinite(cache) or cache < 0:
+        return None
     return (
         max(trial.input_tokens - trial.cache_tokens, 0) / 1_000_000.0 * inp
         + trial.output_tokens / 1_000_000.0 * out
@@ -232,12 +283,14 @@ def aggregate_to_rows(
 
     prices = _load_prices(prices_path)
 
-    groups: dict[tuple[str, str], list[Trial]] = defaultdict(list)
+    groups: dict[tuple[str, str, str | None], list[Trial]] = defaultdict(list)
     for t in trials:
-        groups[(t.agent, t.model)].append(t)
+        groups[(t.agent, t.model, t.e2e_protocol)].append(t)
 
     rows: list[dict[str, object]] = []
-    for (agent, model), gs in sorted(groups.items()):
+    for (agent, model, protocol), gs in sorted(
+        groups.items(), key=lambda item: tuple(str(v or "") for v in item[0])
+    ):
         n1 = len(gs)
         by_task: dict[str, list[Trial]] = defaultdict(list)
         for x in gs:
@@ -256,13 +309,15 @@ def aggregate_to_rows(
             pp3_vec, iters=bootstrap_iters, seed=bootstrap_seed
         )
 
-        total_cost = sum(_cost(x, prices) for x in gs)
+        costs = [_cost(x, prices) for x in gs]
+        mean_cost = sum(costs) / n1 if all(cost is not None for cost in costs) else None
         mean_walltime = sum(x.wall_clock_seconds for x in gs) / max(1, n1)
 
         rows.append(
             {
                 "agent": agent,
                 "model": model,
+                "e2e_protocol": protocol,
                 "n_trials": n1,
                 "n_tasks": nT,
                 "pass_at_1": pass1_mean,
@@ -274,7 +329,7 @@ def aggregate_to_rows(
                 "pass_pow_3": passpow3_mean,
                 "pass_pow_3_lo": passpow3_lo,
                 "pass_pow_3_hi": passpow3_hi,
-                "mean_cost_usd": total_cost / max(1, n1),
+                "mean_cost_usd": mean_cost,
                 "mean_walltime_s": mean_walltime,
             }
         )
@@ -288,7 +343,7 @@ def write_rows_csv(rows: list[dict[str, object]], out_csv: Path) -> None:
     with out_csv.open("w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         w.writeheader()
-        w.writerows(rows)
+        w.writerows({k: "null" if v is None else v for k, v in row.items()} for row in rows)
 
 
 def aggregate(

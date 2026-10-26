@@ -11,6 +11,12 @@ from chi_bench.core.enums import (
     PeerToPeerStatus,
 )
 from chi_bench.core.errors import InvalidCaseActionError
+from chi_bench.core.p2p_evidence import (
+    ExternalP2PEvidence,
+    RelayP2PEvidence,
+    consultation_evidence,
+    utc_time,
+)
 from chi_bench.core.models import (
     DirectoryContact,
     Organization,
@@ -28,7 +34,98 @@ class P2PService:
     def __init__(self, ctx: ServiceContext):
         self.ctx = ctx
 
+    def import_external_evidence(self, evidence: ExternalP2PEvidence) -> dict[str, Any]:
+        """Trusted ingestion for an actual externally documented meeting."""
+        request = self.ctx.get_peer_to_peer_request(evidence.request_id)
+        if request.case_id != evidence.case_id or utc_time(evidence.occurred_at) > utc_time(
+            self.ctx.now
+        ):
+            raise InvalidCaseActionError(
+                "External P2P evidence must match the request/case and an elapsed meeting"
+            )
+        payload = evidence.model_dump(mode="json")
+        existing = self.ctx.store.get_resource("payer", "payer_p2p_external_evidence", evidence.id)
+        if existing is not None and existing != payload:
+            raise InvalidCaseActionError("Imported P2P evidence cannot be overwritten")
+        self.ctx.store.save_resource("payer", "payer_p2p_external_evidence", evidence.id, payload)
+        self.ctx.audit(
+            "payer_p2p_scheduler",
+            "import_external_p2p_evidence",
+            actor="trusted_import",
+            case_id=evidence.case_id,
+            request_id=evidence.request_id,
+            evidence_id=evidence.id,
+        )
+        return {"evidence": payload}
+
+    def record_relay_transcript(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Persist the host-collected E2E relay separately from writable files."""
+        evidence = RelayP2PEvidence.model_validate_json(payload["content"])
+        request = self.ctx.get_peer_to_peer_request(evidence.request_id)
+        if (
+            self.ctx.task_kind != "provider_to_payer_e2e"
+            or request.case_id != evidence.case_id
+            or payload.get("case_id") != evidence.case_id
+        ):
+            raise InvalidCaseActionError("Relay evidence must match this E2E request and case")
+        record = evidence.model_dump(mode="json")
+        existing = self.ctx.store.get_resource("payer", "payer_p2p_relay_evidence", request.id)
+        turns = record["turns"]
+        if any(
+            turn["actor"] != ("provider" if index % 2 == 0 else "payer")
+            for index, turn in enumerate(turns)
+        ):
+            raise InvalidCaseActionError("Relay evidence must preserve provider/payer turn order")
+        if existing and turns[: len(existing["turns"])] != existing["turns"]:
+            raise InvalidCaseActionError("Relay evidence cannot replace previously collected turns")
+        # Keep the existing shared artifact used by the E2E verifier/UI.
+        artifact = self.ctx.workspace.write_workspace_artifact(
+            **payload, owner="payer", created_by="trusted_relay"
+        )
+        self.ctx.store.save_resource("payer", "payer_p2p_relay_evidence", request.id, record)
+        return artifact
+
+    def _require_outcome_evidence(
+        self, request: PayerPeerToPeerRequest, outcome: str, payer_contact_id: str | None = None
+    ) -> tuple[str, str]:
+        payload = request.model_dump(mode="json")
+        payload["outcome"] = PeerToPeerOutcome(outcome).value
+        payload["payer_contact_id"] = payer_contact_id if payer_contact_id != "SYSTEM" else None
+        is_e2e = self.ctx.task_kind == "provider_to_payer_e2e"
+        evidence = consultation_evidence(
+            payload,
+            sessions=[row.model_dump(mode="json") for row in self.ctx.list_p2p_session_records()],
+            external=self.ctx.store.list_resources("payer", "payer_p2p_external_evidence"),
+            relays=self.ctx.store.list_resources("payer", "payer_p2p_relay_evidence")
+            if is_e2e
+            else [],
+            allow_pending_payer_turn=is_e2e,
+        )
+        if evidence is None or (
+            evidence[0] != "external"
+            and request.status not in {PeerToPeerStatus.EVENT_OPEN, PeerToPeerStatus.COMPLETED}
+        ):
+            raise InvalidCaseActionError(
+                "P2P outcome requires conversation evidence for this request/case/reviewer: complete the simulated conversation, use the E2E relay, or import a genuine external meeting record through the trusted control endpoint. A note alone is not evidence."
+            )
+        if evidence[0] == "external" and payer_contact_id not in {None, "SYSTEM"}:
+            external = self.ctx.store.get_resource(
+                "payer", "payer_p2p_external_evidence", evidence[1]
+            )
+            if payer_contact_id != external["payer_contact_id"]:
+                raise InvalidCaseActionError(
+                    "P2P outcome reviewer must match the imported meeting evidence"
+                )
+        return evidence
+
     def _workflow_contract(self, request: PayerPeerToPeerRequest) -> dict[str, Any]:
+        if self.ctx.task_kind == "provider_to_payer_e2e":
+            from chi_bench.core.e2e_protocol import validate_e2e_protocol
+
+            validate_e2e_protocol(getattr(self.ctx, "e2e_protocol", None))
+            # Both roles coordinate and speak in the harness. Source single-role
+            # GT must not manufacture a provider reply or a counterpart opening.
+            return {}
         expectation = getattr(self.ctx, "_expectations", None)
         if expectation is None:
             return {}
@@ -51,9 +148,16 @@ class P2PService:
         self, request_id: str, *, required: bool = True
     ) -> P2PSessionRecord | None:
         session = self.ctx.get_p2p_session_for_request(request_id)
+        if (
+            session is not None
+            and session.case_id != self.ctx.get_peer_to_peer_request(request_id).case_id
+        ):
+            raise InvalidCaseActionError("P2P session evidence belongs to another case")
         if session is None and required:
             raise InvalidCaseActionError(
-                f"No active peer-to-peer session exists for request '{request_id}'."
+                f"No active peer-to-peer session exists for request '{request_id}'. "
+                "Do not claim a conversation occurred. This path requires a configured "
+                "dialogue or trusted external meeting evidence before recording an outcome."
             )
         return session
 
@@ -753,7 +857,18 @@ class P2PService:
         outcome: str,
         note: str | None,
     ) -> dict[str, Any]:
+        source, evidence_id = self._require_outcome_evidence(request, outcome, payer_contact_id)
         outcome_value = PeerToPeerOutcome(outcome)
+        request.outcome_source = source
+        request.outcome_evidence_id = evidence_id
+        if source == "external":
+            external = self.ctx.store.get_resource(
+                "payer", "payer_p2p_external_evidence", evidence_id
+            )
+            payer_contact_id = (
+                external["payer_contact_id"] if payer_contact_id == "SYSTEM" else payer_contact_id
+            )
+            request.scheduled_at = request.scheduled_at or external["occurred_at"]
         request.payer_contact_id = payer_contact_id
         request.outcome = outcome_value
         request.status = PeerToPeerStatus.COMPLETED
@@ -786,6 +901,8 @@ class P2PService:
             case_id=request.case_id,
             request_id=request.id,
             outcome=outcome_value.value,
+            outcome_source=source,
+            outcome_evidence_id=evidence_id,
         )
         return {"p2p_request": request.model_dump(mode="json")}
 
@@ -840,7 +957,12 @@ class P2PService:
             "items": [
                 item.model_dump(mode="json")
                 for item in self.ctx.list_peer_to_peer_requests(case_id)
-            ]
+            ],
+            "external_meeting_evidence": [
+                record
+                for record in self.ctx.store.list_resources("payer", "payer_p2p_external_evidence")
+                if case_id is None or record.get("case_id") == case_id
+            ],
         }
 
     def offer_slots(
@@ -1069,7 +1191,7 @@ class P2PService:
         outcome: PeerToPeerOutcome | str = "",
         note: str | None = None,
     ) -> dict[str, Any]:
-        """Record the adjudicated outcome on a peer-to-peer request and close it. Transitions the request from `event_open` to `completed` — this is how a peer-to-peer request is closed. Publishes an outcome note as a shared artifact. Does not transition the case status.
+        """Record the adjudicated outcome and close a peer-to-peer request. Requires a completed exchange in an open simulated event, a host-collected E2E relay, or a trusted imported external meeting record. A note does not establish that a conversation occurred. Manual recording of supported external evidence uses the same arguments. Publishes an outcome note; does not transition the case status.
 
         Args:
             request_id: PayerPeerToPeerRequest.id, such as 'P2P-A1B2C3D4'. Must not already be `completed`.
@@ -1083,13 +1205,13 @@ class P2PService:
             raise InvalidCaseActionError(
                 f"Peer-to-peer request '{request_id}' is already completed."
             )
+        session = self._session_for_request(request_id, required=False)
         result = self._record_outcome_internal(
             request,
             payer_contact_id=payer_contact_id,
             outcome=outcome,
             note=note,
         )
-        session = self._session_for_request(request_id, required=False)
         if session is not None:
             self._write_thread_state(
                 self.ctx.get_peer_to_peer_request(request_id),
@@ -1234,6 +1356,14 @@ class P2PService:
         session = self._session_for_request(request_id)
         assert session is not None
         contract = self._workflow_contract(request)
+        recorded_result = (
+            contract.get("fixed_result") or proposed_result
+            if session.benchmark_side == "provider"
+            else proposed_result
+        )
+        self._require_outcome_evidence(
+            request, recorded_result, request.payer_contact_id or "SYSTEM"
+        )
         summary_artifact = self._publish_thread_artifact(
             request=request,
             title=f"P2P summary for {request.case_id}",

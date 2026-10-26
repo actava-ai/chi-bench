@@ -13,6 +13,14 @@ from threading import RLock
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
+from chi_bench.core.workspace_files import (
+    read_workspace_bytes,
+    stat_workspace_file,
+    remove_workspace_entry,
+    write_workspace_bytes,
+    validate_workspace_path,
+)
+
 from chi_bench.core.app_suite import app_suite
 from chi_bench.core.clock import WorldClock
 from chi_bench.core.enums import (
@@ -213,6 +221,9 @@ class ServiceContext:
     cm_care_plan: CMCarePlanService
 
     def __init__(self, runtime_dir: Path | str, fixtures_dir: Path | str | None = None):
+        from chi_bench.core.e2e_protocol import validate_e2e_protocol
+
+        self.e2e_protocol = validate_e2e_protocol(os.environ.get("CHI_BENCH_E2E_PROTOCOL"))
         self.runtime_dir = Path(runtime_dir)
         self.fixtures_dir = Path(fixtures_dir) if fixtures_dir else None
         self.store = WorldStore(self.runtime_dir)
@@ -221,7 +232,7 @@ class ServiceContext:
             Path(configured_workspace_root)
             if configured_workspace_root
             else self.runtime_dir / "workspaces"
-        )
+        ).absolute()
         # Raw chart DB + source-artifact workspace: historically lived at
         # `workspace_root/raw/` inside the shared `${HOST_ARTIFACTS_PATH}`
         # bind-mount — meaning the agent container saw it too (a well-known
@@ -239,6 +250,7 @@ class ServiceContext:
         self._scenario: ScenarioDefinition | None = None
         self._expectations: ExpectationDefinition | None = None
         self._manifest: TaskManifest | None = None
+        self._cm_case_manifests: dict[str, TaskManifest] | None = None
         self._e2e_payer_gt: dict[str, Any] | None = None
         # Shared world kept on the context (not just the composed scenario)
         # so the C1 fast-forward path can index cases + their bundle stage
@@ -650,6 +662,26 @@ class ServiceContext:
             or self._scenario.task_kind == "payer_end_to_end_review"
         )
 
+    def cm_manifest_for_case(self, case_id: str) -> TaskManifest | None:
+        """Resolve trusted CM metadata for this case, including resumed sessions."""
+        self._require_loaded()
+        if not self._is_session:
+            manifest = self._manifest
+            return manifest if manifest and manifest.target_case_id == case_id else None
+        if self._cm_case_manifests is None:
+            from chi_bench.core.loaders import load_session_manifest, load_task_manifest
+
+            session = load_session_manifest(self.fixtures_dir)
+            manifests = {}
+            for entry in session.tasks:
+                manifest = load_task_manifest(self.fixtures_dir / "tasks" / entry.task_id)
+                if manifest.target_case_id:
+                    if manifest.target_case_id in manifests:
+                        raise ValueError("CM session contains duplicate target case identifiers")
+                    manifests[manifest.target_case_id] = manifest
+            self._cm_case_manifests = manifests
+        return self._cm_case_manifests.get(case_id)
+
     def _load_cm_definitions(self, manifest: Any) -> None:
         """Load definitions for care management tasks (no PA ScenarioDefinition needed)."""
         from chi_bench.bootstrap_cm import (
@@ -980,7 +1012,7 @@ class ServiceContext:
     def _reset_workspace_root(self) -> None:
         if self.workspace_root.exists():
             try:
-                shutil.rmtree(self.workspace_root)
+                _clear_dir_preserving_mounts(self.workspace_root)
             except FileNotFoundError:
                 pass
         self.workspace_root.mkdir(parents=True, exist_ok=True)
@@ -1001,7 +1033,10 @@ class ServiceContext:
         for path in self._generated_raw_workspace_paths():
             if path.is_dir():
                 try:
-                    shutil.rmtree(path)
+                    if path.is_mount():
+                        _clear_dir_preserving_mounts(path)
+                    else:
+                        shutil.rmtree(path)
                 except FileNotFoundError:
                     pass
             else:
@@ -1020,7 +1055,7 @@ class ServiceContext:
 
     @property
     def _workspace_materialized_marker_path(self) -> Path:
-        return self.workspace_root / ".workspace_materialized"
+        return self.runtime_dir / ".workspace_materialized"
 
     def _workspace_is_materialized(self) -> bool:
         if not self._workspace_materialized_marker_path.exists():
@@ -2105,7 +2140,7 @@ class ServiceContext:
         return f"{artifact_type}/{slug}{extension}"
 
     def workspace_artifact_path(self, artifact: WorkspaceArtifact) -> Path:
-        return self.workspace_root / artifact.relative_path
+        return validate_workspace_path(self.workspace_root, artifact.relative_path)
 
     def _artifact_content_for_registration(
         self,
@@ -2124,7 +2159,7 @@ class ServiceContext:
         }:
             return None
         try:
-            return path.read_text(encoding="utf-8")
+            return read_workspace_bytes(self.workspace_root, path).decode("utf-8")
         except UnicodeDecodeError:
             return None
 
@@ -2257,8 +2292,8 @@ class ServiceContext:
         content: str | None = None,
         artifact_id: str | None = None,
     ) -> WorkspaceArtifact:
-        resolved_root = self.workspace_root.resolve()
-        resolved_path = path.resolve()
+        resolved_root = self.workspace_root.absolute()
+        resolved_path = validate_workspace_path(self.workspace_root, path)
         try:
             relative_path = resolved_path.relative_to(resolved_root).as_posix()
         except ValueError as exc:
@@ -2273,6 +2308,9 @@ class ServiceContext:
             or (existing.mime_type if existing is not None else None)
             or infer_mime_type(resolved_path)
         )
+        if linked_resource_type is None and linked_resource_id is None and existing is not None:
+            linked_resource_type = existing.linked_resource_type
+            linked_resource_id = existing.linked_resource_id
         if linked_resource_type is None or linked_resource_id is None:
             inferred_type, inferred_id = self._infer_linked_resource(case_id, resolved_path.name)
             linked_resource_type = linked_resource_type or inferred_type
@@ -2325,7 +2363,7 @@ class ServiceContext:
             filename=resolved_path.name,
             relative_path=relative_path,
             mime_type=mime_type,
-            size_bytes=resolved_path.stat().st_size,
+            size_bytes=stat_workspace_file(self.workspace_root, resolved_path).st_size,
             linked_resource_type=linked_resource_type,
             linked_resource_id=linked_resource_id,
             previewable=is_previewable_mime_type(mime_type),
@@ -2373,8 +2411,7 @@ class ServiceContext:
             filename = self.default_workspace_filename(title, artifact_type, mime_type)
         relative_path = self.workspace_relative_path(case_id, scope_value, filename)
         output_path = self.workspace_root / relative_path
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(content, encoding="utf-8")
+        write_workspace_bytes(self.workspace_root, output_path, content.encode("utf-8"))
         artifact = self.register_workspace_artifact(
             path=output_path,
             artifact_id=artifact_id,
@@ -2420,8 +2457,7 @@ class ServiceContext:
             filename = self.default_workspace_filename(title, artifact_type, mime_type)
         relative_path = self.workspace_relative_path(case_id, scope_value, filename)
         output_path = self.workspace_root / relative_path
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_bytes(file_bytes)
+        write_workspace_bytes(self.workspace_root, output_path, file_bytes)
         return self.register_workspace_artifact(
             path=output_path,
             artifact_id=artifact_id,
@@ -2456,8 +2492,9 @@ class ServiceContext:
         target_subpath = filename or "/".join(subparts)
         target_relative_path = self.workspace_relative_path(artifact.case_id, scope, target_subpath)
         target_path = self.workspace_root / target_relative_path
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source_path, target_path)
+        write_workspace_bytes(
+            self.workspace_root, target_path, read_workspace_bytes(self.workspace_root, source_path)
+        )
         return self.register_workspace_artifact(
             path=target_path,
             case_id=artifact.case_id,
@@ -2683,12 +2720,11 @@ class ServiceContext:
             "incoming_request",
         )
         dest = self.workspace_root / rel_dir
-        dest.mkdir(parents=True, exist_ok=True)
 
         for source_file in sorted(request_source.iterdir()):
             if source_file.is_file():
                 target = dest / source_file.name
-                shutil.copy2(source_file, target)
+                write_workspace_bytes(self.workspace_root, target, source_file.read_bytes())
                 self.register_workspace_artifact(
                     path=target,
                     case_id=target_case_id,
@@ -2865,6 +2901,14 @@ class ServiceContext:
             linked_resource_id=request.id,
         )
 
+    def _generate_workspace_pdf(self, generator, path: Path, **kwargs):
+        import tempfile
+
+        with tempfile.TemporaryDirectory(prefix="chi-bench-pdf-") as directory:
+            temporary = Path(directory) / "artifact.pdf"
+            generator(temporary, **kwargs)
+            write_workspace_bytes(self.workspace_root, path, temporary.read_bytes())
+
     def _materialize_case_workspace_artifacts(
         self,
         case_id: str,
@@ -2900,7 +2944,8 @@ class ServiceContext:
         if not request_form_path.exists():
             from chi_bench.core.workspace_pdf import generate_request_form_pdf
 
-            generate_request_form_pdf(
+            self._generate_workspace_pdf(
+                generate_request_form_pdf,
                 request_form_path,
                 case=case,
                 patient=patient,
@@ -2930,7 +2975,7 @@ class ServiceContext:
             relative_path = metadata.get("provider_relative_path")
             if not isinstance(relative_path, str) or not relative_path.strip():
                 return None, None
-            path = self.workspace_root / relative_path
+            path = validate_workspace_path(self.workspace_root, self.workspace_root / relative_path)
             if not path.exists():
                 return None, None
             mime_type = metadata.get("mime_type")
@@ -2952,7 +2997,8 @@ class ServiceContext:
                 if not provider_document_path.exists():
                     from chi_bench.core.workspace_pdf import generate_document_pdf
 
-                    generate_document_pdf(
+                    self._generate_workspace_pdf(
+                        generate_document_pdf,
                         provider_document_path,
                         document=document,
                         case=case,
@@ -2989,8 +3035,11 @@ class ServiceContext:
                     WorkspaceArtifactScope.SHARED,
                     f"intake/{provider_document_path.name}",
                 )
-                shared_document_path.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(provider_document_path, shared_document_path)
+                write_workspace_bytes(
+                    self.workspace_root,
+                    shared_document_path,
+                    read_workspace_bytes(self.workspace_root, provider_document_path),
+                )
                 self.register_workspace_artifact(
                     path=shared_document_path,
                     case_id=case.id,
@@ -3021,14 +3070,14 @@ class ServiceContext:
                 relative_path = path.resolve().relative_to(self.workspace_root.resolve()).as_posix()
                 if relative_path in expected_shared_intake_paths:
                     continue
-                path.unlink()
+                remove_workspace_entry(self.workspace_root, path)
             for directory in sorted(
                 (candidate for candidate in intake_root.rglob("*") if candidate.is_dir()),
                 reverse=True,
             ):
                 if any(directory.iterdir()):
                     continue
-                directory.rmdir()
+                remove_workspace_entry(self.workspace_root, directory, directory=True)
 
         if include_letters:
             for letter in self.list_case_letters(case.id):
@@ -3040,7 +3089,8 @@ class ServiceContext:
                 if not letter_pdf_path.exists():
                     from chi_bench.core.workspace_pdf import generate_letter_pdf
 
-                    generate_letter_pdf(
+                    self._generate_workspace_pdf(
+                        generate_letter_pdf,
                         letter_pdf_path,
                         letter=letter,
                         case=case,
@@ -3065,8 +3115,11 @@ class ServiceContext:
                         f"letters/{letter.id}__{slugify_filename(letter.subject)}.pdf",
                     )
                     if not shared_letter_path.exists():
-                        shared_letter_path.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copy2(letter_pdf_path, shared_letter_path)
+                        write_workspace_bytes(
+                            self.workspace_root,
+                            shared_letter_path,
+                            read_workspace_bytes(self.workspace_root, letter_pdf_path),
+                        )
                     self.register_workspace_artifact(
                         path=shared_letter_path,
                         case_id=case.id,
