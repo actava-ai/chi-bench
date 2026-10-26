@@ -19,7 +19,8 @@ chi-bench produces packets via `cb submission prepare`. New benchmarks publish t
             ├── result.json
             ├── verifier/
             │   ├── scorecard.json
-            │   └── reward.json
+            │   ├── reward.json
+            │   └── validity.json  # optional; included when present in the trial
             └── agent/
                 └── trajectory.jsonl.zst
 ```
@@ -83,6 +84,13 @@ The CSV mirrors `submission.json` but in a flat, multi-benchmark-friendly shape.
 | `domain` | `"overall"` plus one row per `per_domain` key |
 | `pass_at_1`, `n_trials`, `n_tasks`, `mean_cost_usd`, `mean_walltime_s` | per-domain (or overall) score block |
 
+`mean_cost_usd` is null when any included trial has unavailable usage or an
+unknown model price. CSV uses the literal `null`. A known zero remains numeric
+zero. These are agent token costs; simulator, judge and infrastructure charges
+are separate. Unavailable execution provenance, including an unrecorded judge
+model or Modal image digest, also remains null. Preparation preserves recorded
+run configuration instead of using its current environment as execution evidence.
+
 A multi-benchmark consumer can `cat */results.csv` without losing rows.
 
 ## Size budget (enforced by the leaderboard validator)
@@ -90,7 +98,7 @@ A multi-benchmark consumer can `cat */results.csv` without losing rows.
 | File | Soft (warn) | Hard (fail) |
 |---|---|---|
 | `submission.json`, `results.csv`, `sub.yaml`, `provenance.json` | 100 KB | 1 MB |
-| `verifier/scorecard.json`, `verifier/reward.json`, `result.json` | 200 KB | 2 MB |
+| `verifier/scorecard.json`, `verifier/reward.json`, `verifier/validity.json` (optional), `result.json` | 200 KB | 2 MB |
 | `agent/trajectory.jsonl.zst` | 10 MB | 50 MB |
 | Total submission directory | 100 MB | 500 MB |
 

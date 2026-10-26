@@ -182,7 +182,9 @@ def _resolve_pricing(model: str) -> tuple[float, float] | None:
     return None
 
 
-def _compute_cost(model: str, input_tokens: int, output_tokens: int) -> float | None:
+def _compute_cost(model: str, input_tokens: int | None, output_tokens: int | None) -> float | None:
+    if input_tokens is None or output_tokens is None:
+        return None
     pricing = _resolve_pricing(model)
     if pricing is None:
         return None
@@ -475,17 +477,24 @@ def _stringify(value: Any) -> str:
 # ---------------------------------------------------------------------------
 # Token usage roll-up
 # ---------------------------------------------------------------------------
-def _extract_usage(raw_responses: list[Any]) -> tuple[int, int, int]:
+def _extract_usage(raw_responses: list[Any]) -> tuple[int | None, int | None, int | None]:
     """Sum input, output, cached tokens across all model responses."""
     input_tokens = 0
     output_tokens = 0
     cached_tokens = 0
+    if not raw_responses:
+        return None, None, None
     for resp in raw_responses:
         usage = getattr(resp, "usage", None)
-        if usage is None:
-            continue
-        input_tokens += int(getattr(usage, "input_tokens", 0) or 0)
-        output_tokens += int(getattr(usage, "output_tokens", 0) or 0)
+        # The SDK uses Usage() with requests=0 when an API response omits
+        # usage. Its default zero counts do not establish known zero spend.
+        if usage is None or getattr(usage, "requests", None) == 0:
+            return None, None, None
+        counts = (getattr(usage, "input_tokens", None), getattr(usage, "output_tokens", None))
+        if any(type(value) is not int or value < 0 for value in counts):
+            return None, None, None
+        input_tokens += counts[0]
+        output_tokens += counts[1]
         cached_tokens += _extract_cached_tokens(usage)
     return input_tokens, output_tokens, cached_tokens
 
@@ -496,9 +505,9 @@ def _extract_usage(raw_responses: list[Any]) -> tuple[int, int, int]:
 def write_result(
     *,
     logs_dir: Path,
-    input_tokens: int,
-    output_tokens: int,
-    cached_tokens: int,
+    input_tokens: int | None,
+    output_tokens: int | None,
+    cached_tokens: int | None,
     cost_usd: float | None,
     turns: int,
     final_output: str | None,
@@ -506,6 +515,8 @@ def write_result(
     error: str | None,
 ) -> None:
     logs_dir.mkdir(parents=True, exist_ok=True)
+    if error:
+        input_tokens = output_tokens = cached_tokens = cost_usd = None
     result = {
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
@@ -694,9 +705,9 @@ async def run_agent(instruction: str, mcp_url: str, logs_dir: Path = DEFAULT_LOG
 
         error: str | None = None
         final_output: str | None = None
-        input_tokens = 0
-        output_tokens = 0
-        cached_tokens = 0
+        input_tokens = None
+        output_tokens = None
+        cached_tokens = None
         turns = 0
         result = None
 

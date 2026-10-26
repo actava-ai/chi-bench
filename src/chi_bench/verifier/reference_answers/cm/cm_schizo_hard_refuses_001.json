@@ -1,0 +1,904 @@
+{
+  "schema_version": "cm_static_reference_v1",
+  "task_id": "cm_schizo_hard_refuses_001",
+  "reference_mode": "static_answer",
+  "executed": false,
+  "source": {
+    "expectations_sha256": "62afbb3cc97787ade923db65a29aac83928b9e1428c0774df37016197d2e2d0f",
+    "contract_sha256": "da0acbd580244c7dad5918a0ec39e87109e7273cb17db2dc1323fb2e00cccbd4",
+    "contract_fields": [
+      "persona",
+      "cm_reference",
+      "stage_ground_truth",
+      "expected_final_status",
+      "expected_target_status",
+      "program_type",
+      "evidence_rubric_items",
+      "target_case_id",
+      "target_patient_id",
+      "required_audit_actions",
+      "expected_audit_actions"
+    ]
+  },
+  "answer": {
+    "chart_review": {
+      "key_findings": "This patient is Patrick Doyle, a 44-year-old man with paranoid schizophrenia (F20.0), hyperlipidemia, obesity, hypertension, GERD, and active tobacco use. The chart shows a recent inpatient psychiatric admission 2026-02-05 to 2026-02-12 for acute psychotic exacerbation with active suicidal ideation in the setting of risperidone non-adherence (pharmacy PDC 0.46 documented 2026-04-08), persistent metabolic-syndrome trajectory (LDL 151 despite atorvastatin 40 mg, weight gain from 104.3 kg to 112.0 kg over 24 months, HbA1c 6.3 in pre-diabetic range), persistent moderate depression and anxiety (PHQ-9 12 / GAD-7 11 on 2026-04-08), and an inpatient social-work note dated 2026-02-06 suggesting probable housing instability that is not in the active problem list.",
+      "clinical_interpretation": "Schizophrenia F20.0 is partially controlled in source GT after February admission; current source voices 1–2/week non-command. LDL 151, weight 104.3→112 kg, HbA1c 6.3 and HTN/GERD/tobacco warrant metabolic follow-up.",
+      "preliminary_risk": "high",
+      "risk_rationale": "Retain the task-authored risk designation under risk-stratification §3.1–§3.3, supported by the numeric referral/utilization/clinical anchors in key_findings; medication class or a single disease-control band does not replace the combined risk framework.",
+      "screening_scores": [
+        {
+          "name": "PHQ-9",
+          "score": 12,
+          "observed_at": "2026-04-08",
+          "source": {
+            "file": "shared/worlds/healthverse-cm-curated25-v1.json",
+            "resource": "observations",
+            "id": "OBS-CM_SCHIZO_HARD_REFUSES_001-064"
+          }
+        },
+        {
+          "name": "GAD-7",
+          "score": 11,
+          "observed_at": "2026-04-08",
+          "source": {
+            "file": "shared/worlds/healthverse-cm-curated25-v1.json",
+            "resource": "observations",
+            "id": "OBS-CM_SCHIZO_HARD_REFUSES_001-065"
+          }
+        }
+      ],
+      "source_refs": [
+        "/evidence_rubric_items/0/prompt",
+        "/cm_reference/risk_reference",
+        "/cm_reference/screening_scores"
+      ]
+    },
+    "outreach": {
+      "dialogue_kind": "authored_ideal_path_reference; not an observed conversation",
+      "ideal_dialogue": [
+        {
+          "speaker": "care_manager",
+          "message": "Hello, I am Alex, a care manager with The Healthcare Company. Is this a private and suitable time for a brief explanation?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Are you monitoring me? Too many people are checking on me already.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "This program is not surveillance, a wellness-check threat, forced participation, or a shortcut to involuntary treatment. I will explain who sees notes and the genuine safety limits before any safety question. Refill and housing support remain your choice. Would a brief explanation in that scope be okay?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "A brief explanation is okay. Please let me choose what I answer.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Care management helps coordinate support with your care team. It is voluntary, has no separate program fee, and you can stop at any time. Joining does not change your benefits or give someone else your decisions.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "What would you actually help with?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "We could coordinate a refill or housing-options check at your direction, without guarantees or threats of a wellness check. I can check options and coordinate, but cannot guarantee access, approval, cost reductions, or a clinical outcome. Would that kind of process help be useful?",
+          "source_refs": [
+            "/persona/consent_triggers"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "That sounds more useful. I still want to understand who sees what I say.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "I can use chart and call information to organize care-management support. Relevant information is documented for the care team; I will explain any proposed wider sharing. Privacy has safety and legal limits, including urgent danger; I cannot promise absolute secrecy. May we start only with what would make a coordination call feel under your control?",
+          "source_refs": [
+            "/persona/consent_triggers",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Yes, that topic is okay. Please go slowly.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "What feels hardest about that, in your own words? You can leave details private.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Mail and pharmacy pickup got messy, and I missed risperidone refills. I do not want that turned into monitoring.",
+          "source_refs": [
+            "/persona/patient_profile",
+            "/cm_reference/assessment_required_items"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "You want practical help without coercion, shame, or housing details used against you. I can explain exactly who sees notes and the safety limits before asking more.",
+          "source_refs": [
+            "/persona/consent_triggers",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Thank you for hearing that. I do not want this to turn into a checklist.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "We can work on one concern at a time and stop whenever you choose. Enrollment does not require all your personal details today. Is there something you want this support to help you do?",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I want a refill routine that works where I am staying, without surveillance.",
+          "source_refs": [
+            "/persona/patient_profile",
+            "/evidence_rubric_items/3/prompt"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "We can make that your priority. A first step would be to coordinate a refill or housing-options check at your direction, without guarantees or threats of a wellness check. These are coordination steps, not a promise that the problem will be solved on this call.",
+          "source_refs": [
+            "/persona/consent_triggers"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Can I decide later about a referral or family involvement?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Yes. Each referral, family contact, and new sensitive topic needs its own discussion. You can skip a question or stop the program. A request for information alone is not enrollment consent.",
+          "source_refs": [
+            "/persona/consent_triggers",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I understand. I would like a manageable follow-up call.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Would telephone follow-up be acceptable? We can agree a convenient time at each contact; please tell me before any other person is included.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Telephone is okay. Please arrange the next time with me and ask before involving anyone else.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Before you decide: this is voluntary care-team coordination, with no separate program fee, the information-use and safety limits we discussed, your chosen contact arrangements, and the right to stop. What would you like clarified?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "That answers my questions. I understand that you can check options but cannot promise the result.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "With those boundaries and the first step we discussed, do you clearly agree to enroll in care management today?",
+          "source_refs": [
+            "/persona/consent_triggers",
+            "/expected_target_status"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Yes, I agree to enroll today on those terms.",
+          "source_refs": [
+            "/persona/consent_triggers"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Enrollment is your choice. Would you like to continue with one practical topic now, with a pause after each, or stop for today?",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I choose to continue one topic at a time. I may still skip optional details.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "I will start with the charted treatment routine and follow-up, then ask your permission before each personal question. The chart is a starting point; it does not tell me how things are going for you now.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path/0",
+            "/evidence_rubric_items/0/prompt"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "That is okay. Please ask one specific question and give me time.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path/0"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "May we focus on refill logistics, with notes used for care support rather than monitoring? This helps tailor support. You may skip or stop.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/0/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I missed risperidone refills when mail and pharmacy pickup got messy. I worry these questions turn into monitoring.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Thank you. I will keep that specific to what you chose to share. Would you like a pause before another topic?",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/0/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have enough energy to continue with the next separate topic.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "May we discuss sleeping arrangements without an exact location or housing consequences? This helps tailor support. You may skip or stop.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I sleep between friends and shelter beds. The mailing address is not always where I stay.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Thank you. I will keep that specific to what you chose to share. Would you like a pause before another topic?",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have enough energy to continue with the next separate topic.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "I would explain safety escalation limits before sharing. May I ask whether current voices tell you to harm anyone? This helps tailor support. You may skip or stop.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I still hear voices sometimes. They are not telling me to hurt anyone. I want clear safety limits first.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Thank you. I will keep that specific to what you chose to share. Would you like a pause before another topic?",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have enough energy to continue with the next separate topic.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "May we ask about current drug or alcohol use solely for safe treatment, without assumptions? This helps tailor support. You may skip or stop.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I am not using drugs and may drink occasionally. Do not tie those questions to assumptions about psychosis.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Thank you. I will keep that specific to what you chose to share. Would you like a pause before another topic?",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have enough energy to continue with the next separate topic.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "You do not need to give optional stories, exact finances, locations, or family details. Shall we leave those private and review the support you selected?",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path/3",
+            "/cm_reference/assessment_optional_deeper_items"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Yes. Leave those optional details private for now.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path/3"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        }
+      ],
+      "consent": {
+        "enrollment": "affirmative_yes_on_authored_branch",
+        "separate_assessment_permission": true,
+        "information_only_is_not_consent": true,
+        "source_refs": [
+          "/persona/consent_triggers"
+        ]
+      },
+      "boundaries": {
+        "voluntary": true,
+        "no_separate_program_fee": true,
+        "right_to_stop": true,
+        "care_team_use_with_explained_safety_legal_limits": true,
+        "family_optional": true,
+        "resource_and_clinical_outcomes_not_guaranteed": true,
+        "optional_topics": "Private/unassessed on this authored branch",
+        "source_refs": [
+          "/persona/patient_profile",
+          "/persona/consent_anti_triggers",
+          "/cm_reference/assessment_hidden_path"
+        ]
+      },
+      "hidden_path": {
+        "mode": "ideal disclosure branch selected for known-answer authoring",
+        "gate_sequence": [
+          {
+            "gate": "Low-sensitivity first",
+            "source_ref": "/cm_reference/assessment_hidden_path/0"
+          },
+          {
+            "gate": "Required refill and housing disclosure",
+            "source_ref": "/cm_reference/assessment_hidden_path/1"
+          },
+          {
+            "gate": "Required assessment expansion",
+            "source_ref": "/cm_reference/assessment_hidden_path/2"
+          },
+          {
+            "gate": "Optional deeper boundary",
+            "source_ref": "/cm_reference/assessment_hidden_path/3"
+          }
+        ]
+      }
+    },
+    "assessment": {
+      "status": "complete",
+      "status_scope": "Static authored content assumes the specified ideal disclosure branch; no real member disclosure or screen administration occurred",
+      "clinical": {
+        "narrative": "Schizophrenia F20.0 is partially controlled in source GT after February admission; current source voices 1–2/week non-command. LDL 151, weight 104.3→112 kg, HbA1c 6.3 and HTN/GERD/tobacco warrant metabolic follow-up.",
+        "chart_evidence_basis": "Source task chart/GT; not a newly collected observation",
+        "source_refs": [
+          "/evidence_rubric_items/0/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ],
+        "authored_disclosures": []
+      },
+      "medication": {
+        "narrative": "20 active medicines and risperidone PDC0.46<60% independently trigger §3.2 pharmacist review. Mail/pickup disruption is authored; auto-refill/pillbox support requires patient choice.",
+        "chart_evidence_basis": "Source task chart/GT; not a newly collected observation",
+        "source_refs": [
+          "/evidence_rubric_items/0/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ],
+        "authored_disclosures": [
+          {
+            "id": "medication.refill_adherence_barrier.confirmation",
+            "section": "medication",
+            "answer": "I missed risperidone refills when mail and pharmacy pickup got messy. I worry these questions turn into monitoring.",
+            "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+            "observed": false,
+            "source_refs": [
+              "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+              "/cm_reference/assessment_required_items/0/persona_disclosure_path",
+              "/cm_reference/assessment_hidden_path"
+            ]
+          }
+        ]
+      },
+      "behavioral_health": {
+        "narrative": "PHQ-9 12 and GAD-7 11 moderate require BH goals. Authored voices are non-command; current reply gives no new active-harm finding. Source C-SSRS-positive history requires safety plan and transparent limits. Authored no drugs/occasional drinking is separate from a new questionnaire score.",
+        "chart_evidence_basis": "Source task chart/GT; not a newly collected observation",
+        "source_refs": [
+          "/evidence_rubric_items/0/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ],
+        "authored_disclosures": [
+          {
+            "id": "behavioral_health.current_symptoms_safety.confirmation",
+            "section": "behavioral_health",
+            "answer": "I still hear voices sometimes. They are not telling me to hurt anyone. I want clear safety limits first.",
+            "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+            "observed": false,
+            "source_refs": [
+              "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+              "/cm_reference/assessment_required_items/2/persona_disclosure_path",
+              "/cm_reference/assessment_hidden_path"
+            ]
+          },
+          {
+            "id": "behavioral_health.substance_use_screen.confirmation",
+            "section": "behavioral_health",
+            "answer": "I am not using drugs and may drink occasionally. Do not tie those questions to assumptions about psychosis.",
+            "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+            "observed": false,
+            "source_refs": [
+              "/cm_reference/assessment_required_items/3/patient_fact_if_earned",
+              "/cm_reference/assessment_required_items/3/persona_disclosure_path",
+              "/cm_reference/assessment_hidden_path"
+            ]
+          }
+        ]
+      },
+      "sdoh": {
+        "narrative": "Current couch/shelter sleeping is authored, not just a mailing address. Moderate-to-severe housing barrier supports §5.2 goal and §5.3 SW when severe. Exact location, family contacts, wrist-pain priority remain private.",
+        "chart_evidence_basis": "Source task chart/GT; not a newly collected observation",
+        "source_refs": [
+          "/evidence_rubric_items/0/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ],
+        "authored_disclosures": [
+          {
+            "id": "sdoh.housing_current_status.confirmation",
+            "section": "sdoh",
+            "answer": "I sleep between friends and shelter beds. The mailing address is not always where I stay.",
+            "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+            "observed": false,
+            "source_refs": [
+              "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+              "/cm_reference/assessment_required_items/1/persona_disclosure_path",
+              "/cm_reference/assessment_hidden_path"
+            ]
+          }
+        ]
+      },
+      "required_item_answers": [
+        {
+          "id": "medication.refill_adherence_barrier.confirmation",
+          "section": "medication",
+          "answer": "I missed risperidone refills when mail and pharmacy pickup got messy. I worry these questions turn into monitoring.",
+          "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+          "observed": false,
+          "source_refs": [
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/0/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "id": "sdoh.housing_current_status.confirmation",
+          "section": "sdoh",
+          "answer": "I sleep between friends and shelter beds. The mailing address is not always where I stay.",
+          "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+          "observed": false,
+          "source_refs": [
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "id": "behavioral_health.current_symptoms_safety.confirmation",
+          "section": "behavioral_health",
+          "answer": "I still hear voices sometimes. They are not telling me to hurt anyone. I want clear safety limits first.",
+          "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+          "observed": false,
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "id": "behavioral_health.substance_use_screen.confirmation",
+          "section": "behavioral_health",
+          "answer": "I am not using drugs and may drink occasionally. Do not tie those questions to assumptions about psychosis.",
+          "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+          "observed": false,
+          "source_refs": [
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        }
+      ],
+      "screening_provenance": {
+        "chart_scores": [
+          {
+            "name": "PHQ-9",
+            "score": 12,
+            "observed_at": "2026-04-08",
+            "source": {
+              "file": "shared/worlds/healthverse-cm-curated25-v1.json",
+              "resource": "observations",
+              "id": "OBS-CM_SCHIZO_HARD_REFUSES_001-064"
+            }
+          },
+          {
+            "name": "GAD-7",
+            "score": 11,
+            "observed_at": "2026-04-08",
+            "source": {
+              "file": "shared/worlds/healthverse-cm-curated25-v1.json",
+              "resource": "observations",
+              "id": "OBS-CM_SCHIZO_HARD_REFUSES_001-065"
+            }
+          }
+        ],
+        "new_scores": "No new numerical screening result is invented; required current safety/topic replies are authored reference replies, not administered instruments",
+        "source_refs": [
+          "/cm_reference/screening_scores",
+          "/evidence_rubric_items/2/prompt"
+        ]
+      },
+      "optional_items": [
+        {
+          "id": "behavioral_health.paranoia_voice_details",
+          "status": "private_unassessed",
+          "source_ref": "/cm_reference/assessment_optional_deeper_items/0"
+        },
+        {
+          "id": "sdoh.exact_housing_location",
+          "status": "private_unassessed",
+          "source_ref": "/cm_reference/assessment_optional_deeper_items/1"
+        },
+        {
+          "id": "sdoh.family_contact_details",
+          "status": "private_unassessed",
+          "source_ref": "/cm_reference/assessment_optional_deeper_items/2"
+        },
+        {
+          "id": "clinical.wrist_pain_priority",
+          "status": "private_unassessed",
+          "source_ref": "/cm_reference/assessment_optional_deeper_items/3"
+        }
+      ],
+      "tool_observed_information": [],
+      "source_refs": [
+        "/stage_ground_truth"
+      ]
+    },
+    "care_plan": {
+      "status": "finalized",
+      "status_scope": "Authored ideal-path final state only; no record was created or finalized",
+      "program_type": "behavioral_health",
+      "problems": [
+        {
+          "id": "P1",
+          "icd10": "F20.0",
+          "statement": "Partially controlled schizophrenia with refill-related exacerbation",
+          "numeric_or_factual_anchor": "risperidone PDC0.46; last admission 2026-02-05",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        },
+        {
+          "id": "P2",
+          "icd10": "Z59.811",
+          "statement": "Housing instability",
+          "numeric_or_factual_anchor": "friends/shelter beds; mailing address not current sleeping place",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        },
+        {
+          "id": "P3",
+          "icd10": "F32.A / F41.9",
+          "statement": "Moderate depressive/anxiety symptoms",
+          "numeric_or_factual_anchor": "PHQ-9 12 / GAD-7 11",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        }
+      ],
+      "goals": [
+        {
+          "id": "G1",
+          "problem_id": "P1",
+          "baseline": "risperidone PDC0.46; last admission 2026-02-05",
+          "measurable_target": "Risperidone PDC≥0.80",
+          "target_date": "2026-09-01",
+          "member_stated_priority": true,
+          "member_priority_text": "I want a refill routine that works where I am staying, without surveillance.",
+          "source_refs": [
+            "/evidence_rubric_items/3/prompt",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "id": "G2",
+          "problem_id": "P2",
+          "baseline": "friends/shelter beds; mailing address not current sleeping place",
+          "measurable_target": "Complete a patient-approved housing-options handoff",
+          "target_date": "2026-09-01",
+          "member_stated_priority": false,
+          "member_priority_text": null,
+          "source_refs": [
+            "/evidence_rubric_items/3/prompt",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "id": "G3",
+          "problem_id": "P3",
+          "baseline": "PHQ-9 12 / GAD-7 11",
+          "measurable_target": "Complete BH-provider review and patient-held safety plan",
+          "target_date": "2026-09-01",
+          "member_stated_priority": false,
+          "member_priority_text": null,
+          "source_refs": [
+            "/evidence_rubric_items/3/prompt",
+            "/persona/patient_profile"
+          ]
+        }
+      ],
+      "interventions": [
+        {
+          "id": "I1",
+          "goal_id": "G1",
+          "owner": "pharmacist",
+          "action": "Offer chosen auto-refill/pillbox/pickup plan; coordinate BH provider and medication/metabolic review; explain safety plan and reporting limits",
+          "timing": "weekly first month then biweekly",
+          "expected_result": "Risperidone PDC≥0.80",
+          "execution_status": "planned_in_static_reference",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        },
+        {
+          "id": "I2",
+          "goal_id": "G2",
+          "owner": "social_worker",
+          "action": "Offer BHCHP warm handoff and eligibility navigation, without housing guarantee or required location disclosure",
+          "timing": "weekly",
+          "expected_result": "Complete a patient-approved housing-options handoff",
+          "execution_status": "planned_in_static_reference",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        },
+        {
+          "id": "I3",
+          "goal_id": "G3",
+          "owner": "behavioral_health_provider",
+          "action": "Coordinate mood and non-command-voice follow-up without surveillance framing; monitor metabolic comorbidities with PCP",
+          "timing": "biweekly",
+          "expected_result": "Complete BH-provider review and patient-held safety plan",
+          "execution_status": "planned_in_static_reference",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        }
+      ],
+      "escalation": {
+        "conditions": "PHQ-9 rise ≥5, new substance use, or new safety concern: BH escalation per care-plan-standards §3.4. Command harm voices or active SI/plan: immediate safety pathway with previously explained limits.",
+        "action_owner": "care_manager with appropriate clinical/BH service",
+        "source_refs": [
+          "/evidence_rubric_items/3/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ]
+      },
+      "follow_up": {
+        "cadence": "biweekly",
+        "transitions_overlay": null,
+        "pcp_communication": "Coordinate the relevant treating clinicians at follow-up",
+        "review": "Review progress, patient priority, medication questions and new safety concerns at each contact; agree next telephone time with patient",
+        "source_refs": [
+          "/evidence_rubric_items/3/prompt",
+          "/stage_ground_truth"
+        ]
+      },
+      "safety_plan": {
+        "kind": "authored_collaborative_plan",
+        "warning_signs": "New or escalating self-harm thoughts, a plan or intent, worsening function or sleep, or the task-specific escalation signs above",
+        "first_steps": "Pause, use the coping/support steps already available in the source safety plan when present, and contact the care team promptly for reassessment",
+        "support_boundaries": "Patient chooses support people; source-named relatives are not contacted without permission, except explained urgent safety/legal limits",
+        "urgent_response": "Immediate danger or active intent requires emergency services; otherwise use the care-team/on-call BH route and task-specific timing above",
+        "privacy": "Explain what safety information requires sharing and what will be shared; do not promise absolute secrecy",
+        "source_refs": [
+          "/evidence_rubric_items/2/prompt",
+          "/evidence_rubric_items/3/prompt",
+          "/persona/patient_profile"
+        ]
+      }
+    },
+    "final_status": "closed"
+  },
+  "authorship": {
+    "kind": "authored_ideal_path",
+    "observed": false,
+    "simulator_run": false,
+    "verifier_run": false
+  },
+  "required_item_coverage": [
+    "medication.refill_adherence_barrier.confirmation",
+    "sdoh.housing_current_status.confirmation",
+    "behavioral_health.current_symptoms_safety.confirmation",
+    "behavioral_health.substance_use_screen.confirmation"
+  ]
+}

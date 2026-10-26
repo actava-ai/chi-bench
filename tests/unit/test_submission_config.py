@@ -40,6 +40,7 @@ def _valid_yaml(**overrides: str) -> str:
         "contact": "you@example.com",
         "agent": "claude-code",
         "model": "anthropic/claude-opus-4-7",
+        "content_sha256": "0" * 64,
     }
     base.update(overrides)
     return textwrap.dedent(
@@ -53,6 +54,7 @@ def _valid_yaml(**overrides: str) -> str:
           model: {base["model"]}
         dataset:
           version: chi-bench-v1.0.0
+          content_sha256: "{base["content_sha256"]}"
           domains: [pa, um, cm]
         """
     ).lstrip()
@@ -143,8 +145,30 @@ def test_domain_dataset_path_helper(tmp_path: Path) -> None:
 # ─── preflight: dataset ──────────────────────────────────────────────────────
 
 
-def _cfg_with_data_root(tmp_path: Path, data_root: Path) -> SubmissionConfig:
-    yaml_body = _valid_yaml() + f"paths:\n  data_root: {data_root}\n"
+def _synthetic_dataset(data_root: Path) -> str:
+    from chi_bench.experiment.content_identity import compute_dataset_identity
+
+    files = {
+        ".chi-bench-version": "chi-bench-v1.0.0\n",
+        "care_management/shared/tool_reference.md": "Synthetic tool reference",
+        "skills/managed-care-operations-handbook/SKILL.md": "Synthetic handbook",
+    }
+    for paths in DOMAIN_REGISTRY.values():
+        family = Path(paths["dataset"]).parts[0]
+        files[f"{family}/registry.json"] = "{}"
+        files[f"{family}/tasks/synthetic/instruction.md"] = "Synthetic instruction"
+        files[f"{family}/shared/worlds/synthetic.json"] = "{}"
+    for relative, body in files.items():
+        path = data_root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(body)
+    return compute_dataset_identity(data_root, DOMAIN_REGISTRY).content_sha256
+
+
+def _cfg_with_data_root(
+    tmp_path: Path, data_root: Path, *, content_sha256: str = "0" * 64
+) -> SubmissionConfig:
+    yaml_body = _valid_yaml(content_sha256=content_sha256) + f"paths:\n  data_root: {data_root}\n"
     p = _write(tmp_path / "sub.yaml", yaml_body)
     return SubmissionConfig.from_yaml(p)
 
@@ -177,11 +201,8 @@ def test_preflight_dataset_version_mismatch(tmp_path: Path) -> None:
 
 def test_preflight_dataset_happy_path(tmp_path: Path) -> None:
     data_root = tmp_path / "data"
-    data_root.mkdir()
-    (data_root / ".chi-bench-version").write_text("chi-bench-v1.0.0\n")
-    for dom_key, paths in DOMAIN_REGISTRY.items():
-        (data_root / paths["dataset"]).mkdir(parents=True)
-    cfg = _cfg_with_data_root(tmp_path, data_root)
+    digest = _synthetic_dataset(data_root)
+    cfg = _cfg_with_data_root(tmp_path, data_root, content_sha256=digest)
     issues = preflight_dataset(cfg)
     assert issues == []
 
@@ -310,7 +331,9 @@ def test_build_slice_yaml_respects_run_overrides(tmp_path: Path) -> None:
 
 
 def test_capture_provenance_fields_present(tmp_path: Path) -> None:
-    cfg = _cfg_from_yaml_body(tmp_path, _valid_yaml())
+    data_root = tmp_path / "data"
+    digest = _synthetic_dataset(data_root)
+    cfg = _cfg_with_data_root(tmp_path, data_root, content_sha256=digest)
     prov = capture_provenance(cfg)
     assert prov["dataset_version"] == "chi-bench-v1.0.0"
     assert prov["environment"] == "modal"
@@ -328,13 +351,10 @@ def test_run_submission_iterates_domains_and_writes_artifacts(tmp_path: Path) ->
     run_experiment is invoked once per domain, provenance.json is finalized."""
     # Set up a valid dataset tree
     data_root = tmp_path / "data"
-    data_root.mkdir()
-    (data_root / ".chi-bench-version").write_text("chi-bench-v1.0.0\n")
-    for paths in DOMAIN_REGISTRY.values():
-        (data_root / paths["dataset"]).mkdir(parents=True)
+    digest = _synthetic_dataset(data_root)
 
     out_root = tmp_path / "out"
-    body = _valid_yaml() + textwrap.dedent(
+    body = _valid_yaml(content_sha256=digest) + textwrap.dedent(
         f"""
         run:
           environment: docker
@@ -711,3 +731,18 @@ def test_status_ignores_run_level_aggregate_result_json(tmp_path: Path) -> None:
     assert by_domain["pa_um"]["n_trials"] == 2
     assert by_domain["pa_um"]["n_passed"] == 1
     assert by_domain["pa_um"]["n_failed"] == 1
+
+
+def test_docker_provenance_records_both_isolation_images(tmp_path, monkeypatch):
+    import chi_bench.experiment.submission as submission
+
+    data_root = tmp_path / "data"
+    digest = _synthetic_dataset(data_root)
+    cfg = _cfg_with_data_root(tmp_path, data_root, content_sha256=digest)
+    cfg.run.environment = "docker"
+    monkeypatch.setattr(
+        submission, "_docker_image_digest", lambda image="chi-bench:latest": "digest:" + image
+    )
+    prov = capture_provenance(cfg)
+    assert prov["docker_image_digest"] == "digest:chi-bench:latest"
+    assert prov["docker_agent_image_digest"] == "digest:chi-bench:agent"

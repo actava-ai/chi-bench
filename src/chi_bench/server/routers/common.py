@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, Depends, FastAPI
 from fastapi.responses import JSONResponse
 
 from chi_bench.core.errors import (
@@ -11,8 +11,12 @@ from chi_bench.core.errors import (
     InvalidCaseTransitionError,
     UnsupportedLaneError,
 )
+from chi_bench.server import control
+from chi_bench.server.control import require_control_token
 from chi_bench.server.routers.ctx import get_ctx
 from chi_bench.server.routers.models import PhaseMarkerBody
+from chi_bench.server.routers.models import WriteArtifactBody
+from chi_bench.core.p2p_evidence import ExternalP2PEvidence
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -54,19 +58,19 @@ def create_common_router(service) -> APIRouter:
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    @router.get("/export")
+    @router.get("/export", dependencies=[Depends(require_control_token)])
     def export_state() -> dict[str, Any]:
         if hasattr(service, "export_state"):
             return service.export_state()
         raise RuntimeError("export_state is only available through WorldService")
 
-    @router.post("/_oracle/solve")
+    @router.post("/_oracle/solve", dependencies=[Depends(require_control_token)])
     def oracle_solve() -> dict[str, Any]:
         if hasattr(service, "run_oracle"):
             return service.run_oracle()
         raise RuntimeError("run_oracle is only available through WorldService")
 
-    @router.post("/_admin/phase_marker")
+    @router.post("/_admin/phase_marker", dependencies=[Depends(require_control_token)])
     def phase_marker(body: PhaseMarkerBody) -> dict[str, bool]:
         """Write an ``e2e_phase_marker`` stage_trace row.
 
@@ -85,6 +89,21 @@ def create_common_router(service) -> APIRouter:
             role=body.role,
             role_phase=body.role_phase,
         )
+        return {"ok": True}
+
+    @router.post("/_admin/p2p_external_evidence", dependencies=[Depends(require_control_token)])
+    def import_p2p_evidence(body: ExternalP2PEvidence) -> dict[str, Any]:
+        return get_ctx(service).p2p.import_external_evidence(body)
+
+    @router.post("/_admin/p2p_relay_transcript", dependencies=[Depends(require_control_token)])
+    def p2p_relay_transcript(body: WriteArtifactBody) -> dict[str, Any]:
+        return get_ctx(service).p2p.record_relay_transcript(
+            body.model_dump(exclude_none=True, exclude={"created_by", "owner"})
+        )
+
+    @router.post("/_admin/agent_role", dependencies=[Depends(require_control_token)])
+    async def agent_role(body: control.AgentRoleBody) -> dict[str, bool]:
+        await control.agent_access_state.change_role(body.role)
         return {"ok": True}
 
     return router

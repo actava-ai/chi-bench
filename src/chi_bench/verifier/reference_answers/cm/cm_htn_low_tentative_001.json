@@ -1,0 +1,843 @@
+{
+  "schema_version": "cm_static_reference_v1",
+  "task_id": "cm_htn_low_tentative_001",
+  "reference_mode": "static_answer",
+  "executed": false,
+  "source": {
+    "expectations_sha256": "ece5264d412f653b442fd2e277d1fb5abe005ba7bd7c121492dc6c71ed14956c",
+    "contract_sha256": "739edc0616974ad650de9ab83abb9d11ad1d3fdff9b7f6870087aa75bea35c0b",
+    "contract_fields": [
+      "persona",
+      "cm_reference",
+      "stage_ground_truth",
+      "expected_final_status",
+      "expected_target_status",
+      "program_type",
+      "evidence_rubric_items",
+      "target_case_id",
+      "target_patient_id",
+      "required_audit_actions",
+      "expected_audit_actions"
+    ]
+  },
+  "answer": {
+    "chart_review": {
+      "key_findings": "Mr. Rohan Patel is a 56-year-old South Asian male enrolled in chronic-disease management for essential hypertension on a three-drug antihypertensive regimen (lisinopril 20 mg, amlodipine 5 mg, hydrochlorothiazide 25 mg). His most recent office BP is 134/84 (2026-04-15) with home log averages of 130-138 / 80-86 over the prior two months - suboptimal per the assessment-standards §2.2 hypertension control row (130-149/80-89). Co-active conditions include hyperlipidemia (LDL 95 on atorvastatin 40 mg, improved from 142) and vitamin D deficiency (25-OH 22 ng/mL on cholecalciferol). The chronic-registry referral risk score is 0.32 with zero inpatient admissions and one non-cardiovascular ED visit in the rolling 12 months.",
+      "clinical_interpretation": "HTN is suboptimal (§2.2): office 134/84, home 130–138/80–86; overall risk remains low, score 0.32 with no admissions. HLD controlled LDL 95; vitamin D 22 on supplementation.",
+      "preliminary_risk": "low",
+      "risk_rationale": "Retain the task-authored risk designation under risk-stratification §3.1–§3.3, supported by the numeric referral/utilization/clinical anchors in key_findings; medication class or a single disease-control band does not replace the combined risk framework.",
+      "screening_scores": [
+        {
+          "name": "PHQ-9",
+          "score": 2,
+          "observed_at": "2025-12-15T09:00:00",
+          "source": {
+            "file": "shared/worlds/healthverse-cm-curated25-v1.json",
+            "resource": "observations",
+            "id": "OBS-CM_HTN_LOW_TENTATIVE_001-019"
+          }
+        }
+      ],
+      "source_refs": [
+        "/evidence_rubric_items/0/prompt",
+        "/cm_reference/risk_reference",
+        "/cm_reference/screening_scores"
+      ]
+    },
+    "outreach": {
+      "dialogue_kind": "authored_ideal_path_reference; not an observed conversation",
+      "ideal_dialogue": [
+        {
+          "speaker": "care_manager",
+          "message": "Hello, I am Alex, a care manager with The Healthcare Company. Is this a private and suitable time for a brief explanation?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Is this a sales call or a change to my benefits?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "I hear your concern. We can pause here; you control whether this continues. Would you like to tell me what would make a short call useful?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "A brief explanation is okay. Please let me choose what I answer.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Care management helps coordinate support with your care team. It is voluntary, has no separate program fee, and you can stop at any time. Joining does not change your benefits or give someone else your decisions.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "What would you actually help with?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "We could prepare PCP questions and a reminder plan around family responsibilities without changing medicines or benefits. I can check options and coordinate, but cannot guarantee access, approval, cost reductions, or a clinical outcome. Would that kind of process help be useful?",
+          "source_refs": [
+            "/persona/consent_triggers"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "That sounds more useful. I still want to understand who sees what I say.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "I can use chart and call information to organize care-management support. Relevant information is documented for the care team; I will explain any proposed wider sharing. Privacy has safety and legal limits, including urgent danger; I cannot promise absolute secrecy. May we start only with support that fits your blood-pressure routine?",
+          "source_refs": [
+            "/persona/consent_triggers",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Yes, that topic is okay. Please go slowly.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "What feels hardest about that, in your own words? You can leave details private.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Late calls and my mother's care squeeze out my evening pill. A prior medicine left me washed out.",
+          "source_refs": [
+            "/persona/patient_profile",
+            "/cm_reference/assessment_required_items"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "You want a care partnership after sales-like calls and feeling brushed off about side effects. Nighttime work and caregiving are real routine constraints.",
+          "source_refs": [
+            "/persona/consent_triggers",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Thank you for hearing that. I do not want this to turn into a checklist.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "We can work on one concern at a time and stop whenever you choose. Enrollment does not require all your personal details today. Is there something you want this support to help you do?",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I want evening doses to fit caregiving nights and clearer advice on home BP numbers.",
+          "source_refs": [
+            "/persona/patient_profile",
+            "/evidence_rubric_items/3/prompt"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "We can make that your priority. A first step would be to prepare PCP questions and a reminder plan around family responsibilities without changing medicines or benefits. These are coordination steps, not a promise that the problem will be solved on this call.",
+          "source_refs": [
+            "/persona/consent_triggers"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Can I decide later about a referral or family involvement?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Yes. Each referral, family contact, and new sensitive topic needs its own discussion. You can skip a question or stop the program. A request for information alone is not enrollment consent.",
+          "source_refs": [
+            "/persona/consent_triggers",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I understand. I would like a manageable follow-up call.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Would telephone follow-up be acceptable? We can agree a convenient time at each contact; please tell me before any other person is included.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Telephone is okay. Please arrange the next time with me and ask before involving anyone else.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Before you decide: this is voluntary care-team coordination, with no separate program fee, the information-use and safety limits we discussed, your chosen contact arrangements, and the right to stop. What would you like clarified?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "That answers my questions. I understand that you can check options but cannot promise the result.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "With those boundaries and the first step we discussed, do you clearly agree to enroll in care management today?",
+          "source_refs": [
+            "/persona/consent_triggers",
+            "/expected_target_status"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Yes, I agree to enroll today on those terms.",
+          "source_refs": [
+            "/persona/consent_triggers"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Enrollment is your choice. Would you like to continue with one practical topic now, with a pause after each, or stop for today?",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I choose to continue one topic at a time. I may still skip optional details.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "I will start with the charted treatment routine and follow-up, then ask your permission before each personal question. The chart is a starting point; it does not tell me how things are going for you now.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path/0",
+            "/evidence_rubric_items/0/prompt"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "That is okay. Please ask one specific question and give me time.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path/0"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "How do you use the home cuff, and what advice about readings is unclear? This helps tailor support. You may skip or stop.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/0/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have a cuff but check when I remember or feel off. I am not always sure which numbers mean I should call.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Thank you. I will keep that specific to what you chose to share. Would you like a pause before another topic?",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/0/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have enough energy to continue with the next separate topic.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "May we focus on evening-pill timing and the earlier side-effect concern? This helps tailor support. You may skip or stop.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Late vendor calls and caring for my mother make evening pills easy to miss. A prior medicine made me feel washed out.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Thank you. I will keep that specific to what you chose to share. Would you like a pause before another topic?",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have enough energy to continue with the next separate topic.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "May we discuss the work/caregiving timing without detailed family questions? This helps tailor support. You may skip or stop.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Work calls and my mother's care collide at night, and my own routine gets squeezed.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Thank you. I will keep that specific to what you chose to share. Would you like a pause before another topic?",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have enough energy to continue with the next separate topic.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "You do not need to give optional stories, exact finances, locations, or family details. Shall we leave those private and review the support you selected?",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path/3",
+            "/cm_reference/assessment_optional_deeper_items"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Yes. Leave those optional details private for now.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path/3"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        }
+      ],
+      "consent": {
+        "enrollment": "affirmative_yes_on_authored_branch",
+        "separate_assessment_permission": true,
+        "information_only_is_not_consent": true,
+        "source_refs": [
+          "/persona/consent_triggers"
+        ]
+      },
+      "boundaries": {
+        "voluntary": true,
+        "no_separate_program_fee": true,
+        "right_to_stop": true,
+        "care_team_use_with_explained_safety_legal_limits": true,
+        "family_optional": true,
+        "resource_and_clinical_outcomes_not_guaranteed": true,
+        "optional_topics": "Private/unassessed on this authored branch",
+        "source_refs": [
+          "/persona/patient_profile",
+          "/persona/consent_anti_triggers",
+          "/cm_reference/assessment_hidden_path"
+        ]
+      },
+      "hidden_path": {
+        "mode": "ideal disclosure branch selected for known-answer authoring",
+        "gate_sequence": [
+          {
+            "gate": "Low-sensitivity first",
+            "source_ref": "/cm_reference/assessment_hidden_path/0"
+          },
+          {
+            "gate": "Required routine disclosure",
+            "source_ref": "/cm_reference/assessment_hidden_path/1"
+          },
+          {
+            "gate": "Required assessment expansion",
+            "source_ref": "/cm_reference/assessment_hidden_path/2"
+          },
+          {
+            "gate": "Optional deeper boundary",
+            "source_ref": "/cm_reference/assessment_hidden_path/3"
+          }
+        ]
+      }
+    },
+    "assessment": {
+      "status": "complete",
+      "status_scope": "Static authored content assumes the specified ideal disclosure branch; no real member disclosure or screen administration occurred",
+      "clinical": {
+        "narrative": "HTN is suboptimal (§2.2): office 134/84, home 130–138/80–86; overall risk remains low, score 0.32 with no admissions. HLD controlled LDL 95; vitamin D 22 on supplementation.",
+        "chart_evidence_basis": "Source task chart/GT; not a newly collected observation",
+        "source_refs": [
+          "/evidence_rubric_items/0/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ],
+        "authored_disclosures": [
+          {
+            "id": "clinical.bp_self_monitoring.confirmation",
+            "section": "clinical",
+            "answer": "I have a cuff but check when I remember or feel off. I am not always sure which numbers mean I should call.",
+            "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+            "observed": false,
+            "source_refs": [
+              "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+              "/cm_reference/assessment_required_items/0/persona_disclosure_path",
+              "/cm_reference/assessment_hidden_path"
+            ]
+          }
+        ]
+      },
+      "medication": {
+        "narrative": "8 medicines, no high-risk agents or discrepancies: no chart-only §3.2 pharmacist trigger. Current evening misses and past washed-out feeling support PCP review and reminders.",
+        "chart_evidence_basis": "Source task chart/GT; not a newly collected observation",
+        "source_refs": [
+          "/evidence_rubric_items/0/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ],
+        "authored_disclosures": [
+          {
+            "id": "medication.evening_dose_routine.confirmation",
+            "section": "medication",
+            "answer": "Late vendor calls and caring for my mother make evening pills easy to miss. A prior medicine made me feel washed out.",
+            "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+            "observed": false,
+            "source_refs": [
+              "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+              "/cm_reference/assessment_required_items/1/persona_disclosure_path",
+              "/cm_reference/assessment_hidden_path"
+            ]
+          }
+        ]
+      },
+      "behavioral_health": {
+        "narrative": "PHQ-9 2, AUDIT-C 1, NIDA 0 negative; GAD-7 and C-SSRS not required by source conditions. Tiredness is not upgraded to depression.",
+        "chart_evidence_basis": "Source task chart/GT; not a newly collected observation",
+        "source_refs": [
+          "/evidence_rubric_items/0/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ],
+        "authored_disclosures": []
+      },
+      "sdoh": {
+        "narrative": "Authored collision of vendor calls and mother care confirms a moderate caregiver-support/routine concern, for §5.2 goal and community resource. Detailed mother-care/salt history remains private.",
+        "chart_evidence_basis": "Source task chart/GT; not a newly collected observation",
+        "source_refs": [
+          "/evidence_rubric_items/0/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ],
+        "authored_disclosures": [
+          {
+            "id": "sdoh.caregiver_work_schedule.confirmation",
+            "section": "sdoh",
+            "answer": "Work calls and my mother's care collide at night, and my own routine gets squeezed.",
+            "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+            "observed": false,
+            "source_refs": [
+              "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+              "/cm_reference/assessment_required_items/2/persona_disclosure_path",
+              "/cm_reference/assessment_hidden_path"
+            ]
+          }
+        ]
+      },
+      "required_item_answers": [
+        {
+          "id": "clinical.bp_self_monitoring.confirmation",
+          "section": "clinical",
+          "answer": "I have a cuff but check when I remember or feel off. I am not always sure which numbers mean I should call.",
+          "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+          "observed": false,
+          "source_refs": [
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/0/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "id": "medication.evening_dose_routine.confirmation",
+          "section": "medication",
+          "answer": "Late vendor calls and caring for my mother make evening pills easy to miss. A prior medicine made me feel washed out.",
+          "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+          "observed": false,
+          "source_refs": [
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "id": "sdoh.caregiver_work_schedule.confirmation",
+          "section": "sdoh",
+          "answer": "Work calls and my mother's care collide at night, and my own routine gets squeezed.",
+          "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+          "observed": false,
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        }
+      ],
+      "screening_provenance": {
+        "chart_scores": [
+          {
+            "name": "PHQ-9",
+            "score": 2,
+            "observed_at": "2025-12-15T09:00:00",
+            "source": {
+              "file": "shared/worlds/healthverse-cm-curated25-v1.json",
+              "resource": "observations",
+              "id": "OBS-CM_HTN_LOW_TENTATIVE_001-019"
+            }
+          }
+        ],
+        "new_scores": "No new numerical screening result is invented; required current safety/topic replies are authored reference replies, not administered instruments",
+        "source_refs": [
+          "/cm_reference/screening_scores",
+          "/evidence_rubric_items/2/prompt"
+        ]
+      },
+      "optional_items": [
+        {
+          "id": "sdoh.mother_care_details",
+          "status": "private_unassessed",
+          "source_ref": "/cm_reference/assessment_optional_deeper_items/0"
+        },
+        {
+          "id": "clinical.salt_habit_details",
+          "status": "private_unassessed",
+          "source_ref": "/cm_reference/assessment_optional_deeper_items/1"
+        },
+        {
+          "id": "medication.prior_side_effect_story",
+          "status": "private_unassessed",
+          "source_ref": "/cm_reference/assessment_optional_deeper_items/2"
+        }
+      ],
+      "tool_observed_information": [],
+      "source_refs": [
+        "/stage_ground_truth"
+      ]
+    },
+    "care_plan": {
+      "status": "finalized",
+      "status_scope": "Authored ideal-path final state only; no record was created or finalized",
+      "program_type": "chronic_disease",
+      "problems": [
+        {
+          "id": "P1",
+          "icd10": "I10",
+          "statement": "Suboptimal hypertension with evening-dose gap",
+          "numeric_or_factual_anchor": "BP 134/84; ~4/7 evenings in source example",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned"
+          ]
+        },
+        {
+          "id": "P2",
+          "icd10": "I10",
+          "statement": "Home BP above target",
+          "numeric_or_factual_anchor": "home average 134/84",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned"
+          ]
+        },
+        {
+          "id": "P3",
+          "icd10": "E78.5",
+          "statement": "Controlled hyperlipidemia maintenance",
+          "numeric_or_factual_anchor": "LDL 95 on atorvastatin 40",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned"
+          ]
+        },
+        {
+          "id": "P4",
+          "icd10": "Z63.6",
+          "statement": "Caregiver/work schedule strain",
+          "numeric_or_factual_anchor": "evening care/work collisions",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned"
+          ]
+        }
+      ],
+      "goals": [
+        {
+          "id": "G1",
+          "problem_id": "P1",
+          "baseline": "BP 134/84; ~4/7 evenings in source example",
+          "measurable_target": "Evening dose ≥6/7 nights",
+          "target_date": "2026-06-15",
+          "member_stated_priority": true,
+          "member_priority_text": "I want evening doses to fit caregiving nights and clearer advice on home BP numbers.",
+          "source_refs": [
+            "/evidence_rubric_items/3/prompt",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "id": "G2",
+          "problem_id": "P2",
+          "baseline": "home average 134/84",
+          "measurable_target": "Home-average BP <130/80",
+          "target_date": "2026-08-01",
+          "member_stated_priority": false,
+          "member_priority_text": null,
+          "source_refs": [
+            "/evidence_rubric_items/3/prompt",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "id": "G3",
+          "problem_id": "P3",
+          "baseline": "LDL 95 on atorvastatin 40",
+          "measurable_target": "Maintain LDL <100 with lipid recheck",
+          "target_date": "2026-10-15",
+          "member_stated_priority": false,
+          "member_priority_text": null,
+          "source_refs": [
+            "/evidence_rubric_items/3/prompt",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "id": "G4",
+          "problem_id": "P4",
+          "baseline": "evening care/work collisions",
+          "measurable_target": "Connect to one chosen caregiver community resource",
+          "target_date": "2026-06-01",
+          "member_stated_priority": false,
+          "member_priority_text": null,
+          "source_refs": [
+            "/evidence_rubric_items/3/prompt",
+            "/persona/patient_profile"
+          ]
+        }
+      ],
+      "interventions": [
+        {
+          "id": "I1",
+          "goal_id": "G1",
+          "owner": "care_manager",
+          "action": "Coach evening timing weekly ×4 then biweekly; review DASH/sodium and cuff technique; member logs BP AM/PM ×2 weeks then 3×/week",
+          "timing": "weekly ×4 then biweekly",
+          "expected_result": "Evening dose ≥6/7 nights",
+          "execution_status": "planned_in_static_reference",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned"
+          ]
+        },
+        {
+          "id": "I2",
+          "goal_id": "G2",
+          "owner": "member",
+          "action": "Share home log with PCP/CM without independent dose changes",
+          "timing": "CM reviews biweekly",
+          "expected_result": "Home-average BP <130/80",
+          "execution_status": "planned_in_static_reference",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned"
+          ]
+        },
+        {
+          "id": "I3",
+          "goal_id": "G3",
+          "owner": "care_manager",
+          "action": "Review statin adherence and lipid self-management education",
+          "timing": "biweekly",
+          "expected_result": "Maintain LDL <100 with lipid recheck",
+          "execution_status": "planned_in_static_reference",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned"
+          ]
+        },
+        {
+          "id": "I4",
+          "goal_id": "G4",
+          "owner": "care_manager",
+          "action": "Offer respite-resource navigation without assuming family consent or guaranteed services",
+          "timing": "biweekly",
+          "expected_result": "Connect to one chosen caregiver community resource",
+          "execution_status": "planned_in_static_reference",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned"
+          ]
+        }
+      ],
+      "escalation": {
+        "conditions": "Home systolic ≥180 or diastolic ≥110 on two readings: urgent PCP/911 per escalation-rules §2. New chest pain, syncope, focal weakness: 911.",
+        "action_owner": "care_manager with appropriate clinical/BH service",
+        "source_refs": [
+          "/evidence_rubric_items/3/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ]
+      },
+      "follow_up": {
+        "cadence": "biweekly",
+        "transitions_overlay": null,
+        "pcp_communication": "Send care-plan summary within 14 days of finalization",
+        "review": "Review progress, patient priority, medication questions and new safety concerns at each contact; agree next telephone time with patient",
+        "source_refs": [
+          "/evidence_rubric_items/3/prompt",
+          "/stage_ground_truth"
+        ]
+      }
+    },
+    "final_status": "closed"
+  },
+  "authorship": {
+    "kind": "authored_ideal_path",
+    "observed": false,
+    "simulator_run": false,
+    "verifier_run": false
+  },
+  "required_item_coverage": [
+    "clinical.bp_self_monitoring.confirmation",
+    "medication.evening_dose_routine.confirmation",
+    "sdoh.caregiver_work_schedule.confirmation"
+  ]
+}

@@ -49,8 +49,8 @@ inherit this file but inherit nothing else from this one.
 across three domains: provider prior authorization, payer utilization management, and
 care management. A single Python package (`chi_bench`) hosts a FastAPI server, three MCP servers
 (provider :8020, payer :8100, care-management :8200), the `WorkspaceJudge` verifier, and seven
-agent harnesses. Trials run in a single Docker image (`chi-bench:latest`) either locally or in
-parallel on Modal sandboxes.
+agent harnesses. Trials use a clean agent image (`chi-bench:agent`) and a trusted simulator/verifier image
+(`chi-bench:latest`), locally or inside disposable Modal Docker sandboxes.
 
 Authoritative docs to consult before changing behavior:
 
@@ -118,19 +118,13 @@ whichever isn't aliased on your shell.
 
 ## Architecture cheatsheet
 
-A trial container is laid out so that:
+A trial uses the isolated lifecycle in `experiment/docker_env.py` for both Docker and Modal:
 
-1. `cb experiment run -f <config>` shells out to **Harbor**, which spawns one container per trial
-   via `ChiBenchDockerEnvironment` (local) or `ChiBenchModalEnvironment` (Modal).
-2. `docker/entrypoint.sh` reads `CHI_BENCH_TASK_ID`, wires `/opt/chi-bench/tasks/<id>/fixtures`
-   to `/fixtures`, starts the unified server (HTTP + 3 MCP threads on fixed ports), and waits
-   for all four endpoints to accept traffic before exec'ing the agent harness CLI.
-3. Agent harness drives the agent against the MCP tools.
-4. After the agent stops, Harbor invokes the verifier (`WorkspaceJudge` on `claude-opus-4-7`)
-   in the same container; it reads `/fixtures/expectations.json` (hidden from the agent) and
-   the full workspace, then writes `verifier/scorecard.json` + `verifier/verdicts.json`.
-5. Harbor writes `result.json`. Trial reward is the AND of rubric verdicts (or a continuous
-   score for care management).
+1. The trusted container starts the simulator with private task data and a per-trial control token.
+2. The clean agent container receives role-scoped MCP access, public read-only assets, permitted raw source artifacts, and a shared task workspace. It has no private filesystem/process mounts or daemon access.
+3. The host controls E2E role changes through authenticated management requests.
+4. Harbor's reserved `/tests` upload stops the whole agent container, closes tool admission, and waits for admitted calls to finish before sending verifier inputs to the trusted container. Stop or drain failures prevent verification. Verifier execution then occurs there.
+5. Native Hub exports use a trusted simulator sidecar and Harbor's separate verifier environment, with a frozen state snapshot collected after the agent stops.
 
 Source layout under `src/chi_bench/`:
 
@@ -176,12 +170,7 @@ Configs:
   preferring those over legacy names, and subtract cache tokens from total input before applying
   the base input rate.** **Why:** `n_input_tokens` includes cached input; ignoring the renamed
   fields or charging it as wholly uncached makes leaderboard cost wrong.
-- **When a newly released Claude model needs a newer CLI, verify the version inside
-  `chi-bench:latest`; if stale, rebuild with
-  `sed '1d' docker/Dockerfile | docker build --no-cache -f - --target runtime -t chi-bench:latest .`.**
-  **Why:** The Dockerfile installs `@anthropic-ai/claude-code@latest`, but Docker can reuse that
-  unchanged install layer across ordinary `cb docker build` runs; removing the first-line syntax
-  directive also avoids a Docker Hub frontend-resolution stall seen with the raw no-cache build.
+- **Check CLI versions in both `chi-bench:agent` (agent) and `chi-bench:latest` (judge), and rebuild both with `cb docker build` after an authorized version change.** **Why:** they execute separate CLI copies, and Docker can reuse an unchanged npm install layer. `CLAUDE_CODE_VERSION` pins 2.1.219 for official evaluation; changing only the trusted image does not update the agent image.
 - **Do not `source .env`; let `cb` load it or parse ad-hoc checks with `python-dotenv`.** **Why:**
   `.env` is dotenv syntax rather than guaranteed shell syntax, and currently contains an unquoted
   value with spaces that a shell tries to execute as a command.
@@ -223,9 +212,9 @@ Configs:
   IDs, or corroborate them with server timestamps, without inspecting arguments or reasoning.
 - **`ANTHROPIC_API_KEY` is always required**, even for non-Anthropic agents — the judge is pinned
   to `claude-opus-4-7`. `CHI_BENCH_JUDGE_MODEL` overrides it but deviates from the paper protocol.
-  Use `CHI_BENCH_JUDGE_NUM_VOTES > 1` for majority-voted judging.
+  Judge voting defaults to one; `CHI_BENCH_JUDGE_NUM_VOTES` configures additional votes.
 - **Dataset version pin** lives at `data/.chi-bench-version` and must match the submission YAML's
-  `dataset.version`. `cb submission validate` (preflight) rejects mismatches. `cb data download`
+  `dataset.version`. Also require `dataset.content_sha256` to match the accepted task/shared-world/handbook bytes; inspect candidates with `uv run python scripts/dataset_identity.py --data-root data`, without rewriting source data or automatically accepting drift. `cb submission validate` (preflight) rejects mismatches. `cb data download`
   writes the pin in one step; the raw `huggingface-cli download` path needs `echo "$REV" > data/.chi-bench-version`.
 - **Model-id convention for `claude-code`:** `cb` configs/submissions pass `anthropic/<bare-id>`
   (e.g. `anthropic/claude-fable-5`); Harbor's harness strips the vendor prefix and exports
@@ -233,10 +222,17 @@ Configs:
   against hub-exported tasks, where `anthropic/<id>` 404s (commit 769744a). New models also need
   a `configs/prices.yaml` entry (input/output/cache $ per 1M; cache = 0.1× input) or
   `scripts/aggregate.py` cost columns come out empty.
-- **`/fixtures` is NOT exposed to the agent** as a readable mount — expectations, scoring contracts,
-  and manifests are reserved for the verifier. The entrypoint exposes raw artifacts via
-  `/workspace/raw/artifacts/` except for `*_new_referral_provider` tasks, where the chart is
-  projected through MCP tools only.
+- **Materialize Modal task mirrors as regular file copies.** The public-asset publisher rejects symlinks; preserve source task bytes and checksums.
+- **Drop `NET_RAW` while retaining normal package-manager capabilities.** Agent harness installation needs UID and ownership operations; keep `no-new-privileges` enabled.
+- **Create `/logs/verifier` in the trusted container before uploading `/tests`.** Verifier command redirection requires the directory before the script starts.
+- **Use the same lexical workspace root for metadata and rooted file I/O.** Ancestor aliases such as `/tmp` and `/private/tmp` must identify the same workspace; links inside the writable workspace remain rejected.
+- **Bind P2P evidence to its case and request.** Manual recording requires sourced external evidence. In E2E relay, `p2p_session.get_context` is read-only; `send_turn` and `submit_summary` cannot replace the two-role exchange. Final scoring checks the completed relay.
+- **E2E execution and scoring use `workflow_v2`.** Provider submits a source-grounded packet; Payer processes that packet in a separate role context. Verification, rejudging, and aggregation reject legacy or unversioned E2E records. Original task evidence and gold remain read-only.
+- **Use full frozen-state verification to validate deterministic verifier changes.** `cb experiment rejudge` retains deterministic checks and reruns only the semantic judge. Write verification results beside the retained trial.
+- **CM references are static authored answers.** Their `executed` and `observed` fields remain false; reading a reference does not run the simulator or verifier.
+- **Use Compose's resolved project name for Hub stop confirmation.** `CHI_BENCH_COMPOSE_PROJECT` and the `main` service label identify the agent container; host networking can give the container a host name.
+- **Keep private task data in the trusted container.** The agent receives public assets, task workspaces and permitted `raw/artifacts` only; the raw chart database stays private.
+- **Repair index metadata with `uv run python scripts/build_tasks_jsonl.py --repair-index data`.** This updates task IDs and fixture file counts. Marathon IDs come from session manifests; counts include regular files only.
 - **Two data layouts.** Host source: `data/<domain>/tasks/...`. Inside the baked image
   (`/opt/chi-bench`): flat `tasks/` with `marathon/`/`worlds/` siblings, handbook at
   `/workspace/skills/managed-care-operations-handbook`. `cb data verify` auto-detects.

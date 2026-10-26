@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from chi_bench.core.e2e_protocol import WORKFLOW_PROTOCOL, e2e_protocol
+
 TERMINAL_CASE_STATUSES = frozenset(
     {
         "approved",
@@ -47,6 +49,9 @@ def target_case_id(exported: dict[str, Any]) -> str:
         case_id = _clean(exported_target_case.get("id"))
         if case_id:
             return case_id
+
+    if e2e_protocol(exported) == WORKFLOW_PROTOCOL:
+        return ""
 
     latest_submission = _latest_item(exported.get("submission_packets"))
     if latest_submission is not None:

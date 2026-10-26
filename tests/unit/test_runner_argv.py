@@ -178,3 +178,18 @@ def test_agent_env_overrides_stay_out_of_child_server_and_judge_env(monkeypatch,
     child_env = _build_child_env(cfg)
     assert child_env["ANTHROPIC_API_KEY"] == native_judge_key
     assert "ANTHROPIC_AUTH_TOKEN" not in child_env
+
+
+def test_openai_agent_does_not_receive_native_judge_or_download_credentials(tmp_path):
+    cfg = ExperimentConfig(dataset=str(tmp_path), agent="openai-agents", model="openai/gpt-5.5")
+    cmd = _build_harbor_command(
+        cfg,
+        env={
+            "OPENAI_API_KEY": "agent-key",
+            "ANTHROPIC_API_KEY": "judge-key",
+            "HF_TOKEN": "download-key",
+        },
+    )
+    pairs = [cmd[i + 1] for i, arg in enumerate(cmd) if arg == "--ae"]
+    assert "OPENAI_API_KEY=agent-key" in pairs
+    assert not any(p.startswith(("ANTHROPIC_API_KEY=", "HF_TOKEN=")) for p in pairs)

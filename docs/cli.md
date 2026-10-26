@@ -13,7 +13,7 @@ This file documents every `cb` subcommand: synopsis, flags, behavior, exit codes
 | [`cb experiment`](#cb-experiment) | Single-config experiment lifecycle: `run`, `rejudge`, `status`. |
 | [`cb data`](#cb-data) | Dataset operations: `verify`, `download`. |
 | [`cb submission`](#cb-submission) | Leaderboard submission lifecycle: `validate`, `run`, `status`, `package`. |
-| [`cb docker`](#cb-docker) | Build the `chi-bench:latest` single-image container. |
+| [`cb docker`](#cb-docker) | Build the trusted runtime and clean agent images. |
 
 Exit-code convention used throughout:
 
@@ -88,6 +88,7 @@ Run a Harbor trial (or set of trials) from an `ExperimentConfig`, optionally ove
 ```
 cb experiment run [-f <config.yaml>] [--dataset <path-or-id>]
                   [--agent <id>] [--model <id>] [-n <int>]
+                  [--e2e-protocol workflow_v2]
                   [--trials-dir <dir>]
                   [-e docker|modal] [--modal-profile <name>]
                   [--modal-sandbox-timeout-secs <int>]
@@ -102,9 +103,10 @@ cb experiment run [-f <config.yaml>] [--dataset <path-or-id>]
 | `--dataset` | — | Path to a dataset directory or a registry ID. |
 | `--agent` | `claude-code` | Agent identifier (e.g. `claude-code`, `codex`, `openclaw`). |
 | `--model` | — | Model identifier in the agent's namespace. |
+| `--e2e-protocol` | `workflow_v2` | Only the current E2E execution and scoring protocol is supported. Legacy settings and legacy/unversioned E2E scores are rejected. YAML key: `e2e_protocol`. See [E2E scoring](judge.md#versioned-e2e-scoring). |
 | `-n` | `1` | Concurrent trials. |
 | `--trials-dir` | — | Harbor trials output directory; falls back to the config's `paths.trials_dir`. |
-| `-e / --environment` | `docker` | Either `docker` (local single-image) or `modal` (remote sandbox parallelism). The runner auto-terminates its own sandboxes on exit. |
+| `-e / --environment` | `docker` | Either `docker` (local isolated containers) or `modal` (remote sandbox parallelism). The runner auto-terminates its own sandboxes on exit. |
 | `--modal-profile` | `actava` | Modal profile from `~/.modal.toml`. Pass `''` to skip Modal preflight. |
 | `--modal-sandbox-timeout-secs` | `86400` | Per-sandbox lifetime cap. Matches YAML key `modal.sandbox_timeout_secs`. |
 | `--modal-force-build` | unset | Force Modal to rebuild the environment image. |
@@ -277,6 +279,15 @@ expectations are unchanged by this regeneration.
 
 ## `cb submission`
 
+Every submission config requires `dataset.content_sha256`, an explicit SHA-256
+of the accepted source assets for `dataset.domains`. Inspect a candidate with
+`uv run python scripts/dataset_identity.py --data-root data`; repeat `--domain`
+for a selected subset. This command reads task families, shared worlds/tools,
+the handbook and version pin without changing them. Preflight and run-start
+provenance compare the current bytes to the configured expected hash. Missing,
+extra or changed assets fail validation. The digest and scope are recorded in
+provenance; a matching text version pin alone is insufficient.
+
 Leaderboard submission lifecycle. See `configs/submission_example.yaml` for the YAML schema.
 
 ### `cb submission validate`
@@ -340,6 +351,9 @@ cb submission status -f <sub.yaml> [--json]
 
 - Counts only trials whose `result.json` carries a `verifier_result` block — the run-level aggregate `result.json` and incomplete trials are skipped (so the tally never claims more evidence than exists on disk).
 - Default output is a human-readable table; `--json` emits a machine-readable shape.
+- Invalid verifier results have a separate `n_invalid` count and `invalid` state.
+  Rejudge or rerun them before aggregation or submission preparation; they do
+  not count as agent passes or failures.
 
 **Example**
 
@@ -358,7 +372,8 @@ cb submission prepare -f <sub.yaml> [-o <out-dir>] [--date YYYY-MM-DD] [--force]
 
 **Behavior**
 
-- Writes `<out-dir>/<YYYY-MM-DD>-<submission_id>/` containing `submission.json` (leaderboard-spec shape with nested `results.overall` + `results.per_domain`), `results.csv` (one row per domain + overall, with `benchmark` and `dataset_version` columns), frozen `sub.yaml`, `provenance.json`, an auto-generated `README.md`, and per-trial `result.json` + `verifier/scorecard.json` + `verifier/reward.json` + `agent/trajectory.jsonl.zst`.
+- Writes `<out-dir>/<YYYY-MM-DD>-<submission_id>/` containing `submission.json` (leaderboard-spec shape with nested `results.overall` + `results.per_domain`), `results.csv` (one row per domain + overall, with `benchmark` and `dataset_version` columns), frozen `sub.yaml`, `provenance.json`, an auto-generated `README.md`, and per-trial `result.json` + `verifier/scorecard.json` + `verifier/reward.json` + `verifier/validity.json` (when present) + `agent/trajectory.jsonl.zst`.
+- Unknown usage or model prices produce `mean_cost_usd: null`, including when only some trials or E2E phases have known usage. CSV writes the literal `null`; known zero remains numeric zero. These totals describe agent token costs, not simulator, judge, or infrastructure charges. Unknown provenance values also remain null; packet preparation does not infer the actual judge from its current process environment.
 - Trajectories are re-serialized as JSONL and zstd-compressed (level 19). Inspect with `zstdcat trajectory.jsonl.zst | jq .`.
 - Workspace artifacts, server logs, agent session caches, and Harbor scratch are deliberately excluded. Typical packet size: <100 MB for a 75-trial pass@1 run; trajectories typically compress 5–20×.
 - The raw trial tree on disk is unchanged.
@@ -385,10 +400,10 @@ Submit the packet via the [actava-ai/leaderboard](https://github.com/actava-ai/l
 
 ### `cb docker build`
 
-Build the chi-Bench single-image container.
+Build the trusted runtime and clean agent images.
 
 ```
-cb docker build [-t chi-bench:latest] [--target runtime|ci-skeleton]
+cb docker build [-t chi-bench:latest] [--target runtime|agent|ci-skeleton]
 ```
 
 **Flags**
@@ -396,11 +411,11 @@ cb docker build [-t chi-bench:latest] [--target runtime|ci-skeleton]
 | Flag | Default | Notes |
 | --- | --- | --- |
 | `-t / --tag` | `chi-bench:latest` | Image tag. |
-| `--target` | `runtime` | Build stage: `runtime` (full image), or `ci-skeleton` (faster, used by `tests/smoke/test_docker_image_builds.py`). |
+| `--target` | `runtime` | `runtime` builds both trusted runtime and clean agent targets. `agent` or `ci-skeleton` builds only that target. |
 
 **Behavior**
 
-- Echoes the underlying `docker build ...` invocation to stdout, then `exec`s it. Exit code mirrors Docker's.
+- Echoes and runs each `docker build ...` invocation. Stops at the first failure and returns that Docker exit code. The default tags are `chi-bench:latest` and `chi-bench:agent`; a custom runtime tag uses `<tag>-agent` for its clean agent image.
 
 **Example**
 
@@ -427,3 +442,5 @@ API keys and tokens are read from process env (or `run.env_file` for `cb submiss
 | `CHI_BENCH_PAYER_MODE` | Auto-set to `agent` by `cb serve` if unset; controls the in-container payer routing. |
 
 Provide whichever subset matches the rows you intend to run.
+
+Management HTTP endpoints require `CHI_BENCH_CONTROL_TOKEN`. The trial runner generates it and confines it to the trusted container. For standalone development with `cb serve`, configure a token before starting the server and send `Authorization: Bearer <token>` with export/oracle/admin requests. Without a configured token these routes return 503. `/health` remains public. Standalone development is not the formal evaluation isolation boundary.

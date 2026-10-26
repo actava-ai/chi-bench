@@ -53,7 +53,7 @@ def test_parse_verdicts_minimal(tmp_path: Path) -> None:
             "r_documentation": {
                 "pass": False,
                 "explanation": "missing chart note",
-                "evidence_refs": [],
+                "evidence_refs": ["agent_outputs/stage_documentation.json: chart note absent"],
             },
         },
         "session_metadata": {"model": "claude-opus-4-7", "n_turns": 12},

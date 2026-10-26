@@ -4,6 +4,7 @@ import json
 from typing import Any
 
 from chi_bench.core.provider_identity import normalize_specialty_value
+from chi_bench.core.e2e_protocol import is_workflow_v2
 
 from ._base import CheckStatus, StageResult, StageVerifier, mark_not_applicable
 from ._helpers import (
@@ -141,6 +142,7 @@ class ProviderSubmissionVerifier(StageVerifier):
         manifest = _parse_manifest(packet_manifest)
 
         checks: dict[str, CheckStatus] = {}
+        not_applicable_reasons: dict[str, str] = {}
         has_packet = len(packets) > 0
         has_bundle_document = (
             bool(bundle_document) and bundle_document.get("kind") == "submission_bundle"
@@ -303,9 +305,21 @@ class ProviderSubmissionVerifier(StageVerifier):
                 checks["provider.required_source_slots_covered"] = required_slot_keys.issubset(
                     covered_manifest_slots
                 )
-                checks["provider.provenance_complete"] = all(
-                    _has_complete_provenance(document) for document in manifest_documents
-                )
+                if (
+                    is_workflow_v2(self.exported, self.expectations)
+                    and not required_slot_keys
+                    and not expected.get("require_source_attachment_provenance")
+                ):
+                    checks["provider.provenance_complete"] = "not_applicable"
+                    not_applicable_reasons["provider.provenance_complete"] = (
+                        "This task has no fixed source-slot provenance contract; normal authored "
+                        "documents expose source lineage without a destination slot. The required "
+                        "Provider source-fidelity rubric grades submitted claims against the chart."
+                    )
+                else:
+                    checks["provider.provenance_complete"] = all(
+                        _has_complete_provenance(document) for document in manifest_documents
+                    )
             else:
                 mark_not_applicable(
                     checks,
@@ -433,4 +447,8 @@ class ProviderSubmissionVerifier(StageVerifier):
                 for action in required_audit_actions
             )
 
-        return StageResult(stage="provider_submission", checks=checks)
+        return StageResult(
+            stage="provider_submission",
+            checks=checks,
+            details={"not_applicable_reasons": not_applicable_reasons},
+        )

@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+from typing import Any
+
+from pydantic import ValidationError
+
+from chi_bench.core.e2e_protocol import is_workflow_v2, lawful_review_skip_reason
+from chi_bench.core.models import NurseCriterionEvaluation
+
 from ._base import CheckStatus, StageResult, StageVerifier, mark_not_applicable
 from ._helpers import (
     actual_item_map,
@@ -19,6 +26,61 @@ from ._provider_new_referral_targets import (
     agent_path_for_e2e,
     is_provider_to_payer_e2e_task,
 )
+
+
+def _actual_criteria_recorded(
+    reviews: list[dict[str, Any]], exported: dict[str, Any], case_id: str
+) -> tuple[bool, dict[str, Any]]:
+    """Validate actual line coverage and recording, leaving clinical correctness to the judge."""
+    intake_id = (exported.get("target_case") or {}).get("payer_intake_case_id")
+    intakes = [
+        intake
+        for intake in filter_by_case_id(exported.get("intake_cases", []), case_id)
+        if not intake_id or intake.get("id") == intake_id
+    ]
+    required_lines: set[tuple[str, int]] = set()
+    errors: list[dict[str, Any]] = []
+    for intake in intakes:
+        for line in intake.get("line_items") or []:
+            number = line.get("line_number") if isinstance(line, dict) else None
+            if type(number) is not int or number < 1 or not intake.get("id"):
+                errors.append({"intake_id": intake.get("id"), "error": "Invalid intake line."})
+            else:
+                required_lines.add((intake["id"], number))
+
+    recorded_lines: set[tuple[str, int]] = set()
+    for review in reviews:
+        number = review.get("line_number")
+        line = (review.get("intake_case_id"), number)
+        if type(number) is not int or number < 1 or line not in required_lines:
+            errors.append({"review_id": review.get("id"), "error": "Unknown or invalid line."})
+            continue
+        evaluations = review.get("criteria_evaluations")
+        if not isinstance(evaluations, list) or not evaluations:
+            errors.append({"review_id": review.get("id"), "error": "No criteria evaluations."})
+            continue
+        valid = True
+        for evaluation in evaluations:
+            try:
+                parsed = NurseCriterionEvaluation.model_validate(evaluation)
+                if not all(
+                    getattr(parsed, field).strip()
+                    for field in ("criterion_id", "criterion_text", "criteria_source", "notes")
+                ):
+                    valid = False
+            except ValidationError:
+                valid = False
+        if valid:
+            recorded_lines.add(line)
+        else:
+            errors.append({"review_id": review.get("id"), "error": "Invalid criteria content."})
+
+    return bool(required_lines) and required_lines == recorded_lines and not errors, {
+        "required_actual_lines": sorted(required_lines),
+        "recorded_actual_lines": sorted(recorded_lines),
+        "errors": errors,
+        "basis": "Actual intake lines and recorded schema; policy coverage and correctness require the actual-packet semantic judge.",
+    }
 
 
 def _compare_expected_item(expected_item: dict, actual_item: dict | None) -> tuple[bool, dict]:
@@ -93,7 +155,16 @@ class NurseReviewVerifier(StageVerifier):
         e2e_path: str | None = None
         if is_provider_to_payer_e2e_task(self.expectations):
             e2e_path = agent_path_for_e2e(self.expectations, self.exported)
-        if e2e_path is not None and e2e_path != "submit":
+        skip_reason = (
+            lawful_review_skip_reason(self.exported, self.case_id)
+            if is_workflow_v2(self.exported, self.expectations)
+            else None
+        )
+        if skip_reason or (
+            e2e_path is not None
+            and e2e_path != "submit"
+            and not is_workflow_v2(self.exported, self.expectations)
+        ):
             # E2E task with no_submit / submit_incomplete / no_decision:
             # the entire payer-side nurse review flow is vacuous. NA every
             # axis instead of letting existence/audit checks drop to False
@@ -109,12 +180,29 @@ class NurseReviewVerifier(StageVerifier):
                 "nurse.no_unauthorized_denial",
                 "nurse.audit",
             )
+            details["not_applicable_reason"] = skip_reason or "Legacy unsubmitted payer path."
             return StageResult(stage="nurse_review", checks=checks, details=details)
 
         checks["nurse.reviews_exist"] = has_reviews
 
         expected_criteria = expected_clinical_criteria_for_stage(self.expectations, "nurse_review")
-        actual_reviews = actual_review_map(nurse_reviews)
+        if is_workflow_v2(self.exported, self.expectations):
+            checks["nurse.criteria_recorded"], details["criteria_recording"] = (
+                _actual_criteria_recorded(nurse_reviews, self.exported, self.case_id)
+            )
+            # Keep source-value comparisons as audit observations without letting
+            # malformed exported rows crash their legacy map builder.
+            actual_reviews = actual_review_map(
+                [
+                    review
+                    for review in nurse_reviews
+                    if type(review.get("line_number")) is int
+                    and review["line_number"] > 0
+                    and isinstance(review.get("criteria_evaluations"), list)
+                ]
+            )
+        else:
+            actual_reviews = actual_review_map(nurse_reviews)
         if expected_criteria and not contract_v3:
             if has_reviews:
                 actual_review_results: dict[tuple[int, str], str] = {}

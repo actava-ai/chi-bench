@@ -831,6 +831,8 @@ class PayerPeerToPeerRequest(ChiBenchModel):
     provider_selected_slot: str | None = None
     notes: list[str] = Field(default_factory=list)
     outcome: PeerToPeerOutcome | None = None
+    outcome_source: str | None = None
+    outcome_evidence_id: str | None = None
     created_at: datetime
     updated_at: datetime
 

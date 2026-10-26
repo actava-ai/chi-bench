@@ -26,6 +26,7 @@ submission:
   model: anthropic/claude-opus-4-6
 dataset:
   version: chi-bench-v1.0.0
+  content_sha256: "{"a" * 64}"
   domains: [pa_provider]
 run:
   environment: docker
@@ -140,7 +141,7 @@ def test_prepare_packet_manifest_has_nested_results(tmp_path: Path) -> None:
     assert manifest["provenance"]["chi_bench_git_sha"] == "abc123"
     assert manifest["provenance"]["image_digest"] == "sha256:def"
     assert manifest["provenance"]["harness_version"] == "1.0.0"
-    assert manifest["provenance"]["judge_model"] == "claude-opus-4-7"
+    assert manifest["provenance"]["judge_model"] is None
 
 
 def test_prepare_packet_results_csv_has_per_domain_rows(tmp_path: Path) -> None:

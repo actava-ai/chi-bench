@@ -28,4 +28,7 @@ run:
 
 dataset:
   version: chi-bench-v1.0.0
+  # REQUIRED: replace zeros with the accepted dataset content SHA-256.
+  # Inspect via: uv run python scripts/dataset_identity.py --data-root data
+  content_sha256: "0000000000000000000000000000000000000000000000000000000000000000"
   domains: [pa_provider, pa_um, cm]

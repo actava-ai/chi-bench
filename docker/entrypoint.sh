@@ -7,6 +7,17 @@
 # hands off to the requested command (default: sleep infinity).
 set -e
 
+# The management token lives only in the trusted container. The token file
+# also supports trusted docker-compose collection hooks after the agent stops.
+umask 077
+mkdir -p /run/chi-bench
+if [ -z "${CHI_BENCH_CONTROL_TOKEN:-}" ]; then
+    CHI_BENCH_CONTROL_TOKEN="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+    export CHI_BENCH_CONTROL_TOKEN
+fi
+printf '%s' "$CHI_BENCH_CONTROL_TOKEN" > /run/chi-bench/control-token
+umask 022
+
 TASK_ID="${CHI_BENCH_TASK_ID:-}"
 TASKS_ROOT="${CHI_BENCH_TASKS_ROOT:-/opt/chi-bench/tasks}"
 LOG_DIR=/logs/artifacts
@@ -160,6 +171,7 @@ wait_mcp() {
     for _ in $(seq 1 60); do
         if python - <<PY >/dev/null 2>&1
 import json, urllib.request
+from chi_bench.server.control import control_headers
 body = json.dumps({
     "jsonrpc": "2.0",
     "method": "initialize",
@@ -174,6 +186,7 @@ req = urllib.request.Request(
     f"http://localhost:${port}/mcp",
     data=body,
     headers={
+        **control_headers(),
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream",
     },
@@ -218,9 +231,19 @@ if [ -n "$SKILLS_ABLATE" ]; then
     done
 fi
 
-TOOL_MODE="${CHI_BENCH_TOOL_MODE:-mcp}"
-if [ "$TOOL_MODE" = "cli" ]; then
-    npm install -g mcporter >/dev/null 2>&1
+if [ "${CHI_BENCH_PUBLISH_AGENT_ASSETS:-0}" = "1" ]; then
+    python - <<'PY'
+import os
+from pathlib import Path
+from chi_bench.experiment.runtime_assets import publish_agent_assets
+publish_agent_assets(
+    Path(os.environ["CHI_BENCH_FIXTURES_DIR"]).parent,
+    Path("/workspace/skills/managed-care-operations-handbook"),
+    Path("/opt/chi-bench-task-assets/tool_reference.md").resolve(strict=True),
+    Path("/agent-assets"),
+)
+Path("/agent-assets/.ready").touch()
+PY
 fi
 
 exec "$@"

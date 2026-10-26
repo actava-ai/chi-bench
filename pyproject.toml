@@ -68,6 +68,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 chi_bench = [
     "conversation/guidelines/*.md",
+    "verifier/reference_answers/cm/*.json",
 ]
 
 [tool.pytest.ini_options]

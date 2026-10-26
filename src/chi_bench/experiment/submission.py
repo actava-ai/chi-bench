@@ -16,6 +16,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
+import os
 import platform
 import shutil
 import socket
@@ -29,6 +30,11 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from chi_bench.experiment.agents.registry import KNOWN_AGENTS
 from chi_bench.experiment.config import Environment
+from chi_bench.experiment.content_identity import (
+    compute_dataset_identity,
+    require_dataset_identity,
+    validate_content_sha256,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -132,10 +138,21 @@ class SubmissionDataset(BaseModel):
             "data/.chi-bench-version at run start; mismatch is a hard error."
         ),
     )
+    content_sha256: str = Field(
+        description=(
+            "Required expected content identity of the accepted selected-domain tasks, "
+            "shared assets and handbook. Drift is a hard error; a version tag is insufficient."
+        )
+    )
     domains: list[str] = Field(
         default_factory=lambda: list(CANONICAL_DOMAINS),
         description="Canonical domain keys (or aliases) to run.",
     )
+
+    @field_validator("content_sha256")
+    @classmethod
+    def _validate_content_identity(cls, value: str) -> str:
+        return validate_content_sha256(value)
 
     @field_validator("domains", mode="before")
     @classmethod
@@ -209,7 +226,7 @@ class PreflightIssue(BaseModel):
 
 
 def preflight_dataset(cfg: SubmissionConfig) -> list[PreflightIssue]:
-    """Verify data/ exists and its version tag matches cfg.dataset.version."""
+    """Require both the declared revision and the independently expected bytes."""
     issues: list[PreflightIssue] = []
     data_root = cfg.paths.data_root
 
@@ -231,7 +248,7 @@ def preflight_dataset(cfg: SubmissionConfig) -> list[PreflightIssue]:
     if not version_file.exists():
         issues.append(
             PreflightIssue(
-                severity="warning",
+                severity="error",
                 code="dataset.version_file_missing",
                 message=(
                     f"{version_file} not found; dataset version cannot be verified. "
@@ -267,6 +284,25 @@ def preflight_dataset(cfg: SubmissionConfig) -> list[PreflightIssue]:
                 )
             )
 
+    try:
+        actual = compute_dataset_identity(data_root, cfg.dataset.domains)
+    except (OSError, ValueError) as exc:
+        issues.append(
+            PreflightIssue(severity="error", code="dataset.content_unavailable", message=str(exc))
+        )
+    else:
+        if actual.content_sha256 != cfg.dataset.content_sha256:
+            issues.append(
+                PreflightIssue(
+                    severity="error",
+                    code="dataset.content_mismatch",
+                    message=(
+                        f"dataset content mismatch: expected {cfg.dataset.content_sha256}, "
+                        f"observed {actual.content_sha256}. Restore the accepted assets or select "
+                        "a separately reviewed bundle; do not silently refresh the expected hash."
+                    ),
+                )
+            )
     return issues
 
 
@@ -298,7 +334,7 @@ def preflight_environment(cfg: SubmissionConfig) -> list[PreflightIssue]:
             )
             return issues
         proc = subprocess.run(
-            ["docker", "image", "inspect", "chi-bench:latest"],
+            ["docker", "image", "inspect", "chi-bench:latest", "chi-bench:agent"],
             capture_output=True,
             text=True,
             check=False,
@@ -309,9 +345,8 @@ def preflight_environment(cfg: SubmissionConfig) -> list[PreflightIssue]:
                     severity="warning",
                     code="docker.image_missing",
                     message=(
-                        "chi-bench:latest not present locally; "
-                        "run `cb docker build` (or it will build at trial start, "
-                        "which delays the first slice by ~5 min)."
+                        "One or both required images (chi-bench:latest, chi-bench:agent) are missing; "
+                        "run `cb docker build` before starting the trial."
                     ),
                 )
             )
@@ -432,12 +467,31 @@ def _chi_bench_version() -> str | None:
 
 def capture_provenance(cfg: SubmissionConfig) -> dict[str, object]:
     """Snapshot everything that affects reproducibility, at run start."""
+    from dotenv import dotenv_values
+
+    identity = require_dataset_identity(
+        cfg.paths.data_root, cfg.dataset.domains, cfg.dataset.content_sha256
+    )
+    # runner._load_env uses override=True after this snapshot. Record that
+    # same model selection without loading credentials into the process here.
+    file_model = dotenv_values(cfg.run.env_file).get("CHI_BENCH_JUDGE_MODEL")
+    judge_model = (
+        file_model
+        if file_model is not None
+        else os.environ.get("CHI_BENCH_JUDGE_MODEL", "claude-opus-4-7")
+    )
     sha, dirty = _git_sha_and_dirty()
     prov: dict[str, object] = {
         "code_sha": sha,
         "code_dirty": dirty,
         "chi_bench_version": _chi_bench_version(),
         "dataset_version": cfg.dataset.version,
+        "dataset_content_sha256": identity.content_sha256,
+        "dataset_expected_content_sha256": cfg.dataset.content_sha256,
+        "dataset_content_identity_schema": identity.schema,
+        "dataset_content_file_count": identity.file_count,
+        "dataset_content_domains": list(identity.domains),
+        "judge_model": judge_model,
         "environment": cfg.run.environment,
         "started_at": _utcnow_iso(),
         "finished_at": None,
@@ -447,6 +501,11 @@ def capture_provenance(cfg: SubmissionConfig) -> dict[str, object]:
     }
     if cfg.run.environment == "docker":
         prov["docker_image_digest"] = _docker_image_digest()
+        prov["docker_agent_image_digest"] = _docker_image_digest("chi-bench:agent")
+    else:
+        # The Modal engine is created later. Unknown identities stay explicit.
+        prov["modal_runtime_image_digest"] = None
+        prov["modal_agent_image_digest"] = None
     return prov
 
 
@@ -479,6 +538,9 @@ def _build_slice_yaml(cfg: SubmissionConfig, domain: str) -> dict[str, object]:
     """Synthesize the ExperimentConfig YAML for one (submission × domain) slice."""
     slice_cfg: dict[str, object] = {
         "dataset": str(cfg.domain_dataset_path(domain)),
+        "data_root": str(cfg.paths.data_root.resolve()),
+        "dataset_content_sha256": cfg.dataset.content_sha256,
+        "dataset_domains": list(cfg.dataset.domains),
         "registry_path": str(cfg.domain_registry_path(domain)),
         "agent": cfg.submission.agent,
         "model": cfg.submission.model,
@@ -711,9 +773,12 @@ class DomainProgress(BaseModel):
     n_trials: int
     n_passed: int
     n_failed: int
+    n_invalid: int = 0
 
     @property
-    def state(self) -> Literal["pending", "running", "done"]:
+    def state(self) -> Literal["pending", "running", "done", "invalid"]:
+        if self.n_invalid:
+            return "invalid"
         if self.n_trials == 0:
             return "pending"
         if self.expected_tasks and self.n_trials < self.expected_tasks:
@@ -754,6 +819,7 @@ def status_submission(
         n_trials = 0
         n_passed = 0
         n_failed = 0
+        n_invalid = 0
         for result_json in dom_dir.rglob("result.json"):
             try:
                 data = json.loads(result_json.read_text())
@@ -765,6 +831,11 @@ def status_submission(
                 # results carry a verifier_result block.
                 continue
             n_trials += 1
+            from chi_bench.verifier.validity import trial_invalid_reason
+
+            if trial_invalid_reason(result_json) is not None:
+                n_invalid += 1
+                continue
             rb = vr.get("rewards")
             reward = float((rb or {}).get("reward", 0.0)) if rb else float(vr.get("reward", 0.0))
             if reward >= 1.0:
@@ -779,6 +850,7 @@ def status_submission(
                 n_trials=n_trials,
                 n_passed=n_passed,
                 n_failed=n_failed,
+                n_invalid=n_invalid,
             )
         )
 
@@ -819,6 +891,7 @@ _PACKET_TRIAL_SMALL_FILES: tuple[str, ...] = (
     "result.json",
     "verifier/scorecard.json",
     "verifier/reward.json",
+    "verifier/validity.json",
 )
 
 # CSV column order for the packet's results.csv. Stable across benchmarks at
@@ -876,8 +949,6 @@ def _build_packet_manifest(
     are nested under {overall, per_domain} and submission carries submitted_at.
     The schema field uses SUBMISSION_SCHEMA_V1.
     """
-    import os as _os
-
     results = aggregate_submission(cfg, output_root=output_root, prices_path=prices_path)
     submission_block = cfg.submission.model_dump()
     submission_block["submitted_at"] = submitted_at
@@ -890,7 +961,7 @@ def _build_packet_manifest(
     provenance: dict[str, object] = {
         "chi_bench_git_sha": internal.get("code_sha"),
         "image_digest": internal.get("docker_image_digest"),
-        "judge_model": _os.environ.get("CHI_BENCH_JUDGE_MODEL", "claude-opus-4-7"),
+        "judge_model": internal.get("judge_model"),
         "harness_version": internal.get("chi_bench_version") or _chi_bench_version() or "unknown",
     }
     # Preserve extra debug fields (schema's additionalProperties: true allows it).
@@ -911,8 +982,7 @@ def _build_packet_manifest(
             for dom, row in per_domain.items()
         },
     }
-    if mean_cost is not None:
-        results_block["mean_cost_usd"] = mean_cost
+    results_block["mean_cost_usd"] = mean_cost
     if mean_walltime is not None:
         results_block["mean_walltime_s"] = mean_walltime
 
@@ -979,7 +1049,7 @@ def _write_packet_results_csv(manifest: dict[str, object], out_path: Path) -> No
         writer = _csv.DictWriter(fh, fieldnames=list(_PACKET_CSV_COLUMNS))
         writer.writeheader()
         for r in rows:
-            writer.writerow(r)
+            writer.writerow({k: "null" if v is None else v for k, v in r.items()})
 
 
 def prepare_packet(
@@ -1010,6 +1080,11 @@ def prepare_packet(
     assert output_root is not None
     if not output_root.is_dir():
         raise FileNotFoundError(f"output_root not found: {output_root}")
+
+    from chi_bench.verifier.validity import require_valid_trial
+
+    for _domain, trial in _iter_trial_dirs(output_root, list(cfg.dataset.domains)):
+        require_valid_trial(trial / "result.json")
 
     date_str = date or dt.datetime.now(dt.UTC).strftime("%Y-%m-%d")
     submitted_at = f"{date_str}T{dt.datetime.now(dt.UTC).strftime('%H:%M:%SZ')}"

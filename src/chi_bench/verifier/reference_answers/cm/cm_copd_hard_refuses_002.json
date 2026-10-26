@@ -1,0 +1,964 @@
+{
+  "schema_version": "cm_static_reference_v1",
+  "task_id": "cm_copd_hard_refuses_002",
+  "reference_mode": "static_answer",
+  "executed": false,
+  "source": {
+    "expectations_sha256": "edfef772b100f94bb11da01b0ad4182059684f89703838b8f7c06cc67a9e0a4b",
+    "contract_sha256": "ec7e6fddc4c077bd7ef0c45a36bd42592ce0a702d23e52403e926ddf680b146c",
+    "contract_fields": [
+      "persona",
+      "cm_reference",
+      "stage_ground_truth",
+      "expected_final_status",
+      "expected_target_status",
+      "program_type",
+      "evidence_rubric_items",
+      "target_case_id",
+      "target_patient_id",
+      "required_audit_actions",
+      "expected_audit_actions"
+    ]
+  },
+  "answer": {
+    "chart_review": {
+      "key_findings": "Mr. Rafael Delgado is a 52 yo Hispanic male with moderate-to-severe COPD (FEV1 declining 52 -> 47 -> 42 -> 38% predicted across the chart, FEV1/FVC 0.58, mMRC trending 2 -> 3 -> 4, CAT 18 -> 22 -> 26), TWO exacerbation-related acute visits in the past 12 months (July 2025 inpatient with BiPAP for hypercapnic respiratory failure and January 2026 ED visit with SpO2 82% on 2 L NC), persistent active 1-PPD smoking with 32 pack-years and a failed varenicline trial, intermittent housing (sister's couch + emergency shelter) with a 2024 LCSW assessment on file, mild MDD (PHQ-9 trajectory 11 -> 8 -> 9 with GAD-7 9), and a CM referral risk_score of 0.78 with three utilization flags.",
+      "clinical_interpretation": "COPD J44.9 uncontrolled (§2.2): FEV1 38%, mMRC 4, CAT 26, two acute exacerbation visits/12 months and SpO2 89–90% room air. HTN/HLD/OA are stable source comorbidities.",
+      "preliminary_risk": "high",
+      "risk_rationale": "Retain the task-authored risk designation under risk-stratification §3.1–§3.3, supported by the numeric referral/utilization/clinical anchors in key_findings; medication class or a single disease-control band does not replace the combined risk framework.",
+      "screening_scores": [
+        {
+          "name": "PHQ-9",
+          "score": 9,
+          "observed_at": "2026-02-12T13:50:00",
+          "source": {
+            "file": "shared/worlds/healthverse-cm-curated25-v1.json",
+            "resource": "observations",
+            "id": "OBS-CM_COPD_HARD_REFUSES_002-045"
+          }
+        },
+        {
+          "name": "GAD-7",
+          "score": 9,
+          "observed_at": "2026-02-12T13:50:00",
+          "source": {
+            "file": "shared/worlds/healthverse-cm-curated25-v1.json",
+            "resource": "observations",
+            "id": "OBS-CM_COPD_HARD_REFUSES_002-047"
+          }
+        }
+      ],
+      "source_refs": [
+        "/evidence_rubric_items/0/prompt",
+        "/cm_reference/risk_reference",
+        "/cm_reference/screening_scores"
+      ]
+    },
+    "outreach": {
+      "dialogue_kind": "authored_ideal_path_reference; not an observed conversation",
+      "ideal_dialogue": [
+        {
+          "speaker": "care_manager",
+          "message": "Hello, I am Alex, a care manager with The Healthcare Company. Is this a private and suitable time for a brief explanation?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I am handling it. I do not want a lecture or a shelter investigation.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "I hear your concern. We can pause here; you control whether this continues. Would you like to tell me what would make a short call useful?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "A brief explanation is okay. Please let me choose what I answer.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Care management helps coordinate support with your care team. It is voluntary, has no separate program fee, and you can stop at any time. Joining does not change your benefits or give someone else your decisions.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "What would you actually help with?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "We could coordinate COPD follow-up, review inhaler access, and check community or housing options without guaranteeing placement or transport. I can check options and coordinate, but cannot guarantee access, approval, cost reductions, or a clinical outcome. Would that kind of process help be useful?",
+          "source_refs": [
+            "/persona/consent_triggers"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "That sounds more useful. I still want to understand who sees what I say.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "I can use chart and call information to organize care-management support. Relevant information is documented for the care team; I will explain any proposed wider sharing. Privacy has safety and legal limits, including urgent danger; I cannot promise absolute secrecy. May we start only with what makes breathing recovery difficult?",
+          "source_refs": [
+            "/persona/consent_triggers",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Yes, that topic is okay. Please go slowly.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "What feels hardest about that, in your own words? You can leave details private.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Keeping the inhalers straight is harder when I do not have one steady place to sleep.",
+          "source_refs": [
+            "/persona/patient_profile",
+            "/cm_reference/assessment_required_items"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Your breathing and privacy both matter. A disrupted place to recover makes inhaler access harder; that is a practical problem, not a judgment about smoking or housing.",
+          "source_refs": [
+            "/persona/consent_triggers",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Thank you for hearing that. I do not want this to turn into a checklist.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "We can work on one concern at a time and stop whenever you choose. Enrollment does not require all your personal details today. Is there something you want this support to help you do?",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I want steadier housing and to avoid another breathing trip to the ER.",
+          "source_refs": [
+            "/persona/patient_profile",
+            "/evidence_rubric_items/3/prompt"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "We can make that your priority. A first step would be to coordinate COPD follow-up, review inhaler access, and check community or housing options without guaranteeing placement or transport. These are coordination steps, not a promise that the problem will be solved on this call.",
+          "source_refs": [
+            "/persona/consent_triggers"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Can I decide later about a referral or family involvement?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Yes. Each referral, family contact, and new sensitive topic needs its own discussion. You can skip a question or stop the program. A request for information alone is not enrollment consent.",
+          "source_refs": [
+            "/persona/consent_triggers",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I understand. I would like a manageable follow-up call.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Would telephone follow-up be acceptable? We can agree a convenient time at each contact; please tell me before any other person is included.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Telephone is okay. Please arrange the next time with me and ask before involving anyone else.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Before you decide: this is voluntary care-team coordination, with no separate program fee, the information-use and safety limits we discussed, your chosen contact arrangements, and the right to stop. What would you like clarified?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "That answers my questions. I understand that you can check options but cannot promise the result.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "With those boundaries and the first step we discussed, do you clearly agree to enroll in care management today?",
+          "source_refs": [
+            "/persona/consent_triggers",
+            "/expected_target_status"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Yes, I agree to enroll today on those terms.",
+          "source_refs": [
+            "/persona/consent_triggers"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Enrollment is your choice. Would you like to continue with one practical topic now, with a pause after each, or stop for today?",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I choose to continue one topic at a time. I may still skip optional details.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "I will start with the charted treatment routine and follow-up, then ask your permission before each personal question. The chart is a starting point; it does not tell me how things are going for you now.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path/0",
+            "/evidence_rubric_items/0/prompt"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "That is okay. Please ask one specific question and give me time.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path/0"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "What happens to your breathing when you walk a block? This helps tailor support. You may skip or stop.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/0/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Walking a block makes me stop; stairs are worse. I worry about safe breathing when I am not somewhere steady.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Thank you. I will keep that specific to what you chose to share. Would you like a pause before another topic?",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/0/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have enough energy to continue with the next separate topic.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "May we focus on keeping the inhalers available where you sleep? This helps tailor support. You may skip or stop.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have skipped or stretched Advair when refills were hard, and keep inhalers in different bags depending on where I sleep.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Thank you. I will keep that specific to what you chose to share. Would you like a pause before another topic?",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have enough energy to continue with the next separate topic.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "May we discuss where recovery happens, without an address or shelter-incident story? This helps tailor support. You may skip or stop.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I split nights between my sister's and a shelter. I avoid some nights because privacy and safety feel shaky.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Thank you. I will keep that specific to what you chose to share. Would you like a pause before another topic?",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have enough energy to continue with the next separate topic.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "May we separately discuss getting to appointments, because breathing can make transfers hard? This helps tailor support. You may skip or stop.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I use the bus, and the transfers are hard with my breathing.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Thank you. I will keep that specific to what you chose to share. Would you like a pause before another topic?",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have enough energy to continue with the next separate topic.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "May we separately ask about meals, without a household budget? This helps tailor support. You may skip or stop.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Sometimes shelter timing and money do not line up, and I skip meals.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Thank you. I will keep that specific to what you chose to share. Would you like a pause before another topic?",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have enough energy to continue with the next separate topic.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Safety concerns may require help beyond this call. May I ask whether you are thinking of harming yourself now? This helps tailor support. You may skip or stop.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I am not trying to hurt myself and have no plan. I get low and angry when shelter and smoking are treated like character flaws.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Thank you. I will keep that specific to what you chose to share. Would you like a pause before another topic?",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have enough energy to continue with the next separate topic.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "You do not need to give optional stories, exact finances, locations, or family details. Shall we leave those private and review the support you selected?",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path/3",
+            "/cm_reference/assessment_optional_deeper_items"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Yes. Leave those optional details private for now.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path/3"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        }
+      ],
+      "consent": {
+        "enrollment": "affirmative_yes_on_authored_branch",
+        "separate_assessment_permission": true,
+        "information_only_is_not_consent": true,
+        "source_refs": [
+          "/persona/consent_triggers"
+        ]
+      },
+      "boundaries": {
+        "voluntary": true,
+        "no_separate_program_fee": true,
+        "right_to_stop": true,
+        "care_team_use_with_explained_safety_legal_limits": true,
+        "family_optional": true,
+        "resource_and_clinical_outcomes_not_guaranteed": true,
+        "optional_topics": "Private/unassessed on this authored branch",
+        "source_refs": [
+          "/persona/patient_profile",
+          "/persona/consent_anti_triggers",
+          "/cm_reference/assessment_hidden_path"
+        ]
+      },
+      "hidden_path": {
+        "mode": "ideal disclosure branch selected for known-answer authoring",
+        "gate_sequence": [
+          {
+            "gate": "Low-sensitivity first",
+            "source_ref": "/cm_reference/assessment_hidden_path/0"
+          },
+          {
+            "gate": "Required access disclosure",
+            "source_ref": "/cm_reference/assessment_hidden_path/1"
+          },
+          {
+            "gate": "Required assessment expansion",
+            "source_ref": "/cm_reference/assessment_hidden_path/2"
+          },
+          {
+            "gate": "Optional deeper boundary",
+            "source_ref": "/cm_reference/assessment_hidden_path/3"
+          }
+        ]
+      }
+    },
+    "assessment": {
+      "status": "complete",
+      "status_scope": "Static authored content assumes the specified ideal disclosure branch; no real member disclosure or screen administration occurred",
+      "clinical": {
+        "narrative": "COPD J44.9 uncontrolled (§2.2): FEV1 38%, mMRC 4, CAT 26, two acute exacerbation visits/12 months and SpO2 89–90% room air. HTN/HLD/OA are stable source comorbidities.",
+        "chart_evidence_basis": "Source task chart/GT; not a newly collected observation",
+        "source_refs": [
+          "/evidence_rubric_items/0/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ],
+        "authored_disclosures": [
+          {
+            "id": "clinical.copd_symptom_burden.confirmation",
+            "section": "clinical",
+            "answer": "Walking a block makes me stop; stairs are worse. I worry about safe breathing when I am not somewhere steady.",
+            "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+            "observed": false,
+            "source_refs": [
+              "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+              "/cm_reference/assessment_required_items/0/persona_disclosure_path",
+              "/cm_reference/assessment_hidden_path"
+            ]
+          }
+        ]
+      },
+      "medication": {
+        "narrative": "≥10 active medicines trigger §3.2 pharmacist review. Advair stretching and inhalers kept in different bags are authored access barriers; prior varenicline intolerance informs cessation options.",
+        "chart_evidence_basis": "Source task chart/GT; not a newly collected observation",
+        "source_refs": [
+          "/evidence_rubric_items/0/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ],
+        "authored_disclosures": [
+          {
+            "id": "medication.inhaler_access_adherence.confirmation",
+            "section": "medication",
+            "answer": "I have skipped or stretched Advair when refills were hard, and keep inhalers in different bags depending on where I sleep.",
+            "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+            "observed": false,
+            "source_refs": [
+              "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+              "/cm_reference/assessment_required_items/1/persona_disclosure_path",
+              "/cm_reference/assessment_hidden_path"
+            ]
+          }
+        ]
+      },
+      "behavioral_health": {
+        "narrative": "PHQ-9 9 and GAD-7 9 are mild; source requires current safety documentation (§4.5). Authored reply denies self-harm intent/plan. Tobacco remains an active concern addressed without a forced quit date.",
+        "chart_evidence_basis": "Source task chart/GT; not a newly collected observation",
+        "source_refs": [
+          "/evidence_rubric_items/0/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ],
+        "authored_disclosures": [
+          {
+            "id": "behavioral_health.safety_screen.confirmation",
+            "section": "behavioral_health",
+            "answer": "I am not trying to hurt myself and have no plan. I get low and angry when shelter and smoking are treated like character flaws.",
+            "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+            "observed": false,
+            "source_refs": [
+              "/cm_reference/assessment_required_items/3/patient_fact_if_earned",
+              "/cm_reference/assessment_required_items/3/persona_disclosure_path",
+              "/cm_reference/assessment_hidden_path"
+            ]
+          }
+        ]
+      },
+      "sdoh": {
+        "narrative": "Authored housing instability is severe; transportation moderate, food mild–moderate, financial moderate (§5.1/§5.2). Social-worker referral considered under §5.3. Shelter address and incident details remain private.",
+        "chart_evidence_basis": "Source task chart/GT; not a newly collected observation",
+        "source_refs": [
+          "/evidence_rubric_items/0/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ],
+        "authored_disclosures": [
+          {
+            "id": "sdoh.housing_transport_food.confirmation",
+            "section": "sdoh",
+            "answer": "I split nights between my sister's and a shelter. Some nights feel unsafe. Bus transfers are hard with my breathing, and sometimes I miss meals when timing and money do not line up.",
+            "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+            "observed": false,
+            "source_refs": [
+              "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+              "/cm_reference/assessment_required_items/2/persona_disclosure_path",
+              "/cm_reference/assessment_hidden_path"
+            ]
+          }
+        ]
+      },
+      "required_item_answers": [
+        {
+          "id": "clinical.copd_symptom_burden.confirmation",
+          "section": "clinical",
+          "answer": "Walking a block makes me stop; stairs are worse. I worry about safe breathing when I am not somewhere steady.",
+          "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+          "observed": false,
+          "source_refs": [
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/0/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "id": "medication.inhaler_access_adherence.confirmation",
+          "section": "medication",
+          "answer": "I have skipped or stretched Advair when refills were hard, and keep inhalers in different bags depending on where I sleep.",
+          "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+          "observed": false,
+          "source_refs": [
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "id": "sdoh.housing_transport_food.confirmation",
+          "section": "sdoh",
+          "answer": "I split nights between my sister's and a shelter. Some nights feel unsafe. Bus transfers are hard with my breathing, and sometimes I miss meals when timing and money do not line up.",
+          "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+          "observed": false,
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "id": "behavioral_health.safety_screen.confirmation",
+          "section": "behavioral_health",
+          "answer": "I am not trying to hurt myself and have no plan. I get low and angry when shelter and smoking are treated like character flaws.",
+          "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+          "observed": false,
+          "source_refs": [
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        }
+      ],
+      "screening_provenance": {
+        "chart_scores": [
+          {
+            "name": "PHQ-9",
+            "score": 9,
+            "observed_at": "2026-02-12T13:50:00",
+            "source": {
+              "file": "shared/worlds/healthverse-cm-curated25-v1.json",
+              "resource": "observations",
+              "id": "OBS-CM_COPD_HARD_REFUSES_002-045"
+            }
+          },
+          {
+            "name": "GAD-7",
+            "score": 9,
+            "observed_at": "2026-02-12T13:50:00",
+            "source": {
+              "file": "shared/worlds/healthverse-cm-curated25-v1.json",
+              "resource": "observations",
+              "id": "OBS-CM_COPD_HARD_REFUSES_002-047"
+            }
+          }
+        ],
+        "new_scores": "No new numerical screening result is invented; required current safety/topic replies are authored reference replies, not administered instruments",
+        "source_refs": [
+          "/cm_reference/screening_scores",
+          "/evidence_rubric_items/2/prompt"
+        ]
+      },
+      "optional_items": [
+        {
+          "id": "sdoh.exact_shelter_location",
+          "status": "private_unassessed",
+          "source_ref": "/cm_reference/assessment_optional_deeper_items/0"
+        },
+        {
+          "id": "sdoh.shelter_safety_incident_details",
+          "status": "private_unassessed",
+          "source_ref": "/cm_reference/assessment_optional_deeper_items/1"
+        },
+        {
+          "id": "behavioral_health.smoking_shame_details",
+          "status": "private_unassessed",
+          "source_ref": "/cm_reference/assessment_optional_deeper_items/2"
+        },
+        {
+          "id": "sdoh.exact_financial_details",
+          "status": "private_unassessed",
+          "source_ref": "/cm_reference/assessment_optional_deeper_items/3"
+        }
+      ],
+      "tool_observed_information": [],
+      "source_refs": [
+        "/stage_ground_truth"
+      ]
+    },
+    "care_plan": {
+      "status": "finalized",
+      "status_scope": "Authored ideal-path final state only; no record was created or finalized",
+      "program_type": "chronic_disease",
+      "problems": [
+        {
+          "id": "P1",
+          "icd10": "J44.9",
+          "statement": "Uncontrolled COPD with recurrent exacerbations",
+          "numeric_or_factual_anchor": "FEV1 38%; 2 ED/acute visits in prior 12 months",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        },
+        {
+          "id": "P2",
+          "icd10": "F17.210",
+          "statement": "Active tobacco use with prior medication intolerance",
+          "numeric_or_factual_anchor": "1 PPD; failed varenicline",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        },
+        {
+          "id": "P3",
+          "icd10": "Z59.811",
+          "statement": "Housing instability affecting recovery and medicine access",
+          "numeric_or_factual_anchor": "sister's couch and shelter; no active housing application",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        }
+      ],
+      "goals": [
+        {
+          "id": "G1",
+          "problem_id": "P1",
+          "baseline": "FEV1 38%; 2 ED/acute visits in prior 12 months",
+          "measurable_target": "0 exacerbation-related ED visits from 2026-04-25",
+          "target_date": "2026-07-25",
+          "member_stated_priority": false,
+          "member_priority_text": null,
+          "source_refs": [
+            "/evidence_rubric_items/3/prompt",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "id": "G2",
+          "problem_id": "P2",
+          "baseline": "1 PPD; failed varenicline",
+          "measurable_target": "Complete a patient-chosen review of tolerable cessation supports",
+          "target_date": "2026-07-25",
+          "member_stated_priority": false,
+          "member_priority_text": null,
+          "source_refs": [
+            "/evidence_rubric_items/3/prompt",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "id": "G3",
+          "problem_id": "P3",
+          "baseline": "sister's couch and shelter; no active housing application",
+          "measurable_target": "Connect with permanent supportive-housing application",
+          "target_date": "2026-05-30",
+          "member_stated_priority": true,
+          "member_priority_text": "I want steadier housing and to avoid another breathing trip to the ER.",
+          "source_refs": [
+            "/evidence_rubric_items/3/prompt",
+            "/persona/patient_profile"
+          ]
+        }
+      ],
+      "interventions": [
+        {
+          "id": "I1",
+          "goal_id": "G1",
+          "owner": "care_manager",
+          "action": "Review COPD action plan, inhaler technique/storage, oxygen safety, and pulmonary follow-up; pharmacist reviews access",
+          "timing": "weekly ×4 then biweekly",
+          "expected_result": "0 exacerbation-related ED visits from 2026-04-25",
+          "execution_status": "planned_in_static_reference",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        },
+        {
+          "id": "I2",
+          "goal_id": "G2",
+          "owner": "care_manager",
+          "action": "Ask readiness separately; offer options and pharmacist review without blame or a compulsory quit date",
+          "timing": "biweekly",
+          "expected_result": "Complete a patient-chosen review of tolerable cessation supports",
+          "execution_status": "planned_in_static_reference",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        },
+        {
+          "id": "I3",
+          "goal_id": "G3",
+          "owner": "social_worker",
+          "action": "Check eligibility and application options; separately review bus/food resources without promising housing",
+          "timing": "initial referral then biweekly",
+          "expected_result": "Connect with permanent supportive-housing application",
+          "execution_status": "planned_in_static_reference",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        }
+      ],
+      "escalation": {
+        "conditions": "New chest pain, SpO2 <88% at home, or thoughts of self-harm: escalate per CM-ESC-001 §2.1 Immediate / §2.2 Urgent as indicated.",
+        "action_owner": "care_manager with appropriate clinical/BH service",
+        "source_refs": [
+          "/evidence_rubric_items/3/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ]
+      },
+      "follow_up": {
+        "cadence": "biweekly",
+        "transitions_overlay": null,
+        "pcp_communication": "Send care-plan summary within 14 days of finalization",
+        "review": "Review progress, patient priority, medication questions and new safety concerns at each contact; agree next telephone time with patient",
+        "source_refs": [
+          "/evidence_rubric_items/3/prompt",
+          "/stage_ground_truth"
+        ]
+      }
+    },
+    "final_status": "closed"
+  },
+  "authorship": {
+    "kind": "authored_ideal_path",
+    "observed": false,
+    "simulator_run": false,
+    "verifier_run": false
+  },
+  "required_item_coverage": [
+    "clinical.copd_symptom_burden.confirmation",
+    "medication.inhaler_access_adherence.confirmation",
+    "sdoh.housing_transport_food.confirmation",
+    "behavioral_health.safety_screen.confirmation"
+  ]
+}

@@ -8,6 +8,7 @@ from chi_bench.core.context import ServiceContext
 from chi_bench.mcp.catalog import PROVIDER_NAMESPACE_ALLOWLIST
 from chi_bench.mcp.tool_filter import is_tool_allowed, parse_tool_filter
 from chi_bench.mcp.tool_naming import resolve_tool_name_separator
+from chi_bench.server.control import track_agent_tool
 
 try:
     from mcp.server.fastmcp import FastMCP
@@ -51,7 +52,7 @@ def build_provider_mcp(
                 continue
             if not is_tool_allowed(namespace, method_name, include, exclude):
                 continue
-            mcp.tool(name=f"{namespace}{sep}{method_name}")(target)
+            mcp.tool(name=f"{namespace}{sep}{method_name}")(track_agent_tool(target, "provider"))
     return mcp
 
 

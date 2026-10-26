@@ -9,6 +9,7 @@ from chi_bench.core.context import ServiceContext
 from chi_bench.mcp.catalog import PAYER_AGENT_TOOL_BINDERS
 from chi_bench.mcp.tool_filter import is_tool_allowed, parse_tool_filter
 from chi_bench.mcp.tool_naming import resolve_tool_name_separator
+from chi_bench.server.control import track_agent_tool
 
 try:
     from mcp.server.fastmcp import FastMCP
@@ -179,7 +180,7 @@ def build_payer_mcp(
         if not is_tool_allowed(namespace, tool_name, include, exclude):
             continue
         registered_name = full_name if sep == "." else f"{namespace}{sep}{tool_name}"
-        mcp.tool(name=registered_name)(target)
+        mcp.tool(name=registered_name)(track_agent_tool(target, "payer"))
     return mcp
 
 

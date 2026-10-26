@@ -16,10 +16,19 @@ is used.
 from __future__ import annotations
 
 import json
+import os
 import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+
+from chi_bench.core.e2e_protocol import (
+    SOURCE_OUTCOME_NA,
+    actual_p2p_branch,
+    is_workflow_v2,
+    lawful_review_skip_reason,
+)
+from chi_bench.core.p2p_evidence import consultation_evidence
 
 from chi_bench.verifier.judge.sanitization import (
     build_canonical_case_record,
@@ -163,6 +172,39 @@ def _policy_paths_for_scenario(scenario_id: str) -> tuple[Path, ...]:
     if not src_dir.exists():
         return ()
     return tuple(sorted(src_dir.glob("*.md")))
+
+
+def _workflow_policy_paths(scenario_id: str) -> tuple[Path, ...]:
+    """Use the original snapshot, then the trusted baked handbook corpus."""
+    snapshot = _policy_paths_for_scenario(scenario_id)
+    if snapshot:
+        return snapshot
+    roots = [Path("/workspace/skills/managed-care-operations-handbook")]
+    configured = os.environ.get("CHI_BENCH_WORLDS_DIR")
+    if configured:
+        roots.extend(
+            p / "skills/managed-care-operations-handbook" for p in Path(configured).parents
+        )
+    roots.append(Path("data/skills/managed-care-operations-handbook"))
+    subdirs = (
+        "medical-library/medical-policies",
+        "medical-library/medical-policies-medicare",
+        "medical-library/clinical-guidelines",
+        "payer-um/operational",
+    )
+    for root in roots:
+        files = tuple(
+            sorted(
+                {
+                    path
+                    for subdir in subdirs
+                    for path in (root / "references" / subdir).rglob("*.md")
+                }
+            )
+        )
+        if files:
+            return files
+    return ()
 
 
 def _filter_logs(logs: list[dict], case_id: str) -> tuple[dict, ...]:
@@ -506,6 +548,8 @@ def _build_pa_source_context(
     expectations: dict[str, Any],
     exported: dict[str, Any],
     case_id: str,
+    *,
+    root: str = "source_context",
 ) -> dict[str, Any]:
     world = _load_shared_world_payload(_normalized_str(exported.get("world_id")))
     patient_id = _resolve_patient_id(expectations, exported, case_id, world)
@@ -517,7 +561,7 @@ def _build_pa_source_context(
     document_items = _add_document_files(
         files,
         documents,
-        prefix="source_context/chart_documents",
+        prefix=f"{root}/chart_documents",
         surface="chart_document",
         preferred_for="pa_chart_reality",
     )
@@ -533,7 +577,7 @@ def _build_pa_source_context(
         metadata["content_path"] = indexed.get("content_path")
         chart_documents.append(metadata)
 
-    files["source_context/chart_slice.json"] = {
+    files[f"{root}/chart_slice.json"] = {
         "patient": (_rows_for_patient(world, "patients", patient_id) or [{}])[0],
         "coverages": _rows_for_patient(world, "coverages", patient_id),
         "conditions": _rows_for_patient(world, "conditions", patient_id),
@@ -548,7 +592,7 @@ def _build_pa_source_context(
             "structured chart resources are auxiliary indexes for consistency checks."
         ),
     }
-    files["source_context/evidence_index.json"] = {
+    files[f"{root}/evidence_index.json"] = {
         "patient_id": patient_id,
         "case_id": case_id or None,
         "usage": {
@@ -566,6 +610,25 @@ def _world_case_context(
     case_id: str,
     patient_id: str,
 ) -> dict[str, Any]:
+    if is_workflow_v2(
+        exported, {"task_kind": exported.get("task_kind") or "provider_to_payer_e2e"}
+    ):
+        cases = _case_rows(exported, case_id)
+        requests = _service_request_rows(exported, {}, cases)
+        return {
+            "visibility": "actual_payer_handoff",
+            "case": exported.get("target_case") or (cases[0] if cases else {}),
+            "service_requests": requests,
+            "submission_packets": [
+                r
+                for r in _dict_rows(exported.get("submission_packets"))
+                if _row_matches_case(r, case_id)
+            ],
+            "intake_cases": [
+                r for r in _dict_rows(exported.get("intake_cases")) if _row_matches_case(r, case_id)
+            ],
+            "source_context_note": "Actual runtime handoff only. Original chart evidence is scoped to provider_source_context/.",
+        }
     cases = _rows_for_world_case(world, "cases", case_id) or _case_rows(exported, case_id)
     target_case = exported.get("target_case")
     case = cases[0] if cases else target_case if isinstance(target_case, dict) else {}
@@ -634,6 +697,29 @@ def _build_um_source_context(
         ]
     )
 
+    if is_workflow_v2(exported, expectations):
+        # Source-world chart documents must not replace the actual live packet.
+        submitted_ids = {
+            str(document_id)
+            for packet in _dict_rows(exported.get("submission_packets"))
+            if _row_matches_case(packet, case_id)
+            for document_id in packet.get("attached_document_ids") or []
+        }
+        submitted_ids.update(
+            str(row.get("linked_resource_id"))
+            for row in _dict_rows(exported.get("workspace_artifacts"))
+            if row.get("case_id") == case_id
+            and row.get("scope") == "shared"
+            and row.get("linked_resource_type") == "document"
+            and str(row.get("relative_path") or "").startswith(f"{case_id}/shared/intake/")
+        )
+        submitted_documents = [
+            row
+            for row in _dict_rows(exported.get("target_documents"))
+            if _row_matches_case(row, case_id) and row.get("id") in submitted_ids
+        ]
+        raw_artifacts = []
+
     evidence_items = _add_document_files(
         files,
         submitted_documents,
@@ -670,6 +756,17 @@ def _build_extra_workspace_files(
     case_id: str,
 ) -> dict[str, Any]:
     contract = str(expectations.get("verifier_contract") or "")
+    if is_workflow_v2(exported, expectations):
+        return {
+            **_build_um_source_context(expectations, exported, case_id),
+            **_build_pa_source_context(
+                expectations, exported, case_id, root="provider_source_context"
+            ),
+            "provider_source_context/request_contract.json": expectations.get(
+                "expected_service_request"
+            )
+            or {},
+        }
     if contract == "contract_v5":
         return _build_pa_source_context(expectations, exported, case_id)
     if contract == "contract_v3":
@@ -691,6 +788,32 @@ def _build_agent_outputs(
             return rows
         return [r for r in rows if _normalized_str(r.get("case_id")) == case_id]
 
+    trusted_consultations: dict[str, list[dict]] = {"external": [], "relay": []}
+    if case_id:
+        for request in _rows("payer_peer_to_peer_requests"):
+            source = request.get("outcome_source")
+            evidence_id = request.get("outcome_evidence_id")
+            key = (
+                "payer_p2p_external_evidence"
+                if source == "external"
+                else "payer_p2p_relay_evidence"
+            )
+            records = [
+                row
+                for row in _rows(key)
+                if (row.get("id") if source == "external" else row.get("request_id")) == evidence_id
+            ]
+            bound = consultation_evidence(
+                request,
+                sessions=[],
+                external=records if source == "external" else [],
+                relays=records if source == "e2e_relay" else [],
+            )
+            if bound == (source, evidence_id):
+                trusted_consultations["external" if source == "external" else "relay"].extend(
+                    records
+                )
+
     outputs = {
         "intake": {"intake_cases": _rows("intake_cases")},
         "triage": {"triage_records": _rows("payer_triage_records")},
@@ -705,6 +828,7 @@ def _build_agent_outputs(
         "p2p": {
             "sessions": _rows("payer_p2p_session_records"),
             "requests": _rows("payer_peer_to_peer_requests"),
+            "trusted_consultations": trusted_consultations,
         },
         "outcome": {
             "determinations": _rows("payer_determinations"),
@@ -715,6 +839,34 @@ def _build_agent_outputs(
             "documents": _rows("workspace_documents"),
         },
     }
+    if is_workflow_v2(exported, expectations):
+        outputs["provider_submission"] = _build_provider_pre_submission_output(
+            exported, expectations, case_id
+        )
+        outputs["payer_workflow"] = {
+            "target_case": exported.get("target_case"),
+            "trusted_p2p_consultations": trusted_consultations,
+            "source_eligibility": exported.get("e2e_source_eligibility"),
+            "policy_route": exported.get("e2e_policy_route"),
+            **{
+                key: _rows(key)
+                for key in (
+                    "intake_cases",
+                    "payer_routing_records",
+                    "payer_nurse_reviews",
+                    "payer_nurse_case_recommendations",
+                    "payer_md_reviews",
+                    "payer_md_case_decisions",
+                    "payer_determinations",
+                    "payer_peer_to_peer_requests",
+                    "payer_letter_requests",
+                    "letters",
+                    "messages",
+                    "stage_traces",
+                    "state_transitions",
+                )
+            },
+        }
     if str(expectations.get("verifier_contract") or "") == "contract_v5":
         outputs["provider_pre_submission"] = _build_provider_pre_submission_output(
             exported,
@@ -835,21 +987,124 @@ class PaUmJudgeAdapter:
         agent_outputs = _build_agent_outputs(self.exported, target_case_id, self.expectations)
         audit_logs = _filter_logs(self.exported.get("audit_logs") or [], target_case_id)
         rubrics = _build_rubrics(self.expectations)
+        self.not_applicable_rubrics: dict[str, str] = {}
+        if is_workflow_v2(self.exported, self.expectations):
+            p2p_entered = actual_p2p_branch(self.exported, target_case_id)
+            for rubric in rubrics:
+                stage = rubric.get("stage")
+                hidden = rubric.get("hidden_expectation") or {}
+                reason = (
+                    lawful_review_skip_reason(self.exported, target_case_id, str(stage))
+                    if stage in {"nurse_review", "md_review"}
+                    else None
+                )
+                if stage == "p2p" and not p2p_entered:
+                    reason = (
+                        "No actual P2P branch was entered; P2P semantic rubrics are "
+                        "not applicable. The required actual-packet policy rubric "
+                        "still assesses whether P2P was needed."
+                    )
+                elif (
+                    stage == "p2p"
+                    and hidden.get("evaluation_mode") == "policy_alignment"
+                    and (hidden.get("position_summary") or hidden.get("required_anchors"))
+                ):
+                    # Legacy role positions describe the source-gold packet,
+                    # not the actual submission or newly supplied P2P evidence.
+                    reason = SOURCE_OUTCOME_NA
+                if (
+                    not reason
+                    and stage in {"nurse_review", "md_review", "p2p"}
+                    and any(str(key).startswith("expected_") for key in hidden)
+                ):
+                    reason = SOURCE_OUTCOME_NA
+                if reason:
+                    self.not_applicable_rubrics[rubric["rubric_id"]] = reason
+            rubrics = tuple(
+                rubric
+                for rubric in rubrics
+                if rubric["rubric_id"] not in self.not_applicable_rubrics
+            )
+        if is_workflow_v2(self.exported, self.expectations):
+            rubrics = (
+                *rubrics,
+                {
+                    "rubric_id": "e2e.provider_request_source_fidelity",
+                    "stage": "provider_submission",
+                    "evaluation_mode": "chart_consistency_assessment",
+                    "prompt": (
+                        "Evaluate the actual submitted Provider request using only the original chart "
+                        "in provider_source_context/, the accepted request fields in its request_contract.json, "
+                        "and agent_outputs/stage_provider_submission.json. A real target packet must exist. "
+                        "Material clinical claims, diagnoses, procedure and site must be supported by "
+                        "the chart and allowed request fields. Existing chart evidence relevant to the request "
+                        "must be represented accurately; gaps and uncertainty must not be replaced with invented "
+                        "facts. Do not demand nonexistent evidence. Fail fabrication, material distortion, "
+                        "wrong request identity, or an empty/uninformative packet. Do not grade approval likelihood, "
+                        "the Provider submit/no-submit choice, or the payer's canonical clinical conclusion. "
+                        "This required rubric also applies to lawful fast-track approvals. Cite chart sources "
+                        "and submitted document IDs; missing source context is insufficient for a passing verdict."
+                    ),
+                    "hidden_expectation": {
+                        "request_contract": self.expectations.get("expected_service_request") or {}
+                    },
+                    "relevant_agent_output_file": "agent_outputs/stage_provider_submission.json",
+                },
+                {
+                    "rubric_id": "e2e.payer_actual_packet_policy",
+                    "stage": "payer_workflow",
+                    "evaluation_mode": "actual_packet_policy_adjudication",
+                    "prompt": (
+                        "Evaluate the Payer's actual handling of the Provider's real target submission. "
+                        "Use actual submitted evidence in source_context/, payer stage records, communications "
+                        "and governing policy documents. Provider-only chart context is not payer evidence. "
+                        "Judge intake eligibility/coverage/completeness, lawful routing, criterion assessments, "
+                        "role authority, rationale, notices, and any P2P handling against the actual packet. "
+                        "An incomplete or unsupported submission may correctly require a pend or denial even "
+                        "when source gold records approval. A substantiated intake denial or missing-information "
+                        "pend may lawfully precede clinical review; gold-card approval needs source-authorized "
+                        "routing. Missing records alone do not establish an exemption. "
+                        "Fail a made-up or immaterial pend, invented ineligibility, unsupported fast-track, "
+                        "unsupported approval/denial, omitted applicable review criteria, bypassed role authority, "
+                        "or missing required communication. Score the clinical reasoning and the appropriate "
+                        "completed or pending episode, not agreement with fixed source-gold values. "
+                        "Source canonical conclusions are audit references only and cannot override the actual "
+                        "packet. Cite actual submitted documents, policies, source eligibility proof and role records."
+                    ),
+                    "hidden_expectation": {
+                        "protocol": "workflow_v2",
+                        "source_gold_role": "audit_reference_only",
+                    },
+                    "relevant_agent_output_file": "agent_outputs/stage_payer_workflow.json",
+                },
+            )
         extra_workspace_files = _build_extra_workspace_files(
             self.expectations,
             self.exported,
             target_case_id,
         )
+        policy_paths = (
+            _workflow_policy_paths(scenario_id)
+            if is_workflow_v2(self.exported, self.expectations)
+            else _policy_paths_for_scenario(scenario_id)
+        )
+        self.unavailable_rubrics = {}
+        if is_workflow_v2(self.exported, self.expectations) and not policy_paths:
+            self.unavailable_rubrics["e2e.payer_actual_packet_policy"] = (
+                "Governing policy corpus unavailable; source gold is not a policy substitute."
+            )
 
         return JudgeInput(
             case_identifier=target_case_id or canonical.get("case_identifier", "UNKNOWN"),
             rubrics=rubrics,
             canonical_case_record=canonical,
-            policy_paths=_policy_paths_for_scenario(scenario_id),
+            policy_paths=policy_paths,
             agent_outputs=agent_outputs,
             audit_logs=audit_logs,
             domain="pa_um",
-            contract=str(self.expectations.get("verifier_contract") or "contract_v3"),
+            contract="e2e_workflow_v2"
+            if is_workflow_v2(self.exported, self.expectations)
+            else str(self.expectations.get("verifier_contract") or "contract_v3"),
             extra_workspace_files=extra_workspace_files,
         )
 

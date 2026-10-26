@@ -53,6 +53,9 @@ dataset:
   # you downloaded with `huggingface-cli` into that file). Preflight rejects
   # mismatches.
   version: chi-bench-v1.0.0
+  # REQUIRED: replace zeros with the accepted dataset content SHA-256.
+  # Inspect via: uv run python scripts/dataset_identity.py --data-root data
+  content_sha256: "0000000000000000000000000000000000000000000000000000000000000000"
   # All three domains for a complete submission. Override with `--domain pa|um|cm`
   # on the CLI for partial runs (development only — partial submissions are
   # marked as such on the leaderboard).

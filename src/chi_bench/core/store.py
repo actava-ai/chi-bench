@@ -49,16 +49,17 @@ class WorldStore:
         self.audit_db_path = self.runtime_dir / "audit.sqlite"
         self._init_lock_path = self.runtime_dir / ".init.lock"
         self._world_marker_path = self.runtime_dir / ".world_fingerprint"
-        self._provider_lock = threading.Lock()
-        self._payer_lock = threading.Lock()
-        self._audit_lock = threading.Lock()
+        self._provider_lock = threading.RLock()
+        self._payer_lock = threading.RLock()
+        self._audit_lock = threading.RLock()
         self._open_connections()
         self._create_schema()
 
     def close(self) -> None:
-        self._provider.close()
-        self._payer.close()
-        self._audit.close()
+        with self._provider_lock, self._payer_lock, self._audit_lock:
+            self._provider.close()
+            self._payer.close()
+            self._audit.close()
 
     def _open_connections(self) -> None:
         self._provider = sqlite3.connect(self.provider_db_path, check_same_thread=False)
@@ -69,8 +70,11 @@ class WorldStore:
         self._audit.row_factory = sqlite3.Row
 
     def _reopen_connections(self) -> None:
-        self.close()
-        self._open_connections()
+        # An export can initialize the same store while another request uses it.
+        # Keep replacement atomic with respect to every database operation.
+        with self._provider_lock, self._payer_lock, self._audit_lock:
+            self.close()
+            self._open_connections()
 
     def _world_fingerprint(self, scenario: ScenarioDefinition) -> str:
         payload = json.dumps(
@@ -155,18 +159,19 @@ class WorldStore:
         )
         self._audit.commit()
 
-    def _side_lock(self, side: str) -> threading.Lock:
+    def _side_lock(self, side: str) -> threading.RLock:
         return self._provider_lock if side == "provider" else self._payer_lock
 
     def reset(self) -> None:
-        self.close()
-        for path in (self.provider_db_path, self.payer_db_path, self.audit_db_path):
-            if path.exists():
-                path.unlink()
-        if self._world_marker_path.exists():
-            self._world_marker_path.unlink()
-        self._open_connections()
-        self._create_schema()
+        with self._provider_lock, self._payer_lock, self._audit_lock:
+            self.close()
+            for path in (self.provider_db_path, self.payer_db_path, self.audit_db_path):
+                if path.exists():
+                    path.unlink()
+            if self._world_marker_path.exists():
+                self._world_marker_path.unlink()
+            self._open_connections()
+            self._create_schema()
 
     def initialize_from_scenario(self, scenario: ScenarioDefinition) -> None:
         fingerprint = self._world_fingerprint(scenario)
@@ -269,8 +274,8 @@ class WorldStore:
         resource_id: str,
         payload: dict[str, Any],
     ) -> None:
-        connection = self._provider if side == "provider" else self._payer
         with self._side_lock(side):
+            connection = self._provider if side == "provider" else self._payer
             connection.execute(
                 """
                 INSERT INTO resources (resource_type, resource_id, payload)
@@ -285,8 +290,8 @@ class WorldStore:
     def get_resource(
         self, side: str, resource_type: str, resource_id: str
     ) -> dict[str, Any] | None:
-        connection = self._provider if side == "provider" else self._payer
         with self._side_lock(side):
+            connection = self._provider if side == "provider" else self._payer
             row = connection.execute(
                 """
                 SELECT payload
@@ -300,8 +305,8 @@ class WorldStore:
         return json.loads(row["payload"])
 
     def list_resources(self, side: str, resource_type: str) -> list[dict[str, Any]]:
-        connection = self._provider if side == "provider" else self._payer
         with self._side_lock(side):
+            connection = self._provider if side == "provider" else self._payer
             rows = connection.execute(
                 """
                 SELECT payload
@@ -318,8 +323,8 @@ class WorldStore:
         side: str,
         resource_type: str,
     ) -> list[dict[str, Any]]:
-        connection = self._provider if side == "provider" else self._payer
         with self._side_lock(side):
+            connection = self._provider if side == "provider" else self._payer
             rows = connection.execute(
                 """
                 SELECT payload
@@ -332,8 +337,8 @@ class WorldStore:
         return [json.loads(row["payload"]) for row in rows]
 
     def delete_resource(self, side: str, resource_type: str, resource_id: str) -> None:
-        connection = self._provider if side == "provider" else self._payer
         with self._side_lock(side):
+            connection = self._provider if side == "provider" else self._payer
             connection.execute(
                 "DELETE FROM resources WHERE resource_type = ? AND resource_id = ?",
                 (resource_type, resource_id),

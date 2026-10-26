@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from chi_bench.core.e2e_protocol import is_workflow_v2, lawful_review_skip_reason
+
 from ._base import CheckStatus, StageResult, StageVerifier, mark_not_applicable
 from ._helpers import (
     actual_item_map,
@@ -19,6 +21,7 @@ from ._provider_new_referral_targets import (
     agent_path_for_e2e,
     is_provider_to_payer_e2e_task,
 )
+from .nurse_review import _actual_criteria_recorded
 
 
 def _compare_expected_item(expected_item: dict, actual_item: dict | None) -> tuple[bool, dict]:
@@ -89,7 +92,16 @@ class MdReviewVerifier(StageVerifier):
         e2e_path: str | None = None
         if is_provider_to_payer_e2e_task(self.expectations):
             e2e_path = agent_path_for_e2e(self.expectations, self.exported)
-        if e2e_path is not None and e2e_path != "submit":
+        skip_reason = (
+            lawful_review_skip_reason(self.exported, self.case_id, "md_review")
+            if is_workflow_v2(self.exported, self.expectations)
+            else None
+        )
+        if skip_reason or (
+            e2e_path is not None
+            and e2e_path != "submit"
+            and not is_workflow_v2(self.exported, self.expectations)
+        ):
             # E2E task with no_submit / submit_incomplete / no_decision:
             # the entire payer-side md review flow is vacuous. NA every axis
             # instead of letting existence/audit checks drop to False
@@ -106,6 +118,7 @@ class MdReviewVerifier(StageVerifier):
                 "md.role_compliance",
                 "md.audit",
             )
+            details["not_applicable_reason"] = skip_reason or "Legacy unsubmitted payer path."
             return StageResult(stage="md_review", checks=checks, details=details)
 
         has_reviews = len(md_reviews) > 0
@@ -119,7 +132,21 @@ class MdReviewVerifier(StageVerifier):
             )
 
         expected_criteria = expected_clinical_criteria_for_stage(self.expectations, "md_review")
-        actual_reviews = actual_review_map(md_reviews)
+        if is_workflow_v2(self.exported, self.expectations):
+            checks["md.criteria_recorded"], details["criteria_recording"] = (
+                _actual_criteria_recorded(md_reviews, self.exported, self.case_id)
+            )
+            actual_reviews = actual_review_map(
+                [
+                    review
+                    for review in md_reviews
+                    if type(review.get("line_number")) is int
+                    and review["line_number"] > 0
+                    and isinstance(review.get("criteria_evaluations"), list)
+                ]
+            )
+        else:
+            actual_reviews = actual_review_map(md_reviews)
         if expected_criteria and not contract_v3:
             if has_reviews:
                 all_items_match = True
@@ -200,7 +227,13 @@ class MdReviewVerifier(StageVerifier):
             if has_decision
             else "not_applicable"
         )
-        if gt_decision.get("signed_off") is not None:
+        if is_workflow_v2(self.exported, self.expectations):
+            checks["md.signed_off"] = (
+                latest_decision.get("signed_off") is True
+                if latest_decision.get("decision") in {"approve", "deny", "partial_approve"}
+                else "not_applicable"
+            )
+        elif gt_decision.get("signed_off") is not None:
             checks["md.signed_off"] = (
                 latest_decision.get("signed_off") == gt_decision["signed_off"]
                 if has_decision

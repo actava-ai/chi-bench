@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from chi_bench.core.e2e_protocol import e2e_protocol
+
 AgentPath = Literal["submit", "no_submit", "submit_incomplete", "no_decision"]
 
 
@@ -32,7 +34,14 @@ def latest_provider_determination(exported: dict[str, Any]) -> dict[str, Any] | 
     ``created_at``, and return the last one. Returns ``None`` when no
     matching record exists.
     """
-    target_case = _clean(exported.get("target_case_id"))
+    is_e2e = exported.get("task_kind") == "provider_to_payer_e2e"
+    if is_e2e:
+        e2e_protocol(exported)
+    target_case = _clean(exported.get("target_case_id")) or _clean(
+        (exported.get("target_case") or {}).get("id")
+    )
+    if not target_case and is_e2e:
+        return None
     determinations = exported.get("provider_determinations") or []
     matching: list[dict[str, Any]] = []
     for record in determinations:
@@ -57,11 +66,26 @@ def compute_agent_path(exported: dict[str, Any]) -> AgentPath:
     """Derive the agent's actual path from runtime export state.
 
     Returns one of:
-    - ``"submit"`` -- agent finalized ``submit_pa`` AND a submission_packet exists
-    - ``"no_submit"`` -- agent finalized ``do_not_submit`` or ``gather_more_evidence``
+    - ``"submit"`` -- a physical target submission_packet exists, regardless of disposition
+    - ``"no_submit"`` -- no packet; agent finalized ``do_not_submit`` or ``gather_more_evidence``
     - ``"submit_incomplete"`` -- agent finalized ``submit_pa`` but no submission_packet
     - ``"no_decision"`` -- no ProviderDeterminationRecord at all (or unknown final_action)
     """
+    is_e2e = exported.get("task_kind") == "provider_to_payer_e2e"
+    if is_e2e:
+        e2e_protocol(exported)
+    target_case = _clean(exported.get("target_case_id")) or _clean(
+        (exported.get("target_case") or {}).get("id")
+    )
+    if not target_case and is_e2e:
+        return "no_decision"
+    # Physical submission is authoritative even if a disposition is absent or
+    # contradictory. Restrict packet evidence to the actual target case.
+    if target_case and any(
+        isinstance(s, dict) and _clean(s.get("case_id")) == target_case
+        for s in exported.get("submission_packets") or []
+    ):
+        return "submit"
     latest = latest_provider_determination(exported)
     if latest is None:
         return "no_decision"

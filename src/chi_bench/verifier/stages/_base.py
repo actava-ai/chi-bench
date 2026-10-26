@@ -7,8 +7,9 @@ from typing import Any, Literal
 from ._provider_new_referral_targets import normalized_str, resolved_target_case_id
 
 
-CheckStatus = bool | Literal["not_applicable"]
+CheckStatus = bool | Literal["not_applicable", "unavailable"]
 NOT_APPLICABLE: Literal["not_applicable"] = "not_applicable"
+UNAVAILABLE: Literal["unavailable"] = "unavailable"
 
 
 def check_not_applicable() -> Literal["not_applicable"]:
@@ -45,7 +46,9 @@ class StageResult:
 
     @property
     def passed(self) -> bool:
-        return all(not is_check_fail(value) for value in self.checks.values())
+        return all(
+            is_check_pass(value) or is_check_not_applicable(value) for value in self.checks.values()
+        )
 
     @property
     def passed_count(self) -> int:
@@ -71,6 +74,9 @@ class StageVerifier(ABC):
         expectations: dict[str, Any],
         ground_truth: list[dict[str, Any]],
     ) -> None:
+        from chi_bench.core.e2e_protocol import e2e_score_metadata
+
+        e2e_score_metadata(exported, expectations)
         self.exported = exported
         self.expectations = expectations
         self.case_id = resolved_target_case_id(exported, expectations) or normalized_str(

@@ -185,7 +185,7 @@ Repair the output by following the JSON contract exactly.
     return f"""You are the {role} participant in a peer-to-peer relay.
 
 Use the current peer-to-peer request and transcript below to write exactly one concise relay turn.
-Do not call p2p_session.send_turn. The harness relays turns out of band.
+Read-only p2p_session.get_context lookup is allowed. Do not call p2p_session.send_turn or p2p_session.submit_summary. The harness relays turns out of band.
 
 Use your available filesystem write/edit tool or shell command to write a UTF-8 JSON object to:
 {output_path}

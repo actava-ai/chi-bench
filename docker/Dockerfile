@@ -1,11 +1,8 @@
 # syntax=docker/dockerfile:1.7
-# Single-image build used by chi-bench's local Docker backend.
-#
-# This image is self-contained: it carries both the chi-bench server
-# runtime AND every prior-auth / care-management task's fixtures/worlds
-# so a sandbox can run a trial by image pull alone. The agent and server
-# share one sandbox at localhost; per-trial selection is driven by the
-# CHI_BENCH_TASK_ID environment variable.
+# The default runtime target contains the trusted server and benchmark data.
+# The agent target starts from the toolchain base and copies only its runner
+# source and dependencies. Public documents and raw artifacts arrive through
+# separate runtime mounts; task fixtures and backend code stay in runtime.
 #
 # Build context MUST be the repo root. Examples:
 #   docker build -f docker/Dockerfile --target ci-skeleton -t chi-bench:ci .
@@ -27,11 +24,12 @@ RUN apt-get update \
 
 # judge-harness:claude-code
 # Install Node 20 + Claude Code CLI for the workspace-agent judge (verifier phase).
+ARG CLAUDE_CODE_VERSION=2.1.219
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
-    && npm install -g @anthropic-ai/claude-code@latest \
+    && npm install -g @anthropic-ai/claude-code@"${CLAUDE_CODE_VERSION}" mcporter \
     && command -v claude \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -58,11 +56,45 @@ WORKDIR /workspace
 
 RUN pip install --no-cache-dir uv
 
+# Login shells must select the venv in both the backend and agent targets.
+RUN echo 'export PATH="/workspace/.venv/bin:$PATH"' > /etc/profile.d/chi-bench.sh
+
+FROM base AS application
+
 COPY pyproject.toml uv.lock /workspace/
 COPY src/ /workspace/src/
 
-RUN uv sync --no-dev \
+RUN uv sync --no-dev --extra openai-agents \
     && /workspace/.venv/bin/playwright install --with-deps chromium
+
+# CI verifies application dependency installation without copying task data.
+FROM application AS ci-skeleton
+
+# No full application source or task-data layer is inherited by this target.
+FROM base AS agent
+
+COPY --from=application /workspace/.venv /workspace/.venv
+COPY src/chi_bench/__init__.py /workspace/src/chi_bench/__init__.py
+COPY src/chi_bench/experiment/__init__.py /workspace/src/chi_bench/experiment/__init__.py
+COPY src/chi_bench/experiment/agents/__init__.py \
+    src/chi_bench/experiment/agents/openai_agents_runner.py \
+    src/chi_bench/experiment/agents/openai_agents_local_tools.py \
+    src/chi_bench/experiment/agents/nemotron_tinker_model.py \
+    src/chi_bench/experiment/agents/nemotron_tool_protocol.py \
+    /workspace/src/chi_bench/experiment/agents/
+
+RUN mkdir -p /agent-assets/skills /agent-assets/tools /agent-raw /logs \
+    && ln -s /agent-assets/skills /workspace/skills \
+    && ln -s /agent-assets/tools /opt/chi-bench-task-assets \
+    && ln -s /opt/chi-bench-task-assets /opt/healthverse-task-assets \
+    && ln -s /agent-raw /workspace/raw
+
+ENV IS_SANDBOX=1
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["sleep", "infinity"]
+
+# Default target: trusted simulator, verifier, full task data, and entrypoint.
+FROM application AS runtime
 
 # healthverse -> chi_bench compatibility shim (docker/shims/healthverse).
 # The published chi-bench dataset's verifier entrypoints invoke
@@ -72,15 +104,6 @@ RUN uv sync --no-dev \
 # whose __path__ is chi_bench's. The build fails fast if the alias can't resolve.
 COPY docker/shims/healthverse /workspace/.venv/lib/python3.12/site-packages/healthverse
 RUN /workspace/.venv/bin/python -c "import importlib.util as u; assert u.find_spec('healthverse.verifier.task_runtime') and u.find_spec('healthverse.verifier.session_verifier'); print('healthverse alias OK')"
-
-# CI build target: stops here, before any task data is copied. This stage
-# is what CI uses to verify the Dockerfile parses and the dependency
-# install succeeds without needing the data/ tree in the build context.
-FROM base AS ci-skeleton
-
-# Runtime build target (default): bakes the benchmark dataset, skills
-# handbook, entrypoint, and runtime env into the image.
-FROM base AS runtime
 
 # Bake the benchmark dataset into the image. These are small JSONs
 # (~O(MB) total) so the size cost is acceptable and it avoids any
@@ -110,12 +133,6 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 # there. Without this, the entrypoint falls back to /tmp and the server
 # log is lost when the sandbox is reaped.
 RUN mkdir -p /logs/artifacts
-
-# Login-shell command runners (e.g. `bash -lc`) trigger Debian's
-# /etc/profile, which clobbers the Dockerfile `ENV PATH=...` set above.
-# Re-prepend the venv's bin dir for login shells so `python -m chi_bench.*`
-# resolves to the venv, not system Python.
-RUN echo 'export PATH="/workspace/.venv/bin:$PATH"' > /etc/profile.d/chi-bench.sh
 
 ENV CHI_BENCH_RUNTIME_DIR=/tmp/chi-bench-runtime \
     CHI_BENCH_WORLDS_DIR=/opt/chi-bench/worlds \

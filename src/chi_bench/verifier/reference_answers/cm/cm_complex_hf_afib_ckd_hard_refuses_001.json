@@ -1,0 +1,913 @@
+{
+  "schema_version": "cm_static_reference_v1",
+  "task_id": "cm_complex_hf_afib_ckd_hard_refuses_001",
+  "reference_mode": "static_answer",
+  "executed": false,
+  "source": {
+    "expectations_sha256": "03eb97095e5e766fe4913c355944b44305630e88342fd91cd77c16d0a1701f1e",
+    "contract_sha256": "2249c8ea214718535ec6a310d6b2f5569b0e2d1cff98b8c1c94e30bffa79c5f1",
+    "contract_fields": [
+      "persona",
+      "cm_reference",
+      "stage_ground_truth",
+      "expected_final_status",
+      "expected_target_status",
+      "program_type",
+      "evidence_rubric_items",
+      "target_case_id",
+      "target_patient_id",
+      "required_audit_actions",
+      "expected_audit_actions"
+    ]
+  },
+  "answer": {
+    "chart_review": {
+      "key_findings": "Latoya Coleman is a 52-year-old Black woman enrolled in The Healthcare Company Choice Medicare Advantage, referred to Complex Care Management on 2026-04-15 by the health-plan high-risk algorithm following a six-day HFrEF admission (2026-01-20 to 2026-01-26). Her chart shows HFrEF with LVEF 30% on 2026-01-22 echo and 32% on 2026-02-14 echo, NT-proBNP 2810 pg/mL at admission falling to 1450 pg/mL on follow-up, paroxysmal atrial fibrillation on apixaban with documented adherence gaps (Thanksgiving copay-confusion gap; holiday-season missed doses noted in 2025-12-12 PCP and 2026-02-14 cardiology notes), CKD stage 3a (eGFR 35-38 on the most recent draws with one AKI episode on 2025-09-28 nadir 33), 18 active medications including three high-risk drugs (apixaban, insulin glargine, digoxin), HbA1c trending up from 7.2 to 7.8 over eight months, mild hypokalemia (K 3.4 on 2026-04-08), and a new positive PHQ-9 of 11 on 2026-04-08 with chart-noted social isolation and caregiver-burden flags from the 2025-09-15 social work note.",
+      "clinical_interpretation": "HFrEF is suboptimal-to-uncontrolled (LVEF 30–32%, one HF admission); AFib uncontrolled with apixaban gaps at CHA2DS2-VASc≥2; CKD stage 3a suboptimal with eGFR 35–38 and prior AKI (§2.2). Preserve these source classifications. K 3.4 and HbA1c 7.8 require follow-up.",
+      "preliminary_risk": "high",
+      "risk_rationale": "Retain the task-authored risk designation under risk-stratification §3.1–§3.3, supported by the numeric referral/utilization/clinical anchors in key_findings; medication class or a single disease-control band does not replace the combined risk framework.",
+      "screening_scores": [
+        {
+          "name": "PHQ-9",
+          "score": 11,
+          "observed_at": "2026-04-08T09:30:00",
+          "source": {
+            "file": "shared/worlds/healthverse-cm-curated25-v1.json",
+            "resource": "observations",
+            "id": "OBS-CM_COMPLEX_HF_AFIB_CKD_HARD_REFUSES_001-055"
+          }
+        }
+      ],
+      "source_refs": [
+        "/evidence_rubric_items/0/prompt",
+        "/cm_reference/risk_reference",
+        "/cm_reference/screening_scores"
+      ]
+    },
+    "outreach": {
+      "dialogue_kind": "authored_ideal_path_reference; not an observed conversation",
+      "ideal_dialogue": [
+        {
+          "speaker": "care_manager",
+          "message": "Hello, I am Alex, a care manager with The Healthcare Company. Is this a private and suitable time for a brief explanation?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "No. I am tired of repeating myself, and Renee is not the person you should be asking.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "I hear your concern. We can pause here; you control whether this continues. Would you like to tell me what would make a short call useful?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "A brief explanation is okay. Please let me choose what I answer.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Care management helps coordinate support with your care team. It is voluntary, has no separate program fee, and you can stop at any time. Joining does not change your benefits or give someone else your decisions.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "What would you actually help with?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "We could fit medicines and labs around your shifts, prepare heart/kidney questions, and include Renee only when you choose. I can check options and coordinate, but cannot guarantee access, approval, cost reductions, or a clinical outcome. Would that kind of process help be useful?",
+          "source_refs": [
+            "/persona/consent_triggers"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "That sounds more useful. I still want to understand who sees what I say.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "I can use chart and call information to organize care-management support. Relevant information is documented for the care team; I will explain any proposed wider sharing. Privacy has safety and legal limits, including urgent danger; I cannot promise absolute secrecy. May we start only with what would make support fit your shifts?",
+          "source_refs": [
+            "/persona/consent_triggers",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Yes, that topic is okay. Please go slowly.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "What feels hardest about that, in your own words? You can leave details private.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "The pills and labs get tangled with shifts and copays. I do not want Renee worrying or being put in charge.",
+          "source_refs": [
+            "/persona/patient_profile",
+            "/cm_reference/assessment_required_items"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "You are the decision-maker. Working, managing symptoms, and protecting Renee from another demand can make routines harder; it does not make this a failure.",
+          "source_refs": [
+            "/persona/consent_triggers",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Thank you for hearing that. I do not want this to turn into a checklist.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "We can work on one concern at a time and stop whenever you choose. Enrollment does not require all your personal details today. Is there something you want this support to help you do?",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I want a medicine routine I can keep up with while working; ask me before involving Renee.",
+          "source_refs": [
+            "/persona/patient_profile",
+            "/evidence_rubric_items/3/prompt"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "We can make that your priority. A first step would be to fit medicines and labs around your shifts, prepare heart/kidney questions, and include Renee only when you choose. These are coordination steps, not a promise that the problem will be solved on this call.",
+          "source_refs": [
+            "/persona/consent_triggers"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Can I decide later about a referral or family involvement?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Yes. Each referral, family contact, and new sensitive topic needs its own discussion. You can skip a question or stop the program. A request for information alone is not enrollment consent.",
+          "source_refs": [
+            "/persona/consent_triggers",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I understand. I would like a manageable follow-up call.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Would telephone follow-up be acceptable? We can agree a convenient time at each contact; please tell me before any other person is included.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Telephone is okay. Please arrange the next time with me and ask before involving anyone else.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Before you decide: this is voluntary care-team coordination, with no separate program fee, the information-use and safety limits we discussed, your chosen contact arrangements, and the right to stop. What would you like clarified?",
+          "source_refs": [
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "That answers my questions. I understand that you can check options but cannot promise the result.",
+          "source_refs": [
+            "/persona/patient_profile"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "With those boundaries and the first step we discussed, do you clearly agree to enroll in care management today?",
+          "source_refs": [
+            "/persona/consent_triggers",
+            "/expected_target_status"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Yes, I agree to enroll today on those terms.",
+          "source_refs": [
+            "/persona/consent_triggers"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Enrollment is your choice. Would you like to continue with one practical topic now, with a pause after each, or stop for today?",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I choose to continue one topic at a time. I may still skip optional details.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "I will start with the charted treatment routine and follow-up, then ask your permission before each personal question. The chart is a starting point; it does not tell me how things are going for you now.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path/0",
+            "/evidence_rubric_items/0/prompt"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "That is okay. Please ask one specific question and give me time.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path/0"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "What do stairs and a work shift feel like for your heart and breathing now? This helps tailor support. You may skip or stop.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/0/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Stairs leave me short of breath, my heart races some nights, and fatigue makes warehouse shifts harder.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Thank you. I will keep that specific to what you chose to share. Would you like a pause before another topic?",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/0/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have enough energy to continue with the next separate topic.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "May we discuss what gets in the way of your own pill routine? This helps tailor support. You may skip or stop.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have delayed or skipped pills because of shifts, bathroom access, or copays, especially when I do not want Renee worrying.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Thank you. I will keep that specific to what you chose to share. Would you like a pause before another topic?",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have enough energy to continue with the next separate topic.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "May we discuss the support you want for rides, while you remain the decision-maker? This helps tailor support. You may skip or stop.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Renee helps with rides and the pillbox, but she is stretched thin. I do not want her made the decision-maker.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Thank you. I will keep that specific to what you chose to share. Would you like a pause before another topic?",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have enough energy to continue with the next separate topic.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "May I ask how lonely evenings affect your routines, without asking for a grief story? This helps tailor support. You may skip or stop.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Since Marcus died I keep most of the fear to myself. Lonely evenings make it easier to miss routines.",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "Thank you. I will keep that specific to what you chose to share. Would you like a pause before another topic?",
+          "source_refs": [
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "I have enough energy to continue with the next separate topic.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        },
+        {
+          "speaker": "care_manager",
+          "message": "You do not need to give optional stories, exact finances, locations, or family details. Shall we leave those private and review the support you selected?",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path/3",
+            "/cm_reference/assessment_optional_deeper_items"
+          ]
+        },
+        {
+          "speaker": "patient",
+          "message": "Yes. Leave those optional details private for now.",
+          "source_refs": [
+            "/cm_reference/assessment_hidden_path/3"
+          ],
+          "authored_reference_reply": true,
+          "observed": false
+        }
+      ],
+      "consent": {
+        "enrollment": "affirmative_yes_on_authored_branch",
+        "separate_assessment_permission": true,
+        "information_only_is_not_consent": true,
+        "source_refs": [
+          "/persona/consent_triggers"
+        ]
+      },
+      "boundaries": {
+        "voluntary": true,
+        "no_separate_program_fee": true,
+        "right_to_stop": true,
+        "care_team_use_with_explained_safety_legal_limits": true,
+        "family_optional": true,
+        "resource_and_clinical_outcomes_not_guaranteed": true,
+        "optional_topics": "Private/unassessed on this authored branch",
+        "source_refs": [
+          "/persona/patient_profile",
+          "/persona/consent_anti_triggers",
+          "/cm_reference/assessment_hidden_path"
+        ]
+      },
+      "hidden_path": {
+        "mode": "ideal disclosure branch selected for known-answer authoring",
+        "gate_sequence": [
+          {
+            "gate": "Low-sensitivity first",
+            "source_ref": "/cm_reference/assessment_hidden_path/0"
+          },
+          {
+            "gate": "Required symptom and medication disclosure",
+            "source_ref": "/cm_reference/assessment_hidden_path/1"
+          },
+          {
+            "gate": "Required assessment expansion",
+            "source_ref": "/cm_reference/assessment_hidden_path/2"
+          },
+          {
+            "gate": "Optional deeper boundary",
+            "source_ref": "/cm_reference/assessment_hidden_path/3"
+          }
+        ]
+      }
+    },
+    "assessment": {
+      "status": "complete",
+      "status_scope": "Static authored content assumes the specified ideal disclosure branch; no real member disclosure or screen administration occurred",
+      "clinical": {
+        "narrative": "HFrEF is suboptimal-to-uncontrolled (LVEF 30–32%, one HF admission); AFib uncontrolled with apixaban gaps at CHA2DS2-VASc≥2; CKD stage 3a suboptimal with eGFR 35–38 and prior AKI (§2.2). Preserve these source classifications. K 3.4 and HbA1c 7.8 require follow-up.",
+        "chart_evidence_basis": "Source task chart/GT; not a newly collected observation",
+        "source_refs": [
+          "/evidence_rubric_items/0/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ],
+        "authored_disclosures": [
+          {
+            "id": "clinical.hf_afib_symptom_burden.confirmation",
+            "section": "clinical",
+            "answer": "Stairs leave me short of breath, my heart races some nights, and fatigue makes warehouse shifts harder.",
+            "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+            "observed": false,
+            "source_refs": [
+              "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+              "/cm_reference/assessment_required_items/0/persona_disclosure_path",
+              "/cm_reference/assessment_hidden_path"
+            ]
+          }
+        ]
+      },
+      "medication": {
+        "narrative": "18 active medicines and ≥2 high-risk agents (apixaban, insulin, digoxin) independently trigger §3.2 pharmacist referral. Shift timing, bathroom access, and copays are authored adherence barriers.",
+        "chart_evidence_basis": "Source task chart/GT; not a newly collected observation",
+        "source_refs": [
+          "/evidence_rubric_items/0/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ],
+        "authored_disclosures": [
+          {
+            "id": "medication.high_risk_adherence_barriers.confirmation",
+            "section": "medication",
+            "answer": "I have delayed or skipped pills because of shifts, bathroom access, or copays, especially when I do not want Renee worrying.",
+            "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+            "observed": false,
+            "source_refs": [
+              "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+              "/cm_reference/assessment_required_items/1/persona_disclosure_path",
+              "/cm_reference/assessment_hidden_path"
+            ]
+          }
+        ]
+      },
+      "behavioral_health": {
+        "narrative": "PHQ-9 11 is moderate (§4.2), requiring a BH goal and consideration of referral. Authored loneliness since Marcus died contributes to missed routines. AUDIT-C/NIDA are required (§4.1); new answers are unavailable here.",
+        "chart_evidence_basis": "Source task chart/GT; not a newly collected observation",
+        "source_refs": [
+          "/evidence_rubric_items/0/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ],
+        "authored_disclosures": [
+          {
+            "id": "behavioral_health.social_isolation_mood.confirmation",
+            "section": "behavioral_health",
+            "answer": "Since Marcus died I keep most of the fear to myself. Lonely evenings make it easier to miss routines.",
+            "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+            "observed": false,
+            "source_refs": [
+              "/cm_reference/assessment_required_items/3/patient_fact_if_earned",
+              "/cm_reference/assessment_required_items/3/persona_disclosure_path",
+              "/cm_reference/assessment_hidden_path"
+            ]
+          }
+        ]
+      },
+      "sdoh": {
+        "narrative": "Source GT rates isolation and caregiver burden severe, meeting §5.3 social-worker referral. Authored disclosure confirms limited ride/pillbox support; Renee is optional support, never the decision-maker.",
+        "chart_evidence_basis": "Source task chart/GT; not a newly collected observation",
+        "source_refs": [
+          "/evidence_rubric_items/0/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ],
+        "authored_disclosures": [
+          {
+            "id": "sdoh.caregiver_transport_support.confirmation",
+            "section": "sdoh",
+            "answer": "Renee helps with rides and the pillbox, but she is stretched thin. I do not want her made the decision-maker.",
+            "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+            "observed": false,
+            "source_refs": [
+              "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+              "/cm_reference/assessment_required_items/2/persona_disclosure_path",
+              "/cm_reference/assessment_hidden_path"
+            ]
+          }
+        ]
+      },
+      "required_item_answers": [
+        {
+          "id": "clinical.hf_afib_symptom_burden.confirmation",
+          "section": "clinical",
+          "answer": "Stairs leave me short of breath, my heart races some nights, and fatigue makes warehouse shifts harder.",
+          "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+          "observed": false,
+          "source_refs": [
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/0/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "id": "medication.high_risk_adherence_barriers.confirmation",
+          "section": "medication",
+          "answer": "I have delayed or skipped pills because of shifts, bathroom access, or copays, especially when I do not want Renee worrying.",
+          "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+          "observed": false,
+          "source_refs": [
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "id": "sdoh.caregiver_transport_support.confirmation",
+          "section": "sdoh",
+          "answer": "Renee helps with rides and the pillbox, but she is stretched thin. I do not want her made the decision-maker.",
+          "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+          "observed": false,
+          "source_refs": [
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        },
+        {
+          "id": "behavioral_health.social_isolation_mood.confirmation",
+          "section": "behavioral_health",
+          "answer": "Since Marcus died I keep most of the fear to myself. Lonely evenings make it easier to miss routines.",
+          "basis": "authored_patient_disclosure_on_specified_ideal_branch",
+          "observed": false,
+          "source_refs": [
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/persona_disclosure_path",
+            "/cm_reference/assessment_hidden_path"
+          ]
+        }
+      ],
+      "screening_provenance": {
+        "chart_scores": [
+          {
+            "name": "PHQ-9",
+            "score": 11,
+            "observed_at": "2026-04-08T09:30:00",
+            "source": {
+              "file": "shared/worlds/healthverse-cm-curated25-v1.json",
+              "resource": "observations",
+              "id": "OBS-CM_COMPLEX_HF_AFIB_CKD_HARD_REFUSES_001-055"
+            }
+          }
+        ],
+        "new_scores": "No new numerical screening result is invented; required current safety/topic replies are authored reference replies, not administered instruments",
+        "source_refs": [
+          "/cm_reference/screening_scores",
+          "/evidence_rubric_items/2/prompt"
+        ]
+      },
+      "optional_items": [
+        {
+          "id": "sdoh.renee_burden_details",
+          "status": "private_unassessed",
+          "source_ref": "/cm_reference/assessment_optional_deeper_items/0"
+        },
+        {
+          "id": "behavioral_health.grief_narrative",
+          "status": "private_unassessed",
+          "source_ref": "/cm_reference/assessment_optional_deeper_items/1"
+        },
+        {
+          "id": "sdoh.exact_copay_lab_costs",
+          "status": "private_unassessed",
+          "source_ref": "/cm_reference/assessment_optional_deeper_items/2"
+        }
+      ],
+      "tool_observed_information": [],
+      "source_refs": [
+        "/stage_ground_truth"
+      ]
+    },
+    "care_plan": {
+      "status": "finalized",
+      "status_scope": "Authored ideal-path final state only; no record was created or finalized",
+      "program_type": "complex_care",
+      "problems": [
+        {
+          "id": "P1",
+          "icd10": "I50.22",
+          "statement": "Suboptimal-to-uncontrolled HFrEF",
+          "numeric_or_factual_anchor": "LVEF 32%; weight 93.0 kg",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        },
+        {
+          "id": "P2",
+          "icd10": "I48.91",
+          "statement": "AFib with anticoagulation gap",
+          "numeric_or_factual_anchor": "CHA2DS2-VASc 4; about 1-week Q4 gap",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        },
+        {
+          "id": "P3",
+          "icd10": "N18.31",
+          "statement": "Source-classified CKD stage 3a with prior AKI",
+          "numeric_or_factual_anchor": "eGFR 35–38; prior nadir 33",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        },
+        {
+          "id": "P4",
+          "icd10": "F32.A",
+          "statement": "Moderate depressive symptoms and severe isolation/caregiver burden",
+          "numeric_or_factual_anchor": "PHQ-9 11; limited support",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        }
+      ],
+      "goals": [
+        {
+          "id": "G1",
+          "problem_id": "P1",
+          "baseline": "LVEF 32%; weight 93.0 kg",
+          "measurable_target": "Home weight log ≤93 kg with no >2 lb/24h gain",
+          "target_date": "2026-07-31",
+          "member_stated_priority": false,
+          "member_priority_text": null,
+          "source_refs": [
+            "/evidence_rubric_items/3/prompt",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "id": "G2",
+          "problem_id": "P2",
+          "baseline": "CHA2DS2-VASc 4; about 1-week Q4 gap",
+          "measurable_target": "Apixaban PDC ≥80%",
+          "target_date": "2026-07-31",
+          "member_stated_priority": true,
+          "member_priority_text": "I want a medicine routine I can keep up with while working; ask me before involving Renee.",
+          "source_refs": [
+            "/evidence_rubric_items/3/prompt",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "id": "G3",
+          "problem_id": "P3",
+          "baseline": "eGFR 35–38; prior nadir 33",
+          "measurable_target": "Complete scheduled kidney-lab and nephrology-question review",
+          "target_date": "2026-07-31",
+          "member_stated_priority": false,
+          "member_priority_text": null,
+          "source_refs": [
+            "/evidence_rubric_items/3/prompt",
+            "/persona/patient_profile"
+          ]
+        },
+        {
+          "id": "G4",
+          "problem_id": "P4",
+          "baseline": "PHQ-9 11; limited support",
+          "measurable_target": "Agree one mood-support and optional caregiver-support next step",
+          "target_date": "2026-07-31",
+          "member_stated_priority": false,
+          "member_priority_text": null,
+          "source_refs": [
+            "/evidence_rubric_items/3/prompt",
+            "/persona/patient_profile"
+          ]
+        }
+      ],
+      "interventions": [
+        {
+          "id": "I1",
+          "goal_id": "G1",
+          "owner": "care_manager",
+          "action": "HF weight/symptom education and cardiology lab coordination including K 3.4; build shift-compatible routine",
+          "timing": "weekly",
+          "expected_result": "Home weight log ≤93 kg with no >2 lb/24h gain",
+          "execution_status": "planned_in_static_reference",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        },
+        {
+          "id": "I2",
+          "goal_id": "G2",
+          "owner": "pharmacist",
+          "action": "Review all 18 medicines and high-risk combinations; check refill/mail-order options and copay questions with Latoya",
+          "timing": "weekly",
+          "expected_result": "Apixaban PDC ≥80%",
+          "execution_status": "planned_in_static_reference",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        },
+        {
+          "id": "I3",
+          "goal_id": "G3",
+          "owner": "nephrology",
+          "action": "Coordinate kidney function, potassium, and medication follow-up around work shifts",
+          "timing": "weekly coordination",
+          "expected_result": "Complete scheduled kidney-lab and nephrology-question review",
+          "execution_status": "planned_in_static_reference",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        },
+        {
+          "id": "I4",
+          "goal_id": "G4",
+          "owner": "social_worker",
+          "action": "Offer BH referral and caregiver resources within 14 days; obtain Latoya's permission before Renee contact",
+          "timing": "weekly",
+          "expected_result": "Agree one mood-support and optional caregiver-support next step",
+          "execution_status": "planned_in_static_reference",
+          "source_refs": [
+            "/evidence_rubric_items/0/prompt",
+            "/evidence_rubric_items/2/prompt",
+            "/evidence_rubric_items/3/prompt",
+            "/cm_reference/assessment_required_items/0/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/1/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/2/patient_fact_if_earned",
+            "/cm_reference/assessment_required_items/3/patient_fact_if_earned"
+          ]
+        }
+      ],
+      "escalation": {
+        "conditions": "Weight gain >2 lb/24h or >5 lb/week: CM-ESC-001 §2.2. PHQ-9 rise ≥5 or new SI: BH urgent escalation §2.3.",
+        "action_owner": "care_manager with appropriate clinical/BH service",
+        "source_refs": [
+          "/evidence_rubric_items/3/prompt",
+          "/evidence_rubric_items/2/prompt"
+        ]
+      },
+      "follow_up": {
+        "cadence": "weekly",
+        "transitions_overlay": null,
+        "pcp_communication": "Coordinate the relevant treating clinicians at follow-up",
+        "review": "Review progress, patient priority, medication questions and new safety concerns at each contact; agree next telephone time with patient",
+        "source_refs": [
+          "/evidence_rubric_items/3/prompt",
+          "/stage_ground_truth"
+        ]
+      }
+    },
+    "final_status": "closed"
+  },
+  "authorship": {
+    "kind": "authored_ideal_path",
+    "observed": false,
+    "simulator_run": false,
+    "verifier_run": false
+  },
+  "required_item_coverage": [
+    "clinical.hf_afib_symptom_burden.confirmation",
+    "medication.high_risk_adherence_barriers.confirmation",
+    "sdoh.caregiver_transport_support.confirmation",
+    "behavioral_health.social_isolation_mood.confirmation"
+  ]
+}

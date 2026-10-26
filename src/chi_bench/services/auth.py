@@ -372,7 +372,33 @@ class AuthService:
             created_by=case.assigned_to or "provider_agent",
         )
         self.ctx.save_provider_determination(record)
-        if final_action_value == ProviderDeterminationAction.DO_NOT_SUBMIT:
+        workflow_handoff = (
+            self.ctx.task_kind == "provider_to_payer_e2e" and self.ctx.e2e_protocol == "workflow_v2"
+        )
+        if workflow_handoff:
+            # Preserve the Provider's real assessment, including a false PA
+            # requirement. The versioned workflow still requires payer handoff.
+            case = self.ctx.transition(
+                case,
+                CaseStatus.DOCS_NEEDED
+                if (
+                    preview.missing_document_kinds
+                    or preview.missing_form_fields
+                    or preview.missing_questionnaire_answers
+                    or preview.missing_diagnosis_codes
+                )
+                else CaseStatus.READY_TO_SUBMIT,
+            )
+            self.ctx.stage_trace(
+                case_id,
+                "e2e_workflow_handoff",
+                "assessment_recorded",
+                e2e_protocol="workflow_v2",
+                final_action=final_action_value.value,
+                authorization_required=preview.authorization_required,
+                reason="Mandatory workflow handoff keeps the assessment separate from case closure.",
+            )
+        elif final_action_value == ProviderDeterminationAction.DO_NOT_SUBMIT:
             case = self.ctx.transition(case, CaseStatus.CLOSED)
         elif final_action_value == ProviderDeterminationAction.GATHER_MORE_EVIDENCE:
             case = self.ctx.transition(case, CaseStatus.DOCS_NEEDED)
@@ -440,8 +466,22 @@ class AuthService:
         )
         case = self.ctx.get_case(case_id)
         policy = self.ctx.get_policy(case_id)
-        if not policy.authorization_required:
+        workflow_handoff = (
+            self.ctx.task_kind == "provider_to_payer_e2e" and self.ctx.e2e_protocol == "workflow_v2"
+        )
+        if not policy.authorization_required and not workflow_handoff:
             raise InvalidCaseActionError("This case does not require prior authorization.")
+        if workflow_handoff and case.status == CaseStatus.REQUIREMENT_CHECKED:
+            case = self.ctx.transition(case, CaseStatus.READY_TO_SUBMIT)
+        if workflow_handoff:
+            self.ctx.stage_trace(
+                case_id,
+                "e2e_workflow_handoff",
+                "mandatory_submission",
+                e2e_protocol="workflow_v2",
+                authorization_required=policy.authorization_required,
+                reason="Protocol requires truthful packet handoff, independently of Provider PA advice.",
+            )
         if case.status not in {
             CaseStatus.DOCS_NEEDED,
             CaseStatus.READY_TO_SUBMIT,
@@ -477,7 +517,11 @@ class AuthService:
         self.ctx.stage_trace(
             case_id,
             "requirement_determination",
-            RequirementOutcome.REQUIRED.value,
+            (
+                RequirementOutcome.REQUIRED
+                if policy.authorization_required
+                else RequirementOutcome.NOT_REQUIRED
+            ).value,
             channel=channel_value.value,
         )
         case.submission_channel = channel_value

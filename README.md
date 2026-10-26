@@ -75,7 +75,10 @@ uv run huggingface-cli download actava/chi-bench --repo-type dataset --revision 
 echo "$REV" > data/.chi-bench-version
 ```
 
-The `data/.chi-bench-version` pin is what submission preflight verifies against your config's `dataset.version`; write it whenever you change revisions.
+Submission preflight checks both `dataset.version` against the version file
+and the required `dataset.content_sha256` against the selected task families,
+shared assets and handbook bytes. The version label alone does not identify
+the evaluated content.
 
 **4. Managed-Care Operations Handbook (gated, request access).**
 
@@ -87,7 +90,7 @@ uv run huggingface-cli download actava/managed-care-operations-handbook \
 # -> data/skills/managed-care-operations-handbook/{SKILL.md,references/}
 ```
 
-**5. Build the Docker image** (~5 min, one-time).
+**5. Build the Docker images** (~5 min, one-time).
 
 Apply the `pa_t035` data correction before building. It restores the coverage
 termination date in the existing request form and requires a payer denial letter.
@@ -106,10 +109,22 @@ Runtime version `1.1.0` and dataset revision `chi-bench-v1.0.0` are separate;
 keep the dataset pin at the revision you downloaded and record the runtime commit
 and image digest with your results. See [the v1.1.0 changes](CHANGELOG.md).
 
+After downloading the handbook and completing any intended data corrections,
+inspect the content identity without modifying the data:
+
+```bash
+uv run python scripts/dataset_identity.py --data-root data
+```
+
+Set `dataset.content_sha256` in your submission YAML to the hash of the accepted
+baseline. The example files contain zeros that must be replaced. Preflight
+rejects subsequent missing, extra or changed assets, even if the version label
+stays the same. Do not update the expected hash merely to bypass a mismatch.
+
 > [!NOTE]
 > `cb` is the short alias for `chi-bench`; both commands resolve to the same CLI. Pick whichever you prefer (the rest of this README uses `cb`). If your shell already aliases `cb` to something else (e.g. a clipboard tool), use `chi-bench`. For the full command surface and flag reference, read [`docs/cli.md`](docs/cli.md).
 
-The image bundles the FastAPI server, the workspace judge, the agent harness, and per-task fixtures.
+`cb docker build` builds `chi-bench:latest` for the trusted simulator/verifier and `chi-bench:agent` for agent execution. The agent receives only public documents, permitted raw inputs, and task workspaces. Private fixtures, server state, and control credentials stay in the trusted container. Rebuild both images after changing the runtime. See [the isolation boundary](docs/architecture.md).
 
 P2P counterpart simulation defaults to `claude-sonnet-5` when `CHI_BENCH_P2P_SIMULATOR_MODEL`
 is unset or empty. A non-empty value overrides it, and the `sonnet` alias selects the same model.
@@ -152,7 +167,15 @@ Full flag-by-flag CLI reference: [`docs/cli.md`](docs/cli.md). Web walkthrough o
 
 chi-Bench is also published to the [Harbor hub](https://hub.harborframework.com/datasets/actava-ai/chi-bench) as `actava-ai/chi-bench` — **78 single-agent tasks** (75 single-domain + 3 marathon). Each task ships a self-contained Dockerfile that Harbor builds on demand — cloning this repo and downloading the [fixtures dataset](https://huggingface.co/datasets/actava/chi-bench) at build — so you can run a trial without cloning anything yourself.
 
+New isolation code applies to rebuilt source-runner images and newly exported task packages. Existing Hub archives retain their released build definitions; updating this checkout does not replace them. See [Hub export and verification](docs/harbor-hub.md) before using an archive for isolated evaluation.
+
 > **The 23 provider↔payer E2E tasks are *not* on the Harbor hub.** The E2E arena needs the two-agent `dual-pa-e2e` harness (provider phase → relay → payer phase), which a stock single-agent `harbor run` can't drive. Run E2E from this repo / the [HF dataset](https://huggingface.co/datasets/actava/chi-bench) with the `cb` CLI: `cb experiment run --dataset data/prior_auth_e2e/tasks/<id> --agent dual-pa-e2e --provider-model … --payer-model …` (see [`configs/experiments/table2_e2e_arena.yaml`](configs/experiments/table2_e2e_arena.yaml)).
+
+E2E uses `workflow_v2`: Provider hands off a truthful packet and Payer reviews
+that actual packet, with separate role contexts. The current verifier rejects
+legacy or unversioned E2E results. Historical artifacts remain unchanged;
+current scores are not comparable to historical paper scores. See
+[versioned E2E scoring](docs/judge.md#versioned-e2e-scoring).
 
 **Prerequisites:** Docker + the [Harbor CLI](https://github.com/harbor-framework/harbor), and an **approved HF token** for the gated [handbook](https://huggingface.co/datasets/actava/managed-care-operations-handbook) (the container downloads it at start; the fixtures dataset itself is public).
 
@@ -246,7 +269,7 @@ uv run python scripts/aggregate.py \
   --out-csv logs/table1.csv
 ```
 
-CSV columns: `agent, model, n_trials, n_tasks, pass_at_1, pass_at_1_lo, pass_at_1_hi, pass_at_3, ..., pass_pow_3, pass_pow_3_hi, mean_cost_usd, mean_walltime_s` with task-level percentile bootstrap 95% CIs (1,000 iterations, seed `0` — matches paper Table 2 / Figure 3 captions; override with `--bootstrap-iters` / `--bootstrap-seed`). v1 emits the numeric tables; paper figures are out of scope — plot from the CSV. See [`docs/reproduce.md`](docs/reproduce.md) for the figure scripts we used.
+CSV columns: `agent, model, e2e_protocol, n_trials, n_tasks, pass_at_1, pass_at_1_lo, pass_at_1_hi, pass_at_3, ..., pass_pow_3, pass_pow_3_hi, mean_cost_usd, mean_walltime_s` with task-level percentile bootstrap 95% CIs (1,000 iterations, seed `0` — matches paper Table 2 / Figure 3 captions; override with `--bootstrap-iters` / `--bootstrap-seed`). Current E2E uses the new `workflow_v2` scoring contract; those scores do not reproduce historical E2E paper results. The tool emits the numeric tables; paper figures are out of scope — plot from the CSV. See [`docs/reproduce.md`](docs/reproduce.md) for the figure scripts we used.
 
 > [!TIP]
 > Add `--modal` to `run_table.sh` for parallel execution on Modal — matrix reproduction on a single host takes days.
@@ -271,7 +294,7 @@ See [`docs/extending.md`](docs/extending.md) (or **[the web version](https://act
 
 ## Architecture
 
-A single Python package (`chi_bench`) hosts a FastAPI server, three MCP servers (provider :8020, payer :8100, CM :8200), and an LLM-based workspace judge. Each trial runs in a fresh Docker container that bundles the server, the judge, the agent harness, and the per-task fixtures. The Managed-Care Operations Handbook (1,279 markdown documents) is mounted into the agent's skill directory at trial start.
+A single Python package (`chi_bench`) hosts a FastAPI server, three MCP servers (provider :8020, payer :8100, CM :8200), and an LLM-based workspace judge. Each trial uses a clean agent container and a separate trusted simulator/verifier container. The Managed-Care Operations Handbook (1,279 markdown documents) is mounted into the agent's skill directory at trial start.
 
 System diagram and module boundaries: [`docs/architecture.md`](docs/architecture.md) (web: **[actava.ai/benchmarks/docs/architecture](https://actava.ai/benchmarks/docs/architecture)**). Verifier details: [`docs/judge.md`](docs/judge.md). Full CLI reference: [`docs/cli.md`](docs/cli.md). Environment chapter from the paper: [`chi-bench-arxiv-submission/sections/approach.tex`](chi-bench-arxiv-submission/sections/approach.tex).
 

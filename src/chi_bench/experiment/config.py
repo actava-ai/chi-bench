@@ -34,6 +34,11 @@ class ExperimentConfig(BaseModel):
     """Configuration for a Harbor experiment run."""
 
     dataset: str = Field(description="Path to Harbor task dataset directory")
+    data_root: Path | None = Field(
+        default=None, description="Source data root used to verify trusted runtime materials."
+    )
+    dataset_content_sha256: str | None = Field(default=None)
+    dataset_domains: list[str] = Field(default_factory=list)
     agent: str = Field(default="claude-code", description="Agent name")
     model: str | None = Field(default=None, description="Model override")
     provider_agent: str | None = Field(
@@ -51,6 +56,10 @@ class ExperimentConfig(BaseModel):
     payer_model: str | None = Field(
         default=None,
         description="Payer role model for dual-agent E2E harnesses.",
+    )
+    e2e_protocol: Literal["workflow_v2"] | None = Field(
+        default=None,
+        description="Trusted E2E protocol; only workflow_v2 is supported and is the runtime default.",
     )
     concurrency: int = Field(default=1, description="Number of concurrent trials")
     n_attempts: int = Field(

@@ -102,22 +102,19 @@ def archive_phase_logs_command(phase_slug: str) -> str:
 
 def _sum_int_field(results: list[PhaseResult], field_name: str) -> int | None:
     values = [getattr(result.context, field_name) for result in results]
-    present_values = [int(value) for value in values if value is not None]
-    if not present_values:
+    if not values or any(value is None for value in values):
         return None
-    return sum(present_values)
+    return sum(int(value) for value in values)
 
 
 def aggregate_phase_contexts(results: list[PhaseResult]) -> AgentContext:
-    costs = [
-        float(result.context.cost_usd) for result in results if result.context.cost_usd is not None
-    ]
+    costs = [result.context.cost_usd for result in results]
     phase_metadata = [result.to_metadata() for result in results]
     return AgentContext(
         n_input_tokens=_sum_int_field(results, "n_input_tokens"),
         n_cache_tokens=_sum_int_field(results, "n_cache_tokens"),
         n_output_tokens=_sum_int_field(results, "n_output_tokens"),
-        cost_usd=sum(costs) if costs else None,
+        cost_usd=sum(costs) if costs and all(cost is not None for cost in costs) else None,
         metadata={
             "phase_count": len(results),
             "phases": phase_metadata,

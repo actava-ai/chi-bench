@@ -562,7 +562,11 @@ class WorldService:
                     effective_case = self._ctx.get_case(effective_case_id)
                 except KeyError:
                     effective_case = None
-            if effective_case_id is None and self._ctx.task_kind == "provider_to_payer_e2e":
+            if (
+                effective_case_id is None
+                and self._ctx.task_kind == "provider_to_payer_e2e"
+                and self._ctx.e2e_protocol != "workflow_v2"
+            ):
                 latest_submission = next(
                     (
                         item
@@ -589,7 +593,42 @@ class WorldService:
             for letter in self._ctx.store.list_models("provider", "letters", Letter)
             if effective_case_id is not None and letter.case_id == effective_case_id
         ]
+        e2e_metadata: dict[str, Any] = {}
+        if self._ctx.task_kind == "provider_to_payer_e2e":
+            e2e_metadata["e2e_protocol"] = self._ctx.e2e_protocol
+            if self._ctx._expectations is not None:
+                expected_e2e = (
+                    self._ctx._expectations.model_dump(mode="json").get("expected_e2e") or {}
+                )
+                if not expected_e2e.get("require_pend_resolution"):
+                    e2e_metadata["e2e_episode_target_status"] = expected_e2e.get("final_decision")
+            if effective_case_id is not None:
+                route, _ = self._ctx.route_target_for_policy(
+                    self._ctx.get_policy(effective_case_id)
+                )
+                e2e_metadata["e2e_policy_route"] = route.value if route is not None else None
+                if effective_case is not None:
+                    coverage = self._ctx.get_coverage(effective_case.patient_id)
+                    request = self._ctx.load_service_request(effective_case.service_request_id)
+                    service_date = request.requested_date.date().isoformat()
+                    e2e_metadata["e2e_source_eligibility"] = {
+                        "case_id": effective_case_id,
+                        "coverage_id": coverage.id,
+                        "service_date": service_date,
+                        "member_eligible": bool(
+                            coverage.active
+                            and (
+                                not coverage.effective_date
+                                or coverage.effective_date <= service_date
+                            )
+                            and (
+                                not coverage.termination_date
+                                or service_date <= coverage.termination_date
+                            )
+                        ),
+                    }
         return {
+            **e2e_metadata,
             "world_id": self._ctx._scenario.world_id,
             "scenario_id": self._ctx._scenario.scenario_id,
             "task_kind": self._ctx._scenario.task_kind,
@@ -694,6 +733,12 @@ class WorldService:
             "payer_p2p_session_records": [
                 item.model_dump(mode="json") for item in self._ctx.list_p2p_session_records()
             ],
+            "payer_p2p_external_evidence": self._ctx.store.list_resources(
+                "payer", "payer_p2p_external_evidence"
+            ),
+            "payer_p2p_relay_evidence": self._ctx.store.list_resources(
+                "payer", "payer_p2p_relay_evidence"
+            ),
             "payer_letter_requests": [
                 item.model_dump(mode="json") for item in self._ctx.list_letter_requests()
             ],
@@ -782,6 +827,12 @@ class WorldService:
     def expectation(self) -> ExpectationDefinition:
         self._ctx._require_loaded()
         return self._ctx._expectations
+
+    def run_oracle(self) -> dict[str, Any]:
+        """Run the trusted reference through ordinary workflow services."""
+        from chi_bench.verifier.reference_oracle import run_reference
+
+        return run_reference(self._ctx)
 
     # ── Provider domain methods (delegated) ─────────────────────────
 
