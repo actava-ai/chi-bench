@@ -210,6 +210,15 @@ def _rejudge_cm_trial(
     )
 
 
+def rejudge_judge_model() -> str:
+    """Judge model for rejudge: the run's pinned judge, never a floating alias.
+
+    The CLI alias ``opus`` resolves to whatever opus is newest, which silently
+    changes the judge (and its price) between a run and its rejudge.
+    """
+    return os.environ.get("CHI_BENCH_JUDGE_MODEL") or "claude-opus-4-7"
+
+
 def _rejudge_pa_um_trial(
     *,
     out_dir: Path,
@@ -390,7 +399,7 @@ def _run_judge_session(
     from chi_bench.verifier.judge.claude_runner import ClaudeAgentRunner
 
     if runner is None:
-        runner = ClaudeAgentRunner(model="opus", timeout_seconds=timeout_seconds)
+        runner = ClaudeAgentRunner(model=rejudge_judge_model(), timeout_seconds=timeout_seconds)
         # Force API-key auth for rejudge sessions: the default runner detects
         # the user's local `claude auth login` (OAuth) and pops ANTHROPIC_API_KEY
         # from the subprocess env so the CLI uses the subscription quota.
