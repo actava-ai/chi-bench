@@ -1,0 +1,24 @@
+name: Runner pins
+
+# Fails when a workflow names a floating runner image (ubuntu-24.04,
+# macos-15, windows-2025). GitHub moves those aliases to a new OS on its
+# own schedule; a pinned label changes only in a reviewed PR.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - ".github/scripts/test_workflow_runner_pins.py"
+
+permissions:
+  contents: read
+
+jobs:
+  runner-pins:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: No floating runner labels
+        run: python3 .github/scripts/test_workflow_runner_pins.py -v
