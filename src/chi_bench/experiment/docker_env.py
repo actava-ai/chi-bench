@@ -38,6 +38,9 @@ FORWARDED_ENV_KEYS: tuple[str, ...] = (
     "CLAUDE_CODE_OAUTH_TOKEN",
     "OPENAI_API_KEY",
     "OPENAI_BASE_URL",
+    "ANTHROPIC_BASE_URL",  # HG: route judge/simulators through chi_budget_proxy
+    "CHI_BENCH_JUDGE_BASE_URL",
+    "HG_JUDGE_ANTHROPIC_BASE_URL",
     "CHI_BENCH_JUDGE_MODEL",
     "CHI_BENCH_JUDGE_TIMEOUT_S",
     "CHI_BENCH_JUDGE_NUM_VOTES",

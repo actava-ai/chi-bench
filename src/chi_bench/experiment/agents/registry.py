@@ -27,6 +27,7 @@ and may lag the harness source; PRs welcome.
 from __future__ import annotations
 
 IN_TREE_AGENT_IMPORT_PATHS: dict[str, str] = {
+    "hg-closure-codex": "chi_bench.experiment.agents.hg_closure_codex_harness:HGClosureCodexHarness",
     "openai-agents": "chi_bench.experiment.agents.openai_agents_harness:OpenAIAgentsHarness",
     "deepagents": "chi_bench.experiment.agents.deepagents_harness:DeepAgentsHarness",
     "dual-pa-e2e": "chi_bench.experiment.agents.dual_pa_e2e_harness:DualPaE2EHarness",
