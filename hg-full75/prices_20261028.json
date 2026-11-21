@@ -1,0 +1,12 @@
+{
+  "_comment": "Verified per-model prices for the CHI-Bench Full75 20261028 resume. USD per 1M tokens.",
+  "source": "litellm model_prices_and_context_window_backup.json (bundled at /opt/chi-bench/.venv/lib/python3.12/site-packages/litellm/model_prices_and_context_window_backup.json)",
+  "retrieved": "2026-10-28T14:40:00Z",
+  "basis": "input_cost_per_token, output_cost_per_token, cache_read_input_token_cost, cache_creation_input_token_cost multiplied by 1e6",
+  "models": {
+    "gpt-5.6-luna":    {"input": 1.0,  "output": 6.0,  "cache_read": 0.1,   "cache_write": 1.25},
+    "gpt-5.4-mini":    {"input": 0.75, "output": 4.5,  "cache_read": 0.075, "cache_write": 0.75},
+    "claude-opus-4-7": {"input": 5.0,  "output": 25.0, "cache_read": 0.5,   "cache_write": 6.25},
+    "claude-sonnet-5": {"input": 2.0,  "output": 10.0, "cache_read": 0.2,   "cache_write": 2.5}
+  }
+}

@@ -711,6 +711,12 @@ class ClaudeAgentRunner:
             if env is None:
                 env = os.environ.copy()
             env.pop("ANTHROPIC_BASE_URL", None)
+        # HG: the judge still talks to api.anthropic.com, but via the local
+        # transparent budget proxy so its spend counts toward the hard cap.
+        if os.environ.get("HG_JUDGE_ANTHROPIC_BASE_URL"):
+            if env is None:
+                env = os.environ.copy()
+            env["ANTHROPIC_BASE_URL"] = os.environ["HG_JUDGE_ANTHROPIC_BASE_URL"]
         return env
 
     def _run_subprocess(
